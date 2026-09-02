@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lead Của Tôi - CRM Lead</title>
+    <!-- Favicon chuẩn -->
+    <link rel="icon" type="image/png" href="/uploads/icon.png">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Nhúng theme động từ theme.js -->
+    <script src="/js/theme.js"></script>
+</head>
+<body class="min-h-screen flex flex-col transition-colors duration-200 bg-slate-50 text-slate-800">
+
+    <!-- Header chung -->
+    <div id="header-container"></div>
+
+    <div class="flex flex-1">
+        <!-- Sidebar chung -->
+        <div id="sidebar-container"></div>
+
+        <!-- Nội dung chính của trang Leads -->
+        <main id="mainContainer" class="flex-1 p-6">
+            <div class="max-w-7xl mx-auto">
+                <div class="flex justify-between items-center mb-6">
+                    <h1 class="text-xl font-bold">Danh sách Lead của tôi</h1>
+                </div>
+
+                <!-- Khu vực hiển thị bảng dữ liệu lead -->
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div class="p-6">
+                        <p class="text-sm opacity-70">Đang tải danh sách khách hàng...</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Các file JS tiện ích và cấu phần hệ thống -->
+    <script src="../js/lucide.min.js"></script>
+    <script src="../js/header.js"></script>
+    <script src="../js/sidebar.js"></script>
+    <script src="../js/searchHelper.js"></script>
+    <script src="../js/ai.js"></script>
+
+    <!-- File kiểm tra giới hạn IP văn phòng -->
+    <script src="../js/iplimit.js"></script>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", async () => {
+            // Khởi tạo icon
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+
+            // Chạy kiểm tra IP văn phòng trước khi cho phép thao tác
+            const allowed = await checkOfficeIpAccess();
+            if (!allowed) return; // Nếu sai IP, hàm checkOfficeIpAccess đã tự khóa giao diện và hiển thị thông báo
+            
+            // --- Logic tải dữ liệu lead thực tế của Agent đặt ở đây ---
+            console.log("IP hợp lệ, tiến hành tải dữ liệu lead...");
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,450 @@
+<!-- public/admin/quanlydata.html -->
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quản lý Data File & Phân Bổ - CRM Lead</title>
+    <link rel="icon" type="image/png" href="/uploads/favicon.png">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- SweetAlert2 -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <!-- File Theme chung -->
+    <script src="/js/theme.js"></script>
+
+    <script>
+    const originalConsoleWarn = console.warn;
+    console.warn = function(...args) {
+        if (args[0] && typeof args[0] === 'string' && args[0].includes('cdn.tailwindcss.com')) {
+            return;
+        }
+        originalConsoleWarn.apply(console, args);
+    };
+    </script>
+     <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+</head>
+
+<body class="min-h-screen flex flex-col transition-colors duration-200">
+
+    <!-- Header dùng chung -->
+    <script src="/js/header.js"></script>
+    
+    <!-- Sidebar dùng chung -->
+    <script src="/js/sidebar.js"></script>
+
+    <!-- Khung nội dung chính -->
+    <div id="mainContainer" class="flex-1 flex flex-col overflow-y-auto transition-colors duration-200 pt-16 ml-64 p-6">
+        
+        <!-- Tiêu đề trang & Các tab điều hướng -->
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+            <div>
+                <h1 class="text-xl font-bold tracking-tight">Quản lý Data File & Phân Bổ</h1>
+                <p class="text-xs opacity-70 mt-0.5">Hệ thống phân bổ, kiểm soát chất lượng và kiểm toán data tập trung.</p>
+            </div>
+            <!-- Các tab chuyển đổi giao diện qua lại -->
+            <div class="flex items-center space-x-2 text-xs font-medium">
+                <button onclick="switchTab(1)" id="tabBtn1" class="px-3 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 transition">1. Data File</button>
+                <button onclick="switchTab(2)" id="tabBtn2" class="px-3 py-1.5 rounded-xl border border-inherit opacity-60 hover:opacity-100 transition">2. Phân Công</button>
+                <button onclick="switchTab(3)" id="tabBtn3" class="px-3 py-1.5 rounded-xl border border-inherit opacity-60 hover:opacity-100 transition">3. Lọc Dữ Liệu</button>
+                <button onclick="switchTab(4)" id="tabBtn4" class="px-3 py-1.5 rounded-xl border border-inherit opacity-60 hover:opacity-100 transition">4. Chi Tiết Lịch Sử</button>
+            </div>
+        </div>
+
+        <!-- ================= TAB 1: DATA FILE ================= -->
+        <div id="tabContent1" class="space-y-6 flex-1 flex flex-col">
+            <!-- Khu vực Tải lên File Dữ Liệu -->
+            <div class="p-6 rounded-2xl border border-inherit theme-dropdown">
+                <h3 class="font-bold text-sm mb-4 flex items-center space-x-2">
+                    <i data-lucide="upload-cloud" class="w-4 h-4 text-emerald-500"></i>
+                    <span>Tải Lên Nhiều File Dữ Liệu (Excel/CSV)</span>
+                </h3>
+                <div class="flex flex-col sm:flex-row items-center gap-4">
+                    <!-- Drop Zone -->
+                    <label id="dropZone" class="w-full sm:w-auto flex-1 flex flex-col items-center justify-center p-6 border-2 border-dashed border-inherit rounded-xl cursor-pointer hover:border-emerald-500 transition text-center">
+                        <i data-lucide="file-spreadsheet" class="w-8 h-8 text-emerald-500 mb-2"></i>
+                        <span id="fileNameLabel" class="text-xs font-medium opacity-80">Nhấn để chọn file hoặc kéo thả nhiều file Excel/CSV vào đây...</span>
+                        <input type="file" id="excelFile" accept=".xlsx, .xls, .csv" multiple class="hidden">
+                    </label>
+                    <button id="btnUpload" class="w-full sm:w-auto px-6 py-4 rounded-xl bg-emerald-500 text-white hover:bg-emerald-600 transition text-xs font-medium flex items-center justify-center space-x-2 shadow-lg shadow-emerald-500/20">
+                        <i data-lucide="upload" class="w-4 h-4"></i>
+                        <span>Tải Lên & Xử Lý</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Danh sách Data File -->
+            <div class="rounded-2xl border border-inherit overflow-hidden theme-dropdown flex-1">
+                <div class="p-4 border-b border-inherit font-bold text-xs flex items-center justify-between">
+                    <span>Danh Sách Data File Đã Tải Lên</span>
+                    <span id="fileCountBadge" class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">0 files</span>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse text-xs">
+                        <thead>
+                            <tr class="border-b border-inherit opacity-75 font-semibold">
+                                <th class="p-3.5 text-center w-12">STT</th>
+                                <th class="p-3.5">Tên File</th>
+                                <th class="p-3.5 text-center">Tổng Số Lead</th>
+                                <th class="p-3.5 text-center">Trạng Thái File</th>
+                                <th class="p-3.5 text-center">Ngày Upload</th>
+                                <th class="p-3.5 text-center">Thao Tác</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dataTableBody" class="divide-y divide-inherit">
+                            <tr>
+                                <td colspan="6" class="text-center py-8 opacity-60">Đang tải danh sách file...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= TAB 2: PHÂN CÔNG ================= -->
+        <div id="tabContent2" class="hidden space-y-6 flex-1">
+            <div class="p-6 rounded-2xl border border-inherit theme-dropdown">
+                <h3 class="font-bold text-sm mb-2 flex items-center space-x-2">
+                    <i data-lucide="users" class="w-4 h-4 text-emerald-500"></i>
+                    <span>Khu Vực Phân Công Lead Cho Nhân Sự / Nhóm</span>
+                </h3>
+                <p class="text-xs opacity-70">Giao các tệp data đã tải lên cho các Agent hoặc Leader theo tiêu chí mong muốn.</p>
+                <div class="mt-6 p-12 text-center border border-dashed border-inherit rounded-xl opacity-60 text-xs">
+                    Giao diện Phân Công Lead đang sẵn sàng.
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= TAB 3: LỌC DỮ LIỆU ================= -->
+        <div id="tabContent3" class="hidden space-y-6 flex-1">
+            <div class="p-6 rounded-2xl border border-inherit theme-dropdown">
+                <h3 class="font-bold text-sm mb-2 flex items-center space-x-2">
+                    <i data-lucide="filter" class="w-4 h-4 text-emerald-500"></i>
+                    <span>Lọc Dữ Liệu & Kiểm Soát Chất Lượng</span>
+                </h3>
+                <p class="text-xs opacity-70">Lọc trùng số điện thoại, kiểm tra định dạng và chất lượng nguồn data.</p>
+                <div class="mt-6 p-12 text-center border border-dashed border-inherit rounded-xl opacity-60 text-xs">
+                    Công cụ Lọc Dữ Liệu và quét trùng lặp.
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= TAB 4: CHI TIẾT LỊCH SỬ ================= -->
+        <div id="tabContent4" class="hidden space-y-6 flex-1">
+            <div class="p-6 rounded-2xl border border-inherit theme-dropdown">
+                <h3 class="font-bold text-sm mb-2 flex items-center space-x-2">
+                    <i data-lucide="history" class="w-4 h-4 text-emerald-500"></i>
+                    <span>Lịch Sử Hoạt Động & Kiểm Toán Data</span>
+                </h3>
+                <p class="text-xs opacity-70">Xem lại lịch sử thao tác upload, phân bổ và chỉnh sửa data toàn hệ thống.</p>
+                <div class="mt-6 p-12 text-center border border-dashed border-inherit rounded-xl opacity-60 text-xs">
+                    Nhật ký lịch sử hệ thống (Audit Log).
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Script điều khiển chức năng -->
+    <script>
+    function switchTab(tabIndex) {
+        for (let i = 1; i <= 4; i++) {
+            const content = document.getElementById(`tabContent${i}`);
+            const btn = document.getElementById(`tabBtn${i}`);
+            if (content && btn) {
+                if (i === tabIndex) {
+                    content.classList.remove('hidden');
+                    btn.className = "px-3 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 transition";
+                } else {
+                    content.classList.add('hidden');
+                    btn.className = "px-3 py-1.5 rounded-xl border border-inherit opacity-60 hover:opacity-100 transition";
+                }
+            }
+        }
+    }
+
+    // Định dạng ngày: DD/MM/YYYY xuống dòng HH:MM (UTC+7)
+    function formatDateTimeUTC7(dateString) {
+        if (!dateString) return 'N/A';
+        const date = new Date(dateString);
+        if (isNaN(date.getTime())) return dateString;
+
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const year = date.getFullYear();
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+
+        return `${day}/${month}/${year}<br><span class="opacity-70 text-[11px]">${hours}:${minutes}</span>`;
+    }
+
+    document.addEventListener("DOMContentLoaded", async () => {
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+
+        const dataTableBody = document.getElementById('dataTableBody');
+        const excelFile = document.getElementById('excelFile');
+        const fileNameLabel = document.getElementById('fileNameLabel');
+        const btnUpload = document.getElementById('btnUpload');
+        const fileCountBadge = document.getElementById('fileCountBadge');
+        const dropZone = document.getElementById('dropZone');
+
+        let selectedFiles = [];
+
+        excelFile.addEventListener('change', (e) => {
+            handleFilesSelection(e.target.files);
+        });
+
+        // Kéo thả file
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropZone.classList.add('border-emerald-500', 'bg-emerald-500/5');
+            }, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropZone.classList.remove('border-emerald-500', 'bg-emerald-500/5');
+            }, false);
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            handleFilesSelection(e.dataTransfer.files);
+        }, false);
+
+        function handleFilesSelection(files) {
+            selectedFiles = Array.from(files);
+            if (selectedFiles.length > 0) {
+                const names = selectedFiles.map(f => f.name).join(', ');
+                fileNameLabel.textContent = `Đã chọn ${selectedFiles.length} file: ${names}`;
+            } else {
+                fileNameLabel.textContent = 'Nhấn để chọn file hoặc kéo thả nhiều file Excel/CSV vào đây...';
+            }
+        }
+
+        // Lấy danh sách file từ backend (Ánh xạ chuẩn schema Supabase: file_name, total_records, created_at, agent_id)
+        async function fetchFiles() {
+            try {
+                const res = await fetch('/api/admin/data-files');
+                const result = await res.json();
+                
+                let files = [];
+                if (Array.isArray(result)) {
+                    files = result;
+                } else if (result.success && Array.isArray(result.data)) {
+                    files = result.data;
+                } else if (Array.isArray(result.files)) {
+                    files = result.files;
+                }
+
+                fileCountBadge.textContent = `${files.length} files`;
+
+                if (files.length === 0) {
+                    dataTableBody.innerHTML = `<tr><td colspan="6" class="text-center py-8 opacity-60">Chưa có file dữ liệu nào được tải lên.</td></tr>`;
+                    return;
+                }
+
+                dataTableBody.innerHTML = files.map((f, index) => {
+                    // Ánh xạ chính xác cột file_name trong bảng data_files Supabase
+                    const fileName = f.file_name || f.ten_file || f.filename || f.original_name || 'Không có tên';
+                    
+                    // Ánh xạ chính xác cột total_records trong bảng data_files Supabase
+                    const totalLeads = f.total_records !== undefined ? f.total_records : (f.tong_so_lead || 0);
+
+                    // Logic trạng thái phân bổ dựa theo agent_id
+                    const agentId = f.agent_id;
+                    const isAssigned = (agentId !== null && agentId !== undefined && agentId !== '');
+                    const statusText = isAssigned ? "Đã phân bổ" : "Chờ phân bổ";
+                    const statusBadgeClass = isAssigned 
+                        ? "bg-blue-500/10 text-blue-500 border border-blue-500/20" 
+                        : "bg-amber-500/10 text-amber-500 border border-amber-500/20";
+
+                    const uploadDate = formatDateTimeUTC7(f.created_at || f.ngay_upload);
+                    const fileId = f.id || index;
+                    const downloadUrl = f.file_path || f.url || `/uploads/data/${fileName}`;
+
+                    return `
+                        <tr class="hover:bg-[var(--hover-bg,rgba(0,0,0,0.03))] dark:hover:bg-[var(--hover-bg,rgba(255,255,255,0.05))] transition">
+                            <td class="p-3.5 text-center font-mono opacity-60">${index + 1}</td>
+                            <td class="p-3.5 font-medium text-emerald-500">${fileName}</td>
+                            <td class="p-3.5 text-center font-mono">${totalLeads}</td>
+                            <td class="p-3.5 text-center">
+                                <span class="px-2 py-1 rounded-full text-[10px] font-semibold ${statusBadgeClass}">${statusText}</span>
+                            </td>
+                            <td class="p-3.5 text-center opacity-70 leading-tight">${uploadDate}</td>
+                            <td class="p-3.5 text-center space-x-1">
+                                <button onclick="downloadFileFromDB('${fileId}', '${fileName}')" class="p-1 rounded opacity-80 hover:opacity-100 hover:bg-emerald-500/10 transition inline-block" title="Tải lại file Excel từ hệ thống">
+                                    <i data-lucide="download" class="w-3.5 h-3.5 text-blue-500"></i>
+                                </button>
+                                <button onclick="deleteFile('${fileId}', '${fileName}')" class="p-1 rounded opacity-80 hover:opacity-100 hover:bg-red-500/10 transition inline-block" title="Xóa file">
+                                    <i data-lucide="trash-2" class="w-3.5 h-3.5 text-red-500"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+            } catch (error) {
+                console.error("Lỗi khi tải danh sách file:", error);
+                dataTableBody.innerHTML = `<tr><td colspan="6" class="text-center py-8 text-red-500">Lỗi kết nối đến server.</td></tr>`;
+            }
+        }
+
+        fetchFiles();
+
+        // Xử lý upload nhiều file
+        btnUpload.addEventListener('click', async () => {
+            if (selectedFiles.length === 0) {
+                await Swal.fire({
+                    title: 'Chưa chọn file!',
+                    text: 'Vui lòng chọn hoặc kéo thả ít nhất một file Excel/CSV.',
+                    icon: 'warning',
+                    confirmButtonText: 'Đóng'
+                });
+                return;
+            }
+
+            const formData = new FormData();
+            selectedFiles.forEach(file => {
+                formData.append('file', file);
+            });
+
+            try {
+                btnUpload.disabled = true;
+                btnUpload.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Đang tải lên...`;
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+
+                const res = await fetch('/api/admin/upload-data', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await res.json();
+
+                if (res.ok && (result.success !== false)) {
+                    await Swal.fire({
+                        title: 'Thành công!',
+                        text: `Tải lên và xử lý thành công ${selectedFiles.length} file!`,
+                        icon: 'success',
+                        confirmButtonText: 'OK'
+                    });
+                    excelFile.value = '';
+                    selectedFiles = [];
+                    fileNameLabel.textContent = 'Nhấn để chọn file hoặc kéo thả nhiều file Excel/CSV vào đây...';
+                    fetchFiles();
+                } else {
+                    await Swal.fire({
+                        title: 'Thất bại!',
+                        text: result.message || 'Có lỗi xảy ra khi xử lý file!',
+                        icon: 'error',
+                        confirmButtonText: 'Đóng'
+                    });
+                }
+            } catch (error) {
+                console.error('Lỗi upload:', error);
+                await Swal.fire({
+                    title: 'Lỗi kết nối!',
+                    text: 'Không thể kết nối đến server: ' + error.message,
+                    icon: 'error',
+                    confirmButtonText: 'Đóng'
+                });
+            } finally {
+                btnUpload.disabled = false;
+                btnUpload.innerHTML = `<i data-lucide="upload" class="w-4 h-4"></i> <span>Tải Lên & Xử Lý</span>`;
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+            }
+        });
+
+        // Xử lý xóa file gọi API xuống backend
+        window.deleteFile = async function(id, fileName) {
+            const confirm = await Swal.fire({
+                title: 'Xác nhận xóa?',
+                text: `Bạn có chắc chắn muốn xóa file "${fileName}" không? Toàn bộ lịch sử và dữ liệu liên quan sẽ bị xóa sạch!`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Xóa ngay',
+                cancelButtonText: 'Hủy',
+                confirmButtonColor: '#ef4444'
+            });
+
+            if (confirm.isConfirmed) {
+                try {
+                    const res = await fetch(`/api/admin/data-files/${id}`, { method: 'DELETE' });
+                    
+                    // Kiểm tra xem phản hồi có phải là JSON không tránh lỗi cú pháp Unexpected token '<'
+                    const contentType = res.headers.get("content-type");
+                    if (!contentType || !contentType.includes("application/json")) {
+                        throw new Error("Server chưa bật route API xóa hoặc trả về trang lỗi (404/500).");
+                    }
+
+                    const result = await res.json();
+                    
+                    if (res.ok && result.success) {
+                        await Swal.fire({
+                            title: 'Đã xóa!',
+                            text: 'Xóa file thành công khỏi hệ thống.',
+                            icon: 'success',
+                            timer: 1500,
+                            showConfirmButton: false
+                        });
+                        fetchFiles(); // Tải lại danh sách
+                    } else {
+                        await Swal.fire({
+                            title: 'Lỗi!',
+                            text: result.message || 'Không thể xóa file từ server.',
+                            icon: 'error',
+                            confirmButtonText: 'Đóng'
+                        });
+                    }
+                } catch (error) {
+                    console.error('Lỗi xóa file:', error);
+                    await Swal.fire({
+                        title: 'Lỗi kết nối hoặc API!',
+                        text: error.message || 'Không thể kết nối đến server để xóa file.',
+                        icon: 'error',
+                        confirmButtonText: 'Đóng'
+                    });
+                }
+            }
+        };
+
+        // Hàm tải file ở tab1
+        window.downloadFileFromDB = async function(fileId, fileName) {
+            try {
+                Swal.fire({
+                    title: 'Đang chuẩn bị file...',
+                    text: 'Hệ thống đang trích xuất dữ liệu từ database.',
+                    allowOutsideClick: false,
+                    didOpen: () => { Swal.showLoading(); }
+                });
+
+                // Gọi API lấy danh sách lead thuộc về file này (đảm bảo route này tồn tại ở backend)
+                const res = await fetch(`/api/admin/file-leads/${fileId}`);
+                const result = await res.json();
+
+                if (result.success && result.leads && result.leads.length > 0) {
+                    // Sử dụng thư viện SheetJS (XLSX) để tạo và tải file Excel
+                    const worksheet = XLSX.utils.json_to_sheet(result.leads);
+                    const workbook = XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(workbook, worksheet, "Data");
+                    XLSX.writeFile(workbook, fileName);
+                    
+                    Swal.close();
+                } else {
+                    Swal.fire('Thông báo', 'Không có dữ liệu chi tiết hoặc file trống.', 'info');
+                }
+            } catch (error) {
+                console.error(error);
+                Swal.fire('Lỗi', 'Không thể tạo file để tải về.', 'error');
+            }
+        };
+    });
+    </script>
+</body>
+</html>

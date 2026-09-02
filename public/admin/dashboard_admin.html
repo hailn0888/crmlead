@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - CRM Lead</title>
+    
+    <link rel="icon" type="image/png" href="/uploads/favicon.png">
+    <link rel="apple-touch-icon" href="/uploads/icon.png">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Nhúng thư viện Lucide Icons offline -->
+    <script src="/js/lucide.min.js"></script>
+</head>
+<body class="font-sans antialiased transition-colors duration-200">
+
+    <!-- Nội dung trang chính -->
+    <div class="flex h-screen overflow-hidden">
+        <!-- Main Content (Đã xóa bg-white cứng để tự động ăn theo theme.js) -->
+        <div id="mainContainer" class="flex-1 flex flex-col overflow-y-auto transition-colors duration-200 pt-16">
+            <main class="px-4 py-4 max-w-full w-full">
+                <div class="mb-4">
+                    <h1 class="text-xl font-bold tracking-tight">Tổng quan</h1>
+                </div>
+
+                <!-- Thống kê nhanh (Cards kiểu Supabase Dashboard) -->
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                    <div class="theme-card border p-4 rounded-xl transition">
+                        <p class="text-xs opacity-65 font-medium uppercase tracking-wider">Tổng số User</p>
+                        <h3 class="text-xl font-semibold mt-1">12</h3>
+                    </div>
+                    <div class="theme-card border p-4 rounded-xl transition">
+                        <p class="text-xs opacity-65 font-medium uppercase tracking-wider">Tổng số Lead</p>
+                        <h3 class="text-xl font-semibold mt-1">148</h3>
+                    </div>
+                    <div class="theme-card border p-4 rounded-xl transition">
+                        <p class="text-xs opacity-65 font-medium uppercase tracking-wider">Hợp đồng đã chốt</p>
+                        <h3 class="text-xl font-semibold text-emerald-500 mt-1">32</h3>
+                    </div>
+                    <div class="theme-card border p-4 rounded-xl transition">
+                        <p class="text-xs opacity-65 font-medium uppercase tracking-wider">Cuộc gọi chăm sóc</p>
+                        <h3 class="text-xl font-semibold text-blue-500 mt-1">510</h3>
+                    </div>
+                </div>
+
+                <!-- Khung thông tin chi tiết -->
+                <div class="theme-card rounded-xl border p-5 transition">
+                    <h3 class="text-sm font-semibold mb-1">Trạng thái vận hành</h3>
+                    <p class="text-xs opacity-70 leading-relaxed">Hệ thống phân quyền bảo mật và kết nối Supabase Database đang hoạt động ổn định. Mọi thông số dòng tiền và chăm sóc khách hàng được đồng bộ hóa thời gian thực.</p>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Nhúng file logic Header - Sidebar động - Theme - AI -->
+    <script src="/js/header.js"></script>
+    <script src="/js/sidebar.js"></script>
+    <!-- <script src="/js/ai.js"></script> -->
+    <script src="/js/theme.js"></script>
+</body>
+</html>

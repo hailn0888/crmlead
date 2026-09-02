@@ -1,0 +1,721 @@
+<!-- public/admin/users.html --> 
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quản lý User - CRM Lead</title>
+    <link rel="icon" type="image/png" href="/uploads/favicon.png">
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- File Theme chung -->
+    <script src="/js/theme.js"></script>
+</head>
+<body class="min-h-screen flex flex-col transition-colors duration-200">
+
+    <!-- Header dùng chung -->
+    <script src="/js/header.js"></script>
+    
+    <!-- Sidebar dùng chung -->
+    <script src="/js/sidebar.js"></script>
+
+    <!-- Khung nội dung chính -->
+    <div id="mainContainer" class="flex-1 flex flex-col overflow-y-auto transition-colors duration-200 pt-16 ml-64 p-6">
+        
+        <!-- Tiêu đề trang & Các nút thao tác -->
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+            <div>
+                <h1 class="text-xl font-bold tracking-tight">Quản lý Nhân sự & Hệ thống</h1>
+            </div>
+            <div class="flex items-center space-x-2">
+                <button id="openGroupModalBtn" class="px-3.5 py-2 rounded-xl text-xs font-medium border border-inherit hover:opacity-80 transition flex items-center space-x-2">
+                    <i data-lucide="folder-plus" class="w-4 h-4 text-emerald-500"></i>
+                    <span>Tạo nhóm mới</span>
+                </button>
+                <button id="openUserModalBtn" class="px-3.5 py-2 rounded-xl text-xs font-medium bg-emerald-500 text-white hover:bg-emerald-600 transition flex items-center space-x-2 shadow-lg shadow-emerald-500/20">
+                    <i data-lucide="user-plus" class="w-4 h-4"></i>
+                    <span>Thêm nhân viên</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Thanh tìm kiếm & Lọc dữ liệu -->
+        <div class="p-4 rounded-2xl border border-inherit theme-dropdown mb-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div class="relative w-full sm:w-80">
+                <i data-lucide="search" class="w-4 h-4 absolute left-3 top-2.5 opacity-50"></i>
+                <input type="text" id="searchInput" placeholder="Tìm kiếm theo họ tên, MSĐL..." class="w-full bg-transparent border border-inherit rounded-xl pl-9 pr-3 py-2 text-xs focus:outline-none focus:border-emerald-500">
+            </div>
+            <div class="flex items-center space-x-2 w-full sm:w-auto">
+                <span class="text-xs opacity-60 whitespace-nowrap">Lọc phân quyền:</span>
+                <select id="roleFilter" class="bg-transparent border border-inherit rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-emerald-500">
+                    <option value="all" class="theme-dropdown">Tất cả</option>
+                    <option value="admin" class="theme-dropdown">Admin</option>
+                    <option value="leader" class="theme-dropdown">Leader</option>
+                    <option value="agent" class="theme-dropdown">Agent</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Bảng danh sách User -->
+        <div class="rounded-2xl border border-inherit overflow-hidden theme-dropdown flex-1">
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse text-xs">
+                    <thead>
+                        <tr class="border-b border-inherit opacity-75 font-semibold">
+                            <th class="p-3.5 text-center w-12">STT</th>
+                            <th class="p-3.5">Họ và Tên</th>
+                            <th class="p-3.5">MSĐL (Tên đăng nhập)</th>
+                            <th class="p-3.5">Nhóm</th>
+                            <th class="p-3.5">Trưởng nhóm</th>
+                            <th class="p-3.5 text-center">Trạng thái</th>
+                            <th class="p-3.5 text-center">Giới hạn IP</th>
+                            <th class="p-3.5 text-center">Thao tác</th>
+                        </tr>
+                    </thead>
+                    <tbody id="userTableBody" class="divide-y divide-inherit">
+                        <!-- Dữ liệu render bằng JavaScript động -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: Thêm nhân viên mới -->
+    <div id="userModal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4">
+        <div class="w-full max-w-md rounded-2xl border border-inherit theme-dropdown p-6 shadow-2xl relative animate-in fade-in zoom-in-95 duration-200">
+            <div class="flex items-center justify-between mb-4 pb-3 border-b border-inherit">
+                <div class="flex items-center space-x-2">
+                    <i data-lucide="user-plus" class="w-5 h-5 text-emerald-500"></i>
+                    <h3 class="font-bold text-sm">Thêm nhân viên mới</h3>
+                </div>
+                <button id="closeUserModal" class="p-1 rounded-lg opacity-60 hover:opacity-100 transition"><i data-lucide="x" class="w-4 h-4"></i></button>
+            </div>
+            <form id="addUserForm" class="space-y-4 text-xs">
+                <div>
+                    <label class="block font-medium mb-1 opacity-80">Tên đăng nhập (MSĐL) *</label>
+                    <input type="text" 
+                        id="addTenDangNhap" 
+                        required 
+                        maxlength="8" 
+                        pattern="[0-9]{8}" 
+                        title="Mã số đại lý phải đúng 8 chữ số" 
+                        placeholder="Ví dụ: 60807777" 
+                        oninput="this.value = this.value.replace(/[^0-9]/g, '').slice(0, 8)"
+                        class="w-full bg-transparent border border-inherit rounded-xl px-3 py-2.5 focus:outline-none focus:border-emerald-500">
+                </div>
+                <div>
+                    <label class="block font-medium mb-1 opacity-80">Mật khẩu *</label>
+                    <input type="password" id="addMatKhau" required placeholder="••••••••" class="w-full bg-transparent border border-inherit rounded-xl px-3 py-2.5 focus:outline-none focus:border-emerald-500">
+                </div>
+                <div>
+                    <label class="block font-medium mb-1 opacity-80">Họ và Tên *</label>
+                    <input type="text" id="addHoVaTen" required placeholder="Ví dụ: Nguyễn Thị Thu Ngân" class="w-full bg-transparent border border-inherit rounded-xl px-3 py-2.5 focus:outline-none focus:border-emerald-500">
+                </div>
+                <div>
+                    <label class="block font-medium mb-1 opacity-80">Phân quyền *</label>
+                    <select id="addPhanQuyen" class="w-full bg-transparent border border-inherit rounded-xl px-3 py-2.5 focus:outline-none focus:border-emerald-500">
+                        <option value="agent" class="theme-dropdown">Đại lý</option>
+                        <option value="leader" class="theme-dropdown">Trưởng nhóm</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block font-medium mb-1 opacity-80">Trưởng nhóm quản lý</label>
+                    <select id="addTruongNhom" class="w-full bg-transparent border border-inherit rounded-xl p-2.5 focus:outline-none focus:border-emerald-500 theme-dropdown">
+                        <option value="">-- Chọn trưởng nhóm --</option>
+                        <!-- Danh sách leader sẽ được đổ động bằng JS hoặc list tĩnh -->
+                    </select>
+                </div>
+                <div class="flex justify-end space-x-2 pt-3 border-t border-inherit">
+                    <button type="button" id="cancelUserModal" class="px-4 py-2 rounded-xl border border-inherit hover:opacity-80 transition">Hủy</button>
+                    <button type="submit" class="px-4 py-2 rounded-xl bg-emerald-500 text-white hover:bg-emerald-600 transition font-medium">Lưu nhân sự</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Tạo Nhóm Mới -->
+    <div id="groupModal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4">
+        <div class="w-full max-w-lg rounded-2xl border border-inherit theme-dropdown p-6 shadow-2xl relative animate-in fade-in zoom-in-95 duration-200">
+            <div class="flex items-center justify-between mb-4 pb-3 border-b border-inherit">
+                <div class="flex items-center space-x-2">
+                    <i data-lucide="folder-plus" class="w-5 h-5 text-emerald-500"></i>
+                    <h3 class="font-bold text-sm">Tạo hoặc Gán Nhóm Mới</h3>
+                </div>
+                <button id="closeGroupModal" class="p-1 rounded-lg opacity-60 hover:opacity-100 transition"><i data-lucide="x" class="w-4 h-4"></i></button>
+            </div>
+
+            <form id="addGroupForm" class="space-y-4 text-xs">
+                <div>
+                    <label class="block font-medium mb-1 opacity-80">Tên nhóm mới *</label>
+                    <input type="text" id="modalTenNhom" required placeholder="Ví dụ: RJX" class="w-full bg-transparent border border-inherit rounded-xl px-3 py-2.5 focus:outline-none focus:border-emerald-500">
+                </div>
+
+                <div>
+                    <label class="block font-medium mb-1 opacity-80">Chọn trưởng nhóm *</label>
+                    <select id="modalTruongNhom" required class="w-full bg-transparent border border-inherit rounded-xl px-3 py-2.5 focus:outline-none focus:border-emerald-500 theme-dropdown">
+                        <option value="" class="theme-dropdown">-- Chọn trưởng nhóm --</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block font-medium mb-1 opacity-80">Chọn nhân viên vào nhóm (Giữ Ctrl/Cmd để chọn nhiều) *</label>
+                    <select id="modalSelectUser" multiple class="w-full bg-transparent border border-inherit rounded-xl p-2.5 h-32 focus:outline-none focus:border-emerald-500 theme-dropdown">
+                    </select>
+                </div>
+
+                <div class="flex justify-end space-x-2 pt-3 border-t border-inherit">
+                    <button type="button" id="cancelGroupModal" class="px-4 py-2 rounded-xl border border-inherit hover:opacity-80 transition">Hủy</button>
+                    <button type="submit" id="btnSubmitGroup" class="px-4 py-2 rounded-xl bg-emerald-500 text-white hover:bg-emerald-600 transition font-medium flex items-center space-x-2">
+                        <i data-lucide="check" class="w-4 h-4"></i>
+                        <span>Áp dụng nhóm</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: Phân lại nhóm cho 1 user cụ thể -->
+    <div id="assignSingleGroupModal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4">
+        <div class="w-full max-w-sm rounded-2xl border border-inherit theme-dropdown p-6 shadow-2xl relative animate-in fade-in zoom-in-95 duration-200">
+            <div class="flex items-center justify-between mb-4 pb-3 border-b border-inherit">
+                <div class="flex items-center space-x-2">
+                    <i data-lucide="user-check" class="w-5 h-5 text-emerald-500"></i>
+                    <h3 class="font-bold text-sm">Phân lại nhóm nhân sự</h3>
+                </div>
+                <button id="closeAssignModal" class="p-1 rounded-lg opacity-60 hover:opacity-100 transition"><i data-lucide="x" class="w-4 h-4"></i></button>
+            </div>
+            <form id="assignSingleGroupForm" class="space-y-4 text-xs">
+                <input type="hidden" id="assignUserId">
+                <div>
+                    <label class="block font-medium mb-1 opacity-80">Chọn nhóm *</label>
+                    <select id="modalAssignGroupSelect" required class="w-full bg-transparent border border-inherit rounded-xl px-3 py-2.5 focus:outline-none focus:border-emerald-500">
+                        <!-- Dynamic group options -->
+                    </select>
+                </div>
+                <div>
+                    <label class="block font-medium mb-1 opacity-80">Trưởng nhóm tự động (Cập nhật theo nhóm)</label>
+                    <input type="text" id="modalAssignLeaderInput" readonly class="w-full bg-inherit opacity-70 border border-inherit rounded-xl px-3 py-2.5 focus:outline-none cursor-not-allowed">
+                </div>
+                <div class="flex justify-end space-x-2 pt-3 border-t border-inherit">
+                    <button type="button" id="cancelAssignModal" class="px-4 py-2 rounded-xl border border-inherit hover:opacity-80 transition">Hủy</button>
+                    <button type="submit" class="px-4 py-2 rounded-xl bg-emerald-500 text-white hover:bg-emerald-600 transition font-medium">Lưu thay đổi</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+<!--==================================================================-->
+<!--==         Script điều khiển giao diện trang Users              ==-->
+<!--==================================================================-->
+
+    <script>
+    let usersList = [];
+    let groupsList = [];
+
+    document.addEventListener("DOMContentLoaded", async () => {
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+
+        const userTableBody = document.getElementById('userTableBody');
+        const searchInput = document.getElementById('searchInput');
+        const roleFilter = document.getElementById('roleFilter');
+
+        // Hàm gọi API lấy danh sách user và groups từ Backend
+        async function fetchUsersAndGroups() {
+            try {
+                const [resUsers, resGroups] = await Promise.all([
+                    fetch('/api/admin/users'),
+                    fetch('/api/admin/groups')
+                ]);
+                const resultUsers = await resUsers.json();
+                const resultGroups = await resGroups.json();
+
+                if (resultUsers.success) {
+                    usersList = resultUsers.data || [];
+                }
+                if (resultGroups.success) {
+                    groupsList = resultGroups.data || [];
+                }
+                renderUsers();
+            } catch (error) {
+                console.error("Lỗi khi tải dữ liệu:", error);
+                userTableBody.innerHTML = `<tr><td colspan="8" class="text-center py-8 text-red-500">Lỗi kết nối đến server.</td></tr>`;
+            }
+        }
+
+        // Render Bảng User
+        function renderUsers() {
+            const keyword = searchInput.value.toLowerCase();
+            const selectedRole = roleFilter.value;
+
+            const filtered = usersList.filter(u => {
+                const matchText = (u.ho_va_ten || '').toLowerCase().includes(keyword) || (u.ten_dang_nhap || '').toLowerCase().includes(keyword);
+                const matchRole = selectedRole === 'all' || u.phan_quyen === selectedRole;
+                return matchText && matchRole;
+            });
+
+            if (filtered.length === 0) {
+                userTableBody.innerHTML = `<tr><td colspan="8" class="text-center py-8 opacity-60">Không tìm thấy nhân sự phù hợp trong hệ thống.</td></tr>`;
+                return;
+            }
+
+            userTableBody.innerHTML = filtered.map((u, index) => {
+                const isActive = u.trang_thai === 'Đang hoạt động';
+                const tenNhom = u.ten_nhom || '<span class="opacity-40 italic">Chưa có nhóm</span>';
+                const truongNhom = u.leader_name || '<span class="opacity-40 italic">Không có</span>';
+
+                return `
+                    <tr class="hover:bg-black/5 dark:hover:bg-white/5 transition">
+                        <td class="p-3.5 text-center font-mono opacity-60">${index + 1}</td>
+                        <td class="p-3.5 font-medium">${u.ho_va_ten || ''}</td>
+                        <td class="p-3.5 font-mono text-emerald-500">${u.ten_dang_nhap || ''}</td>
+                        <td class="p-3.5">${tenNhom}</td>
+                        <td class="p-3.5">${truongNhom}</td>
+                        <td class="p-3.5 text-center">
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-medium ${isActive ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'bg-red-500/10 text-red-500 border border-red-500/20'}">
+                                ${u.trang_thai || 'Đang hoạt động'}
+                            </span>
+                        </td>
+                        <td class="p-3.5 text-center">
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" class="sr-only peer" ${u.ip_limit ? 'checked' : ''} onchange="toggleIpLimit(${u.id})">
+                                <div class="w-7 h-4 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-500"></div>
+                            </label>
+                        </td>
+                        <td class="p-3.5 text-center space-x-1">
+                            <button onclick="openAssignGroupModal(${u.id})" class="p-1 rounded hover:bg-black/10 dark:hover:bg-white/10 transition" title="Phân lại nhóm"><i data-lucide="folder" class="w-3.5 h-3.5 text-blue-500"></i></button>
+                            <button onclick="toggleLockUser(${u.id})" class="p-1 rounded hover:bg-black/10 dark:hover:bg-white/10 transition" title="${isActive ? 'Khoá tài khoản' : 'Mở khoá'}"><i data-lucide="${isActive ? 'lock' : 'unlock'}" class="w-3.5 h-3.5 text-red-400"></i></button>
+                            <button onclick="deleteUser(${u.id}, '${u.ho_va_ten || ''}')" class="p-1 rounded hover:bg-black/10 dark:hover:bg-white/10 transition" title="Xóa nhân viên"><i data-lucide="trash-2" class="w-3.5 h-3.5 text-red-500"></i></button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+
+        searchInput.addEventListener('input', renderUsers);
+        roleFilter.addEventListener('change', renderUsers);
+
+        // Tải dữ liệu ban đầu
+        fetchUsersAndGroups();
+
+        // Xử lý Modal Thêm nhân viên
+        const userModal = document.getElementById('userModal');
+        document.getElementById('openUserModalBtn').addEventListener('click', () => userModal.classList.remove('hidden'));
+        document.getElementById('closeUserModal').addEventListener('click', () => userModal.classList.add('hidden'));
+        document.getElementById('cancelUserModal').addEventListener('click', () => userModal.classList.add('hidden'));
+
+        document.getElementById('addUserForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const payload = {
+            ten_dang_nhap: document.getElementById('addTenDangNhap')?.value || '',
+            mat_khau: document.getElementById('addMatKhau')?.value || '',
+            ho_va_ten: document.getElementById('addHoVaTen')?.value || '',
+            phan_quyen: document.getElementById('addPhanQuyen')?.value || '',
+            ten_nhom: document.getElementById('addTenNhom')?.value || '',
+            truong_nhom: document.getElementById('addTruongNhom')?.value || ''
+        };
+
+            const res = await fetch('/api/admin/users', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (res.ok) {
+                userModal.classList.add('hidden');
+                fetchUsersAndGroups();
+                e.target.reset();
+            } else {
+                await Swal.fire({
+                    title: 'Thất bại!',
+                    text: result.message || 'Lỗi khi thêm nhân sự mới!',
+                    icon: 'error',
+                    confirmButtonText: 'Đóng'
+                });
+            }
+        });
+
+        // Xử lý Modal Tạo Nhóm
+        const groupModal = document.getElementById('groupModal');
+        const openGroupBtn = document.getElementById('openGroupModalBtn');
+        const closeGroupModalBtn = document.getElementById('closeGroupModal');
+        const cancelGroupModalBtn = document.getElementById('cancelGroupModal');
+
+        if (openGroupBtn && groupModal) {
+            openGroupBtn.addEventListener('click', () => {
+                const selectLeader = document.getElementById('modalTruongNhom');
+                const selectUser = document.getElementById('modalSelectUser');
+
+                const currentUsers = window.usersList || usersList || [];
+                const activeGroupNames = new Set(currentUsers.map(u => u.ten_nhom).filter(n => n && n !== 'Chưa có nhóm'));
+                const leadersWithGroup = new Set();
+                
+                currentUsers.forEach(u => {
+                    if (u.phan_quyen === 'leader' && activeGroupNames.has(u.ten_nhom)) {
+                        leadersWithGroup.add(u.id);
+                    }
+                });
+
+                const leaders = currentUsers.filter(u => 
+                    (u.phan_quyen || '').toLowerCase() === 'leader' && 
+                    !leadersWithGroup.has(u.id) &&
+                    !u.group_id
+                );
+
+                if (selectLeader) {
+                    selectLeader.innerHTML = `<option value="" class="theme-dropdown">-- Chọn trưởng nhóm --</option>` + 
+                        (leaders.length > 0 ? leaders.map(l => `<option value="${l.id}" class="theme-dropdown">${l.ho_va_ten} (${l.ten_dang_nhap})</option>`).join('') : '<option value="" disabled class="theme-dropdown">Không còn Leader trống nào</option>');
+                }
+
+                const freeAgents = currentUsers.filter(u => (u.phan_quyen || '').toLowerCase() === 'agent' && !u.group_id);
+                if (selectUser) {
+                    selectUser.innerHTML = freeAgents.length > 0
+                        ? freeAgents.map(u => `<option value="${u.id}" class="theme-dropdown">${u.ho_va_ten} (${u.ten_dang_nhap})</option>`).join('')
+                        : '<option value="" disabled class="theme-dropdown">Không có Agent nào chưa có nhóm</option>';
+                }
+
+                groupModal.classList.remove('hidden');
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+            });
+        }
+
+        // Đóng modal nhóm
+        if (closeGroupModalBtn) closeGroupModalBtn.addEventListener('click', () => groupModal.classList.add('hidden'));
+        if (cancelGroupModalBtn) cancelGroupModalBtn.addEventListener('click', () => groupModal.classList.add('hidden'));
+
+        // Xử lý submit gán nhóm với hiệu ứng mượt mà
+        const addGroupForm = document.getElementById('addGroupForm');
+        if (addGroupForm) {
+            addGroupForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const submitBtn = document.getElementById('btnSubmitGroup');
+                const selectUser = document.getElementById('modalSelectUser');
+                const selectedUserIds = Array.from(selectUser.selectedOptions).map(option => option.value);
+                const ten_nhom = document.getElementById('modalTenNhom').value.trim();
+                const leader_id = document.getElementById('modalTruongNhom').value;
+
+                try {
+                    if (submitBtn) {
+                        submitBtn.disabled = true;
+                        submitBtn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Đang xử lý...`;
+                        if (typeof lucide !== 'undefined') lucide.createIcons();
+                    }
+
+                    const res = await fetch('/api/admin/groups', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ ten_nhom, leader_id, agent_ids: selectedUserIds })
+                    });
+                    const result = await res.json();
+
+                    if (res.ok && result.success) {
+                        groupModal.classList.add('hidden');
+                        addGroupForm.reset();
+
+                        await Swal.fire({
+                            title: 'Thành công!',
+                            text: 'Tạo và phân bổ nhóm mới thành công!',
+                            icon: 'success',
+                            confirmButtonText: 'OK'
+                        });
+
+                        fetchUsersAndGroups();
+                    } else {
+                        Swal.fire({
+                            title: 'Không thể tạo nhóm!',
+                            text: result.message || 'Đã có lỗi xảy ra khi tạo nhóm!',
+                            icon: 'error',
+                            confirmButtonText: 'Đóng'
+                        });
+                    }
+                } catch (error) {
+                    console.error('Lỗi tạo nhóm:', error);
+                    Swal.fire({
+                        title: 'Lỗi kết nối!',
+                        text: 'Không thể kết nối đến server: ' + error.message,
+                        icon: 'error',
+                        confirmButtonText: 'Đóng'
+                    });
+                } finally {
+                    if (submitBtn) {
+                        submitBtn.disabled = false;
+                        submitBtn.innerHTML = `<i data-lucide="check" class="w-4 h-4"></i> <span>Áp dụng nhóm</span>`;
+                        if (typeof lucide !== 'undefined') lucide.createIcons();
+                    }
+                }
+            });
+        }
+
+        // Xử lý submit gán nhóm cho Trưởng nhóm và các nhân viên
+        document.getElementById('addGroupForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const selectUser = document.getElementById('modalSelectUser');
+            const selectedUserIds = Array.from(selectUser.selectedOptions).map(option => option.value);
+            const ten_nhom = document.getElementById('modalTenNhom').value;
+            const leader_id = document.getElementById('modalTruongNhom').value;
+
+            try {
+                const res = await fetch('/api/admin/groups', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ten_nhom, leader_id, agent_ids: selectedUserIds })
+                });
+                const result = await res.json();
+
+                if (result.success) {
+                    await Swal.fire({
+                        title: 'Thành công!',
+                        text: 'Tạo và phân bổ nhóm mới thành công!',
+                        icon: 'success',
+                        confirmButtonText: 'OK'
+                    });
+                    groupModal.classList.add('hidden');
+                    fetchUsersAndGroups();
+                    e.target.reset();
+                } else {
+                    await Swal.fire({
+                        title: 'Thất bại!',
+                        text: result.message || 'Lỗi khi tạo nhóm!',
+                        icon: 'error',
+                        confirmButtonText: 'Đóng'
+                    });
+                }
+            } catch (error) {
+                console.error('Lỗi tạo nhóm:', error);
+                await Swal.fire({
+                    title: 'Lỗi kết nối!',
+                    text: 'Không thể kết nối đến server!',
+                    icon: 'error',
+                    confirmButtonText: 'Đóng'
+                });
+            }
+        });
+
+        // Hàm khóa/mở khóa tài khoản
+        window.toggleLockUser = async function(id) {
+            try {
+                const res = await fetch(`/api/admin/users/${id}/toggle-lock`, { method: 'PATCH' });
+                const data = await res.json();
+                
+                if (data.success) {
+                    const user = usersList.find(u => u.id === id);
+                    if (user) user.trang_thai = data.trang_thai;
+                    renderUsers();
+                } else {
+                    await Swal.fire({
+                        title: 'Lỗi trạng thái!',
+                        text: 'Lỗi khi đổi trạng thái khoá!',
+                        icon: 'error',
+                        confirmButtonText: 'Đóng'
+                    });
+                }
+            } catch (error) {
+                console.error('Lỗi toggle lock:', error);
+                await Swal.fire({
+                    title: 'Lỗi kết nối!',
+                    text: 'Không thể kết nối đến server!',
+                    icon: 'error',
+                    confirmButtonText: 'Đóng'
+                });
+            }
+        }
+
+        // Hàm Xóa User
+        window.deleteUser = async function(id, tenNhanVien) {
+            if (confirm(`Bạn có chắc chắn muốn xóa nhân viên "${tenNhanVien}" khỏi hệ thống không?`)) {
+                try {
+                    const res = await fetch(`/api/admin/users/${id}`, { method: 'DELETE' });
+                    const data = await res.json();
+                    if (data.success) {
+                        fetchUsersAndGroups();
+                    } else {
+                        await Swal.fire({
+                            title: 'Lỗi!',
+                            text: 'Không thể xoá nhân viên!',
+                            icon: 'error',
+                            confirmButtonText: 'Đóng'
+                        });
+                    }
+                } catch (error) {
+                    console.error('Lỗi xóa user:', error);
+                    await Swal.fire({
+                        title: 'Lỗi kết nối!',
+                        text: 'Không thể kết nối đến server!',
+                        icon: 'error',
+                        confirmButtonText: 'Đóng'
+                    });
+                }
+            }
+        }
+    });
+
+    // Xử lý mở modal khi bấm nút phân nhóm trên mỗi dòng user
+    window.openAssignGroupModal = function(userId) {
+        document.getElementById('assignUserId').value = userId;
+
+        const groupSelect = document.getElementById('modalAssignGroupSelect');
+        groupSelect.innerHTML = `<option value="">-- Chọn nhóm --</option>` + 
+            groupsList.map(g => `<option value="${g.id}">${g.ten_nhom} (Leader: ${g.leader_name || 'Chưa có'})</option>`).join('');
+
+        const currentUser = usersList.find(u => u.id === userId);
+        const leaderInput = document.getElementById('modalAssignLeaderInput');
+
+        if (currentUser && currentUser.group_id) {
+            groupSelect.value = currentUser.group_id;
+            const groupObj = groupsList.find(g => g.id === currentUser.group_id);
+            leaderInput.value = groupObj ? (groupObj.leader_name || 'Chưa có trưởng nhóm') : 'Không có';
+        } else {
+            groupSelect.value = "";
+            leaderInput.value = '';
+        }
+
+        document.getElementById('assignSingleGroupModal').classList.remove('hidden');
+    };
+
+    // Sự kiện khi thay đổi nhóm trên dropdown -> Tự động tìm Trưởng nhóm tương ứng
+    document.getElementById('modalAssignGroupSelect').addEventListener('change', function() {
+        const selectedGroupId = this.value;
+        const leaderInput = document.getElementById('modalAssignLeaderInput');
+
+        if (!selectedGroupId) {
+            leaderInput.value = '';
+            return;
+        }
+
+        const groupObj = groupsList.find(g => g.id == selectedGroupId);
+        if (groupObj && groupObj.leader_name) {
+            leaderInput.value = groupObj.leader_name;
+        } else {
+            leaderInput.value = 'Chưa có trưởng nhóm cho nhóm này';
+        }
+    });
+
+    // Đóng modal phân nhóm đơn lẻ
+    document.getElementById('closeAssignModal').addEventListener('click', () => {
+        document.getElementById('assignSingleGroupModal').classList.add('hidden');
+    });
+    document.getElementById('cancelAssignModal').addEventListener('click', () => {
+        document.getElementById('assignSingleGroupModal').classList.add('hidden');
+    });
+
+    // Submit cập nhật nhóm cho user
+    document.getElementById('assignSingleGroupForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const userId = document.getElementById('assignUserId').value;
+        const group_id = document.getElementById('modalAssignGroupSelect').value;
+        const groupObj = groupsList.find(g => g.id == group_id);
+
+        try {
+            const res = await fetch(`/api/admin/users/${userId}/group`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    group_id: group_id ? parseInt(group_id, 10) : null,
+                    ten_nhom: groupObj ? groupObj.ten_nhom : null,
+                    truong_nhom: groupObj ? groupObj.leader_name : null
+                })
+            });
+            const data = await res.json();
+
+            if (data.success) {
+                await Swal.fire({
+                    title: 'Thành công!',
+                    text: 'Cập nhật nhóm thành công!',
+                    icon: 'success',
+                    confirmButtonText: 'OK'
+                });
+                document.getElementById('assignSingleGroupModal').classList.add('hidden');
+                
+                // Reload dữ liệu mới
+                const resReload = await fetch('/api/admin/users');
+                const resultReload = await resReload.json();
+                if (resultReload.success) {
+                    usersList = resultReload.data || [];
+                    
+                    const searchInput = document.getElementById('searchInput');
+                    const roleFilter = document.getElementById('roleFilter');
+                    const keyword = searchInput.value.toLowerCase();
+                    const selectedRole = roleFilter.value;
+                    const userTableBody = document.getElementById('userTableBody');
+
+                    const filtered = usersList.filter(u => {
+                        const matchText = (u.ho_va_ten || '').toLowerCase().includes(keyword) || (u.ten_dang_nhap || '').toLowerCase().includes(keyword);
+                        const matchRole = selectedRole === 'all' || u.phan_quyen === selectedRole;
+                        return matchText && matchRole;
+                    });
+
+                    userTableBody.innerHTML = filtered.map((u, index) => {
+                        const isActive = u.trang_thai === 'Đang hoạt động';
+                        const tenNhom = u.ten_nhom || '<span class="opacity-40 italic">Chưa có nhóm</span>';
+                        const truongNhom = u.leader_name || '<span class="opacity-40 italic">Không có</span>';
+
+                        return `
+                            <tr class="hover:bg-black/5 dark:hover:bg-white/5 transition">
+                                <td class="p-3.5 text-center font-mono opacity-60">${index + 1}</td>
+                                <td class="p-3.5 font-medium">${u.ho_va_ten || ''}</td>
+                                <td class="p-3.5 font-mono text-emerald-500">${u.ten_dang_nhap || ''}</td>
+                                <td class="p-3.5">${tenNhom}</td>
+                                <td class="p-3.5">${truongNhom}</td>
+                                <td class="p-3.5 text-center">
+                                    <span class="px-2 py-0.5 rounded-full text-[10px] font-medium ${isActive ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'bg-red-500/10 text-red-500 border border-red-500/20'}">
+                                        ${u.trang_thai || 'Đang hoạt động'}
+                                    </span>
+                                </td>
+                                <td class="p-3.5 text-center">
+                                    <label class="relative inline-flex items-center cursor-pointer">
+                                        <input type="checkbox" class="sr-only peer" ${u.ip_limit ? 'checked' : ''} onchange="toggleIpLimit(${u.id})">
+                                        <div class="w-7 h-4 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-500"></div>
+                                    </label>
+                                </td>
+                                <td class="p-3.5 text-center space-x-1">
+                                    <button onclick="openAssignGroupModal(${u.id})" class="p-1 rounded hover:bg-black/10 dark:hover:bg-white/10 transition" title="Phân lại nhóm"><i data-lucide="folder" class="w-3.5 h-3.5 text-blue-500"></i></button>
+                                    <button onclick="toggleLockUser(${u.id})" class="p-1 rounded hover:bg-black/10 dark:hover:bg-white/10 transition" title="${isActive ? 'Khoá tài khoản' : 'Mở khoá'}"><i data-lucide="${isActive ? 'lock' : 'unlock'}" class="w-3.5 h-3.5 text-red-400"></i></button>
+                                    <button onclick="deleteUser(${u.id}, '${u.ho_va_ten || ''}')" class="p-1 rounded hover:bg-black/10 dark:hover:bg-white/10 transition" title="Xóa nhân viên"><i data-lucide="trash-2" class="w-3.5 h-3.5 text-red-500"></i></button>
+                                </td>
+                            </tr>
+                        `;
+                    }).join('');
+                    if (typeof lucide !== 'undefined') lucide.createIcons();
+                }
+            } else {
+                await Swal.fire({
+                    title: 'Thất bại!',
+                    text: data.message || 'Cập nhật thất bại!',
+                    icon: 'error',
+                    confirmButtonText: 'Đóng'
+                });
+            }
+        } catch (error) {
+            console.error('Lỗi phân nhóm:', error);
+            await Swal.fire({
+                title: 'Lỗi kết nối!',
+                text: 'Lỗi kết nối đến server!',
+                icon: 'error',
+                confirmButtonText: 'Đóng'
+            });
+        }
+    });
+
+    // Lắng nghe sự kiện thay đổi phân quyền khi thêm nhân viên
+    const phanQuyenSelect = document.getElementById('addPhanQuyen');
+    const truongNhomInput = document.getElementById('addTruongNhom');
+
+    if (phanQuyenSelect && truongNhomInput) {
+        phanQuyenSelect.addEventListener('change', (e) => {
+            const val = e.target.value;
+            if (val === 'leader') {
+                truongNhomInput.value = '';
+                truongNhomInput.disabled = true;
+                truongNhomInput.classList.add('opacity-50', 'cursor-not-allowed');
+            } else {
+                truongNhomInput.disabled = false;
+                truongNhomInput.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+        });
+    }
+</script>
+</body>
+</html>
