@@ -38,7 +38,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Chọn bộ menu phù hợp với phân quyền thực tế của user đăng nhập
     const currentMenu = menusByRole[phanQuyen] || menusByRole['agent'];
-    const isExpanded = localStorage.getItem('sidebar_expanded') === 'true';
+    // Đổi lại logic: Nếu trong localStorage chưa có giá trị (null) thì mặc định là 'true' (mở rộng). 
+    // Nếu người dùng đã từng bấm thu gọn thì mới nhận giá trị 'false'.
+    const savedSidebarState = localStorage.getItem('sidebar_expanded');
+    const isExpanded = savedSidebarState === null ? true : savedSidebarState === 'true';
     const sidebarWidth = isExpanded ? 'w-64' : 'w-12';
 
     // Thiết lập màu sắc giao diện theo theme (light/dark)

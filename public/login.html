@@ -1,211 +1,211 @@
-<!DOCTYPE html>
-<html lang="vi">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Đăng nhập - CRM Lead</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!DOCTYPE html>
+    <html lang="vi">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Đăng nhập - CRM Lead</title>
+        <script src="https://cdn.tailwindcss.com"></script>
 
-    <link rel="icon" type="image/png" href="../uploads/favicon.png">
-    <link rel="apple-touch-icon" href="../uploads/icon.png">
-</head>
+        <link rel="icon" type="image/png" href="../uploads/favicon.png">
+        <link rel="apple-touch-icon" href="../uploads/icon.png">
+    </head>
 
-<body class="bg-slate-900 flex items-center justify-center h-screen">
-    <div class="bg-white p-8 rounded-2xl shadow-xl w-96 relative">
-        <div class="text-center mb-6">
-            <h1 class="text-3xl font-bold text-slate-800">CRM LEAD</h1>
-            <p class="text-sm text-slate-500">Đăng nhập hệ thống quản lý chăm sóc khách hàng</p>
+    <body class="bg-slate-900 flex items-center justify-center h-screen">
+        <div class="bg-white p-8 rounded-2xl shadow-xl w-96 relative">
+            <div class="text-center mb-6">
+                <h1 class="text-3xl font-bold text-slate-800">CRM LEAD</h1>
+                <p class="text-sm text-slate-500">Đăng nhập hệ thống quản lý chăm sóc khách hàng</p>
+            </div>
+
+            <form id="loginForm" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Tài khoản</label>
+                    <input type="text" id="ten_dang_nhap" required class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Nhập tài khoản...">
+                </div>
+                <div>
+                    <div class="flex justify-between items-center mb-1">
+                        <label class="block text-sm font-medium text-slate-700">Mật khẩu</label>
+                        <a href="#" id="btnOpenForgot" class="text-xs text-blue-600 hover:underline">Quên mật khẩu?</a>
+                    </div>
+                    <div class="relative">
+                        <input type="password" id="mat_khau" required class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 pr-10">
+                        <button type="button" id="togglePassword" class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500 hover:text-gray-700 focus:outline-none">
+                            <svg id="eyeIcon" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition font-medium">Đăng Nhập</button>
+            </form>
+
+            <div id="errorMsg" class="mt-4 text-center text-sm text-red-500 hidden"></div>
         </div>
 
-        <form id="loginForm" class="space-y-4">
-            <div>
-                <label class="block text-sm font-medium text-slate-700 mb-1">Tài khoản</label>
-                <input type="text" id="ten_dang_nhap" required class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Nhập tài khoản...">
-            </div>
-            <div>
-                <div class="flex justify-between items-center mb-1">
-                    <label class="block text-sm font-medium text-slate-700">Mật khẩu</label>
-                    <a href="#" id="btnOpenForgot" class="text-xs text-blue-600 hover:underline">Quên mật khẩu?</a>
+        <!-- Modal Quên Mật Khẩu -->
+        <div id="forgotModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
+            <div class="bg-white p-6 rounded-xl shadow-2xl w-96">
+                <h3 class="text-lg font-bold text-slate-800 mb-2">Khôi phục mật khẩu Admin</h3>
+                
+                <!-- Bước 1: Nhập email nhận OTP -->
+                <div id="step1">
+                    <p class="text-xs text-slate-500 mb-4">Nhập email được ủy quyền để nhận mã OTP.
+                        <br>Lưu ý: chức năng chỉ dành cho Admin !
+                        <br>Nhân viên quên mật khẩu vui lòng liên hệ Admin để reset
+                    </p>
+                    <input type="text" id="forgotUser" class="w-full px-3 py-2 border rounded-lg mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" placeholder="Nhập email">
+                    <div id="msgStep1" class="text-xs mb-3 hidden"></div>
+                    <div class="flex space-x-2">
+                        <button type="button" id="btnCloseForgot" class="w-1/2 bg-slate-200 text-slate-700 py-2 rounded-lg text-sm font-medium hover:bg-slate-300">Đóng</button>
+                        <button type="button" id="btnSendOtp" class="w-1/2 bg-blue-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-blue-700">Gửi OTP</button>
+                    </div>
                 </div>
-                <div class="relative">
-                    <input type="password" id="mat_khau" required class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 pr-10">
-                    <button type="button" id="togglePassword" class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500 hover:text-gray-700 focus:outline-none">
-                        <svg id="eyeIcon" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                        </svg>
-                    </button>
-                </div>
-            </div>
-            <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition font-medium">Đăng Nhập</button>
-        </form>
 
-        <div id="errorMsg" class="mt-4 text-center text-sm text-red-500 hidden"></div>
-    </div>
-
-    <!-- Modal Quên Mật Khẩu -->
-    <div id="forgotModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
-        <div class="bg-white p-6 rounded-xl shadow-2xl w-96">
-            <h3 class="text-lg font-bold text-slate-800 mb-2">Khôi phục mật khẩu Admin</h3>
-            
-            <!-- Bước 1: Nhập email nhận OTP -->
-            <div id="step1">
-                <p class="text-xs text-slate-500 mb-4">Nhập email được ủy quyền để nhận mã OTP.
-                    <br>Lưu ý: chức năng chỉ dành cho Admin !
-                    <br>Nhân viên quên mật khẩu vui lòng liên hệ Admin để reset
-                </p>
-                <input type="text" id="forgotUser" class="w-full px-3 py-2 border rounded-lg mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" placeholder="Nhập email">
-                <div id="msgStep1" class="text-xs mb-3 hidden"></div>
-                <div class="flex space-x-2">
-                    <button type="button" id="btnCloseForgot" class="w-1/2 bg-slate-200 text-slate-700 py-2 rounded-lg text-sm font-medium hover:bg-slate-300">Đóng</button>
-                    <button type="button" id="btnSendOtp" class="w-1/2 bg-blue-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-blue-700">Gửi OTP</button>
-                </div>
-            </div>
-
-            <!-- Bước 2: Nhập OTP và mật khẩu mới -->
-            <div id="step2" class="hidden">
-                <p class="text-xs text-slate-500 mb-4">Mã OTP đã được gửi về email. Nhập mã và mật khẩu mới của bạn.</p>
-                <input type="text" id="otpCode" class="w-full px-3 py-2 border rounded-lg mb-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" placeholder="Nhập mã OTP 6 số...">
-                <input type="password" id="newPassword" class="w-full px-3 py-2 border rounded-lg mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" placeholder="Mật khẩu mới...">
-                <div id="msgStep2" class="text-xs mb-3 hidden"></div>
-                <div class="flex space-x-2">
-                    <button type="button" id="btnBackStep1" class="w-1/2 bg-slate-200 text-slate-700 py-2 rounded-lg text-sm font-medium hover:bg-slate-300">Quay lại</button>
-                    <button type="button" id="btnResetPass" class="w-1/2 bg-emerald-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-emerald-700">Xác nhận</button>
+                <!-- Bước 2: Nhập OTP và mật khẩu mới -->
+                <div id="step2" class="hidden">
+                    <p class="text-xs text-slate-500 mb-4">Mã OTP đã được gửi về email. Nhập mã và mật khẩu mới của bạn.</p>
+                    <input type="text" id="otpCode" class="w-full px-3 py-2 border rounded-lg mb-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" placeholder="Nhập mã OTP 6 số...">
+                    <input type="password" id="newPassword" class="w-full px-3 py-2 border rounded-lg mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" placeholder="Mật khẩu mới...">
+                    <div id="msgStep2" class="text-xs mb-3 hidden"></div>
+                    <div class="flex space-x-2">
+                        <button type="button" id="btnBackStep1" class="w-1/2 bg-slate-200 text-slate-700 py-2 rounded-lg text-sm font-medium hover:bg-slate-300">Quay lại</button>
+                        <button type="button" id="btnResetPass" class="w-1/2 bg-emerald-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-emerald-700">Xác nhận</button>
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
 
-<script>
-    const modal = document.getElementById('forgotModal');
-    let savedAccount = ""; // Biến lưu tạm tài khoản/email
+    <script>
+        const modal = document.getElementById('forgotModal');
+        let savedAccount = ""; // Biến lưu tạm tài khoản/email
 
-    document.getElementById('btnOpenForgot').addEventListener('click', (e) => { 
-        e.preventDefault(); 
-        modal.classList.remove('hidden'); 
-    });
-    
-    document.getElementById('btnCloseForgot').addEventListener('click', () => { 
-        modal.classList.add('hidden'); 
-    });
-
-    document.getElementById('btnBackStep1').addEventListener('click', () => {
-        document.getElementById('step2').classList.add('hidden');
-        document.getElementById('step1').classList.remove('hidden');
-    });
-
-    // 1. Gửi OTP và lưu lại tên tài khoản
-    document.getElementById('btnSendOtp').addEventListener('click', async () => {
-        const btnSend = document.getElementById('btnSendOtp');
-        const ten_dang_nhap = document.getElementById('forgotUser').value.trim();
-        const msg = document.getElementById('msgStep1');
+        document.getElementById('btnOpenForgot').addEventListener('click', (e) => { 
+            e.preventDefault(); 
+            modal.classList.remove('hidden'); 
+        });
         
-        if(!ten_dang_nhap) {
-            msg.textContent = "Vui lòng nhập tài khoản hoặc email!";
-            msg.className = "text-xs mb-3 text-red-500";
-            msg.classList.remove('hidden');
-            return;
-        }
+        document.getElementById('btnCloseForgot').addEventListener('click', () => { 
+            modal.classList.add('hidden'); 
+        });
 
-        // Disable nút và đổi chữ ngay lập tức để báo hiệu đang xử lý
-        btnSend.disabled = true;
-        btnSend.classList.add('opacity-50', 'cursor-not-allowed');
-        btnSend.textContent = "Đang gửi...";
-        msg.classList.add('hidden');
+        document.getElementById('btnBackStep1').addEventListener('click', () => {
+            document.getElementById('step2').classList.add('hidden');
+            document.getElementById('step1').classList.remove('hidden');
+        });
 
-        try {
-            const res = await fetch('/api/auth/forgot-password', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ten_dang_nhap })
-            });
-            const result = await res.json();
+        // 1. Gửi OTP và lưu lại tên tài khoản
+        document.getElementById('btnSendOtp').addEventListener('click', async () => {
+            const btnSend = document.getElementById('btnSendOtp');
+            const ten_dang_nhap = document.getElementById('forgotUser').value.trim();
+            const msg = document.getElementById('msgStep1');
             
-            if(result.success) {
-                savedAccount = ten_dang_nhap; // Lưu lại tài khoản để dùng ở bước 2
-                document.getElementById('step1').classList.add('hidden');
-                document.getElementById('step2').classList.remove('hidden');
-            } else {
-                msg.textContent = result.message;
+            if(!ten_dang_nhap) {
+                msg.textContent = "Vui lòng nhập tài khoản hoặc email!";
+                msg.className = "text-xs mb-3 text-red-500";
+                msg.classList.remove('hidden');
+                return;
+            }
+
+            // Disable nút và đổi chữ ngay lập tức để báo hiệu đang xử lý
+            btnSend.disabled = true;
+            btnSend.classList.add('opacity-50', 'cursor-not-allowed');
+            btnSend.textContent = "Đang gửi...";
+            msg.classList.add('hidden');
+
+            try {
+                const res = await fetch('/api/auth/forgot-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ten_dang_nhap })
+                });
+                const result = await res.json();
+                
+                if(result.success) {
+                    savedAccount = ten_dang_nhap; // Lưu lại tài khoản để dùng ở bước 2
+                    document.getElementById('step1').classList.add('hidden');
+                    document.getElementById('step2').classList.remove('hidden');
+                } else {
+                    msg.textContent = result.message;
+                    msg.className = "text-xs mb-3 text-red-500";
+                    msg.classList.remove('hidden');
+                }
+            } catch(err) {
+                msg.textContent = "Lỗi kết nối server!";
+                msg.className = "text-xs mb-3 text-red-500";
+                msg.classList.remove('hidden');
+            } finally {
+                // Phục hồi lại trạng thái nút nếu có lỗi xảy ra để người dùng có thể bấm gửi lại
+                btnSend.disabled = false;
+                btnSend.classList.remove('opacity-50', 'cursor-not-allowed');
+                btnSend.textContent = "Gửi OTP";
+            }
+        });
+
+        // 2. Xác thực OTP và đổi mật khẩu mới (Sử dụng biến savedAccount)
+        document.getElementById('btnResetPass').addEventListener('click', async () => {
+            const otp_code = document.getElementById('otpCode').value.trim();
+            const mat_khau_moi = document.getElementById('newPassword').value.trim();
+            const msg = document.getElementById('msgStep2');
+
+            if(!otp_code || !mat_khau_moi) {
+                msg.textContent = "Vui lòng điền đầy đủ OTP và mật khẩu mới!";
+                msg.className = "text-xs mb-3 text-red-500";
+                msg.classList.remove('hidden');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/auth/reset-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        ten_dang_nhap: savedAccount, 
+                        otp_code, 
+                        mat_khau_moi 
+                    })
+                });
+                const result = await res.json();
+                
+                if(result.success) {
+                    alert(result.message);
+                    modal.classList.add('hidden');
+                    location.reload();
+                } else {
+                    msg.textContent = result.message;
+                    msg.className = "text-xs mb-3 text-red-500";
+                    msg.classList.remove('hidden');
+                }
+            } catch(err) {
+                msg.textContent = "Lỗi kết nối server!";
                 msg.className = "text-xs mb-3 text-red-500";
                 msg.classList.remove('hidden');
             }
-        } catch(err) {
-            msg.textContent = "Lỗi kết nối server!";
-            msg.className = "text-xs mb-3 text-red-500";
-            msg.classList.remove('hidden');
-        } finally {
-            // Phục hồi lại trạng thái nút nếu có lỗi xảy ra để người dùng có thể bấm gửi lại
-            btnSend.disabled = false;
-            btnSend.classList.remove('opacity-50', 'cursor-not-allowed');
-            btnSend.textContent = "Gửi OTP";
-        }
-    });
+        });
 
-    // 2. Xác thực OTP và đổi mật khẩu mới (Sử dụng biến savedAccount)
-    document.getElementById('btnResetPass').addEventListener('click', async () => {
-        const otp_code = document.getElementById('otpCode').value.trim();
-        const mat_khau_moi = document.getElementById('newPassword').value.trim();
-        const msg = document.getElementById('msgStep2');
+        // Xử lý ẩn hiện mật khẩu
+        const togglePassword = document.getElementById('togglePassword');
+        const passwordInput = document.getElementById('mat_khau');
+        const eyeIcon = document.getElementById('eyeIcon');
 
-        if(!otp_code || !mat_khau_moi) {
-            msg.textContent = "Vui lòng điền đầy đủ OTP và mật khẩu mới!";
-            msg.className = "text-xs mb-3 text-red-500";
-            msg.classList.remove('hidden');
-            return;
-        }
-
-        try {
-            const res = await fetch('/api/auth/reset-password', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    ten_dang_nhap: savedAccount, 
-                    otp_code, 
-                    mat_khau_moi 
-                })
-            });
-            const result = await res.json();
+        togglePassword.addEventListener('click', () => {
+            const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+            passwordInput.setAttribute('type', type);
             
-            if(result.success) {
-                alert(result.message);
-                modal.classList.add('hidden');
-                location.reload();
+            // Đổi qua lại giữa hình con mắt mở và con mắt gạch chéo
+            if (type === 'text') {
+                eyeIcon.innerHTML = `
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.542-7a10.05 10.05 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.542 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                `;
             } else {
-                msg.textContent = result.message;
-                msg.className = "text-xs mb-3 text-red-500";
-                msg.classList.remove('hidden');
+                eyeIcon.innerHTML = `
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                `;
             }
-        } catch(err) {
-            msg.textContent = "Lỗi kết nối server!";
-            msg.className = "text-xs mb-3 text-red-500";
-            msg.classList.remove('hidden');
-        }
-    });
-
-    // Xử lý ẩn hiện mật khẩu
-    const togglePassword = document.getElementById('togglePassword');
-    const passwordInput = document.getElementById('mat_khau');
-    const eyeIcon = document.getElementById('eyeIcon');
-
-    togglePassword.addEventListener('click', () => {
-        const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
-        passwordInput.setAttribute('type', type);
-        
-        // Đổi qua lại giữa hình con mắt mở và con mắt gạch chéo
-        if (type === 'text') {
-            eyeIcon.innerHTML = `
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.542-7a10.05 10.05 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.542 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-            `;
-        } else {
-            eyeIcon.innerHTML = `
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-            `;
-        }
-    });
-</script>
-<!-- Script xử lý đăng nhập-->
-<script src="/login.js"></script>
-</body>
-</html>
+        });
+    </script>
+    <!-- Script xử lý đăng nhập-->
+    <script src="/login.js"></script>
+    </body>
+    </html>
