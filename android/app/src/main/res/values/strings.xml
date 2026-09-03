@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">CRM Lead</string>
+    <string name="title_activity_main">CRM Lead</string>
+    <string name="package_name">baohiem.onrender.com</string>
+    <string name="custom_url_scheme">baohiem.onrender.com</string>
+</resources>

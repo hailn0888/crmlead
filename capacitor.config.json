@@ -1,0 +1,9 @@
+{
+  "appId": "com.crm.lead",
+  "appName": "CRM Lead",
+  "webDir": "public",
+  "server": {
+    "url": "https://baohiem.onrender.com",
+    "cleartext": true
+  }
+}
