@@ -30,6 +30,8 @@ app.get('/', (req, res) => {
     res.sendFile(__dirname + '/public/login.html');
 });
 
-app.listen(PORT, () => {
-    console.log(`🚀 Hệ thống CRM Lead đang chạy mượt mà tại http://localhost:${PORT}`);
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 Hệ thống CRM Lead đang chạy mượt mà tại port ${PORT}`);
 });
