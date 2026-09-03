@@ -12,9 +12,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="/js/lucide.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="/js/lucide.min.js"></script>
+    
+    <!-- Các script dùng chung hệ thống -->
     <script src="/js/header.js"></script>
     <script src="/js/sidebar.js"></script>
     <script src="/js/theme.js"></script>
@@ -41,39 +40,42 @@
                             </div>
                         </div>
 
-                        <div class="grid grid-cols-2 gap-y-2 text-xs">
-                            <div class="opacity-70 font-medium">Số hợp đồng:</div>
-                            <div id="lbl-so-hop-dong" class="font-semibold">-</div>
+                        <div class="grid grid-cols-12 gap-y-2 text-xs">
+                        <div class="col-span-4 opacity-70 font-medium">Số hợp đồng:</div>
+                        <div id="lbl-so-hop-dong" class="col-span-8 font-semibold">-</div>
 
-                            <div class="opacity-70 font-medium">Họ và tên:</div>
-                            <div id="lbl-ho-ten" class="font-semibold">-</div>
+                        <div class="col-span-4 opacity-70 font-medium">Họ và tên:</div>
+                        <div id="lbl-ho-ten" class="col-span-8 font-semibold">-</div>
 
-                            <div class="opacity-70 font-medium">Giới tính:</div>
-                            <div id="lbl-gioi-tinh">-</div>
+                        <div class="col-span-4 opacity-70 font-medium">Giới tính:</div>
+                        <div id="lbl-gioi-tinh" class="col-span-8">-</div>
 
-                            <div class="opacity-70 font-medium">Điện thoại:</div>
-                            <div>
-                                <a id="lbl-dien-thoai-link" href="#" class="hidden inline-flex items-center gap-1 bg-emerald-600 text-white px-2 py-0.5 rounded text-xs">
-                                    <i data-lucide="phone" class="w-3 h-3"></i> <span id="lbl-dien-thoai-text">-</span>
-                                </a>
-                                <span id="lbl-dien-thoai-none" class="opacity-50">-</span>
-                            </div>
-
-                            <div class="opacity-70 font-medium">CCCD / CMND:</div>
-                            <div id="lbl-cccd">-</div>
-
-                            <div class="opacity-70 font-medium">Ngày sinh (Tuổi):</div>
-                            <div id="lbl-ngay-sinh">-</div>
-
-                            <div class="opacity-70 font-medium">Ngày tham gia:</div>
-                            <div id="lbl-ngay-tham-gia">-</div>
-
-                            <div class="opacity-70 font-medium">Mệnh giá bảo hiểm:</div>
-                            <div id="lbl-menh-gia">-</div>
-
-                            <div class="opacity-70 font-medium col-span-2">Địa chỉ đăng ký:</div>
-                            <div id="lbl-dia-chi" class="col-span-2 opacity-90"></div>
+                        <div class="col-span-4 opacity-70 font-medium">Điện thoại:</div>
+                        <div class="col-span-8">
+                            <a id="lbl-dien-thoai-link" href="#" class="hidden inline-flex items-center gap-1 bg-emerald-600 text-white px-2 py-0.5 rounded text-xs">
+                                <i data-lucide="phone" class="w-3 h-3"></i> <span id="lbl-dien-thoai-text">-</span>
+                            </a>
+                            <span id="lbl-dien-thoai-none" class="opacity-50">-</span>
                         </div>
+
+                        <div class="col-span-4 opacity-70 font-medium">CCCD / CMND:</div>
+                        <div id="lbl-cccd" class="col-span-8">-</div>
+
+                        <div class="col-span-4 opacity-70 font-medium">Ngày sinh (Tuổi):</div>
+                        <div id="lbl-ngay-sinh" class="col-span-8">-</div>
+
+                        <div class="col-span-4 opacity-70 font-medium">Ngày tham gia:</div>
+                        <div id="lbl-ngay-tham-gia" class="col-span-8">-</div>
+
+                        <div class="col-span-4 opacity-70 font-medium">Năm đáo hạn:</div>
+                        <div id="lbl-nam-dao-han" class="col-span-8">-</div>
+
+                        <div class="col-span-4 opacity-70 font-medium">Mệnh giá bảo hiểm:</div>
+                        <div id="lbl-menh-gia" class="col-span-8">-</div>
+
+                        <div class="col-span-4 opacity-70 font-medium">Địa chỉ đăng ký:</div>
+                        <div id="lbl-dia-chi" class="col-span-8 opacity-90 font-medium"></div>
+                    </div>
                     </div>
 
                     <!-- 40% Bên phải: Cập nhật kết quả cuộc gọi -->
@@ -156,11 +158,6 @@
         </div>
     </div>
 
-    <!-- Nhúng đầy đủ các file script hệ thống chuẩn đúng vị trí -->
-    <script src="/js/header.js"></script>
-    <script src="/js/sidebar.js"></script>
-    <script src="/js/theme.js"></script>
-
     <script>
         document.addEventListener("DOMContentLoaded", function() {
             if (typeof lucide !== 'undefined') {
@@ -222,5 +219,7 @@
             }
         });
     </script>
+    <!-- Nhúng file logic riêng của trang Agent Lead ở cuối body -->
+    <script src="/agents/js/leads.js"></script>
 </body>
 </html>

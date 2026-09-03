@@ -104,6 +104,23 @@ async function handleUploadSubmit(event) {
         }
 }
 
+// [VỊ TRÍ: Thêm hàm helper format ngày giờ Việt Nam vào đầu hoặc cuối file uploaddata.js]
+// [CHỨC NĂNG: Chuyển đổi thời gian UTC từ database sang định dạng giờ Việt Nam chuẩn UTC+7]
+function formatDateTimeVN(dateString) {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return new Intl.DateTimeFormat('vi-VN', {
+        timeZone: 'Asia/Ho_Chi_Minh',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+    }).format(date);
+}
+
 // Hàm tải danh sách file cho Trung tâm Phân bổ (Tab 2)
 async function loadFilesForAssignment() {
     try {

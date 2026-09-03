@@ -497,7 +497,10 @@
                         ? "bg-blue-500/10 text-blue-500 border border-blue-500/20" 
                         : "bg-amber-500/10 text-amber-500 border border-amber-500/20";
 
-                    const uploadDate = formatDateTimeUTC7(f.created_at || f.ngay_upload);
+                    const rawDate = f.created_at || f.ngay_upload;
+                    const d = rawDate ? new Date(new Date(rawDate).getTime() + 7 * 60 * 60 * 1000) : null;
+                    const uploadDate = d ? `<div class="text-center">${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}<br><span class="text-slate-400 text-[11px]">${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}</span></div>` : '';
+                    
                     const fileId = f.id || index;
 
                     return `
@@ -532,6 +535,7 @@
         fetchFiles();
 
         // [CHỨC NĂNG TAB 1]: Xử lý sự kiện bấm nút Tải Lên & Xử Lý (kèm kiểm tra trùng tên file)
+        // [CHỨC NĂNG: Đồng bộ key 'files' trong FormData khớp với API backend, bổ sung kiểm tra Content-Type JSON an toàn]
         btnUpload.addEventListener('click', async () => {
             if (selectedFiles.length === 0) {
                 await Swal.fire({
@@ -555,8 +559,9 @@
             }
 
             const formData = new FormData();
+            // [GHI CHÚ VỊ TRÍ CODE SỬA LỖI]: Đổi tên key từ 'file' thành 'files' để tương thích hoàn toàn với API backend nhận mảng hoặc đa file
             selectedFiles.forEach(file => {
-                formData.append('file', file);
+                formData.append('files', file);
             });
 
             try {
@@ -568,6 +573,13 @@
                     method: 'POST',
                     body: formData
                 });
+
+                // [GHI CHÚ VỊ TRÍ CODE SỬA LỖI]: Kiểm tra Content-Type từ server để tránh lỗi cú pháp JSON khi server trả về trang lỗi HTML
+                const contentType = res.headers.get("content-type");
+                if (!contentType || !contentType.includes("application/json")) {
+                    throw new Error("Server không trả về định dạng JSON hợp lệ (Kiểm tra lại API route trên backend).");
+                }
+
                 const result = await res.json();
 
                 if (res.ok && (result.success !== false)) {
@@ -671,6 +683,38 @@
         };
     });
 
+    // [CHỨC NĂNG: Tự động quét và cộng bù 7 tiếng cho các mốc thời gian hiển thị sai lệch múi giờ trên bảng]
+    document.addEventListener("DOMContentLoaded", () => {
+        setTimeout(() => {
+            const rows = document.querySelectorAll("table tbody tr, #file-table-body tr"); // Thay thế bằng selector thực tế của bảng
+            rows.forEach(row => {
+                // Tìm cột chứa ngày tháng (thường là cột thứ 4 hoặc có định dạng dd/mm/yyyy hh:mm)
+                const cells = row.querySelectorAll("td");
+                cells.forEach(cell => {
+                    let text = cell.innerText.trim();
+                    // Kiểm tra nếu text có dạng ngày tháng giờ (ví dụ: 03/09/2026 06:16)
+                    if (/^\d{2}\/\d{2}\/\d{4}\s+\d{2}:\d{2}$/.test(text)) {
+                        let parts = text.split(" ");
+                        let dateParts = parts[0].split("/");
+                        let timeParts = parts[1].split(":");
+                        
+                        // Tạo đối tượng Date theo UTC rồi cộng thêm 7 tiếng
+                        let d = new Date(Date.UTC(dateParts[2], dateParts[1] - 1, dateParts[0], timeParts[0], timeParts[1]));
+                        d.setHours(d.getHours() + 7);
+                        
+                        let day = String(d.getUTCDate()).padStart(2, '0');
+                        let month = String(d.getUTCMonth() + 1).padStart(2, '0');
+                        let year = d.getUTCFullYear();
+                        let hour = String(d.getUTCHours()).padStart(2, '0');
+                        let minute = String(d.getUTCMinutes()).padStart(2, '0');
+                        
+                        cell.innerText = `${day}/${month}/${year} ${hour}:${minute}`;
+                    }
+                });
+            });
+        }, 1000); // Chờ 1 giây để bảng load xong dữ liệu từ API rồi tự động update lại giờ
+    });
+
     // ================= TAB 2: LOGIC PHÂN BỔ LEAD CHO NHÂN SỰ =================
     window.loadDataForAllocation = async function() {
         const tbody = document.getElementById('allocationTableBody');
@@ -720,7 +764,9 @@
                 let agentOptions = `<option value="">-- Chọn Agent --</option>`;
                 systemAgents.forEach(agent => {
                     const selected = (file.agent_id == agent.id || file.assigned_to == agent.id) ? 'selected' : '';
-                    agentOptions += `<option value="${agent.id}" ${selected}>${agent.ho_va_ten || agent.ten_dang_nhap}</option>`;
+                    // Hiển thị định dạng: ho_va_ten (ten_dang_nhap)
+                    const displayName = `${agent.ho_va_ten || 'Chưa cập nhật'} (${agent.ten_dang_nhap || 'N/A'})`;
+                    agentOptions += `<option value="${agent.id}" ${selected}>${displayName}</option>`;
                 });
 
                 const isDisabled = isAssigned && !isLocked ? 'disabled' : '';

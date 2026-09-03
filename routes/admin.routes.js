@@ -5,13 +5,75 @@ const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage() }); // Lưu file tạm trên RAM trước khi đọc
 const XLSX = require('xlsx');
 
+/**
+ * Hàm hỗ trợ chuyển đổi linh hoạt các định dạng ngày tháng từ Excel sang YYYY-MM-DD chuẩn cho Database
+ */
+function parseFlexibleDate(rawVal) {
+    if (rawVal === undefined || rawVal === null || rawVal === '') return null;
+
+    const strVal = String(rawVal).trim();
+
+    // 1. Trường hợp đặc biệt: Excel trả về dạng chuỗi 8 số liên tục (VD: "20120816")
+    if (/^\d{8}$/.test(strVal)) {
+        const year = strVal.substring(0, 4);
+        const month = strVal.substring(4, 6);
+        const day = strVal.substring(6, 8);
+        const formatted = `${year}-${month}-${day}`;
+        const testDate = new Date(formatted);
+        if (!isNaN(testDate.getTime())) {
+            return formatted;
+        }
+    }
+
+    // 2. Trường hợp dạng số serial của Excel (VD: 41138)
+    if (!isNaN(rawVal) && strVal.length <= 6) {
+        const serial = Number(rawVal);
+        if (serial > 1000) {
+            const utcDays = Math.floor(serial - 25569);
+            const utcValue = utcDays * 86400 * 1000;
+            const dateInfo = new Date(utcValue);
+            if (!isNaN(dateInfo.getTime())) {
+                return dateInfo.toISOString().split('T')[0];
+            }
+        }
+    }
+
+    // 3. Trường hợp chuẩn ISO hoặc chuỗi ngày thông thường
+    let parsedDate = new Date(strVal);
+    if (!isNaN(parsedDate.getTime())) {
+        return parsedDate.toISOString().split('T')[0];
+    }
+
+    // 4. Xử lý các định dạng có dấu gạch chéo hoặc gạch ngang (DD/MM/YYYY hoặc MM/DD/YYYY)
+    const parts = strVal.split(/[\/\-]/);
+    if (parts.length === 3) {
+        let month = parts[0];
+        let day = parts[1];
+        let year = parts[2];
+
+        if (year.length === 4 && parts[0].length === 4) {
+            year = parts[0];
+            month = parts[1];
+            day = parts[2];
+        } else if (year.length === 2) {
+            year = (parseInt(year) > 50 ? '19' : '20') + year;
+        }
+
+        if (year.length === 4 && !isNaN(month) && !isNaN(day)) {
+            const formatted = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            const testDate = new Date(formatted);
+            if (!isNaN(testDate.getTime())) {
+                return formatted;
+            }
+        }
+    }
+
+    return null;
+}
+
 // ==========================================
 // 0. KIỂM TRA TRẠNG THÁI ROUTE
 // ==========================================
-/**
- * Route kiểm tra kết nối cơ bản
- * Endpoint: GET /admin/
- */
 router.get('/', (req, res) => {
     res.json({ message: "Route đang hoạt động bình thường!" });
 });
@@ -21,10 +83,6 @@ router.get('/', (req, res) => {
 // 1. QUẢN LÝ USER & GROUPS (NHÂN SỰ & NHÓM)
 // ==========================================
 
-/**
- * Lấy danh sách toàn bộ người dùng/nhân sự
- * Endpoint: GET /admin/users
- */
 router.get('/users', async (req, res) => {
     try {
         const { data: users, error: userError } = await req.supabase
@@ -34,7 +92,6 @@ router.get('/users', async (req, res) => {
 
         if (userError) throw userError;
 
-        // Chuẩn hóa dữ liệu hiển thị (nếu chưa có nhóm hay trưởng nhóm)
         const formattedData = users.map(u => ({
             ...u,
             ten_nhom: u.ten_nhom || 'Chưa có nhóm',
@@ -47,10 +104,6 @@ router.get('/users', async (req, res) => {
     }
 });
 
-/**
- * Lấy danh sách các nhóm làm việc (Gom nhóm từ bảng users)
- * Endpoint: GET /admin/groups
- */
 router.get('/groups', async (req, res) => {
     try {
         const { data, error } = await req.supabase
@@ -66,7 +119,7 @@ router.get('/groups', async (req, res) => {
                 groupMap.set(u.ten_nhom, {
                     id: u.group_id || u.id,
                     ten_nhom: u.ten_nhom,
-                    leader_name: u.truong_nhom || (u.phan_quyen === 'leader' ? u.ho_va_ten : 'Chưa có')
+                    leader_name: u.truong_nhom || (u.phan_quyen?.toLowerCase() === 'leader' ? u.ho_va_ten : 'Chưa có')
                 });
             }
         });
@@ -77,10 +130,6 @@ router.get('/groups', async (req, res) => {
     }
 });
 
-/**
- * Thêm mới một tài khoản nhân sự vào hệ thống
- * Endpoint: POST /admin/users
- */
 router.post('/users', async (req, res) => {
     try {
         const { ten_dang_nhap, mat_khau, ho_va_ten, phan_quyen, ten_nhom, truong_nhom } = req.body;
@@ -106,10 +155,6 @@ router.post('/users', async (req, res) => {
     }
 });
 
-/**
- * Xóa tài khoản nhân sự theo ID
- * Endpoint: DELETE /admin/users/:id
- */
 router.delete('/users/:id', async (req, res) => {
     try {
         const userId = req.params.id;
@@ -125,10 +170,6 @@ router.delete('/users/:id', async (req, res) => {
     }
 });
 
-/**
- * Khóa hoặc Mở khóa tài khoản nhân sự
- * Endpoint: PATCH /admin/users/:id/toggle-lock
- */
 router.patch('/users/:id/toggle-lock', async (req, res) => {
     try {
         const userId = req.params.id;
@@ -155,10 +196,6 @@ router.patch('/users/:id/toggle-lock', async (req, res) => {
 // 2. QUẢN LÝ DATA FILE & BATCH (TẢI LÊN & XỬ LÝ EXCEL)
 // ==========================================
 
-/**
- * Lấy danh sách các file dữ liệu đã tải lên
- * Endpoint: GET /admin/data-files
- */
 router.get('/data-files', async (req, res) => {
     try {
         const { data: files, error } = await req.supabase
@@ -175,67 +212,136 @@ router.get('/data-files', async (req, res) => {
 });
 
 /**
- * Tải lên file Excel, đọc dữ liệu và lưu vào data_files & contracts
- * Endpoint: POST /admin/upload-data
+ * POST /upload-data - Tải lên file Excel và tự động gán file_id cho từng dòng contracts
  */
-router.post('/upload-data', upload.single('file'), async (req, res) => {
+router.post('/upload-data', upload.array('files'), async (req, res) => {
     try {
-        if (!req.file) {
+        const uploadedFiles = req.files || (req.file ? [req.file] : []);
+
+        if (uploadedFiles.length === 0) {
             return res.status(400).json({ success: false, message: 'Vui lòng chọn file tải lên.' });
         }
 
-        const fileName = req.file.originalname;
-        const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
-        const sheetName = workbook.SheetNames[0];
-        const sheet = workbook.Sheets[sheetName];
-        const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-        const totalRecords = rows.length > 1 ? rows.length - 1 : 0;
+        for (const file of uploadedFiles) {
+            const fileName = file.originalname;
+            const workbook = XLSX.read(file.buffer, { type: 'buffer' });
+            const sheetName = workbook.SheetNames[0];
+            const sheet = workbook.Sheets[sheetName];
+            const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+            const totalRecords = rows.length > 1 ? rows.length - 1 : 0;
 
-        // 1. Lưu thông tin tổng quan của file vào bảng data_files
-        const { error: fileErr } = await req.supabase
-            .from('data_files')
-            .insert([{
-                file_name: fileName,
-                total_records: totalRecords > 0 ? totalRecords : 0,
-                status: 'Chưa phân bổ',
-                untouched_count: totalRecords > 0 ? totalRecords : 0,
-                called_count: 0,
-                appt_count: 0,
-                created_at: new Date().toISOString()
-            }]);
+            // Bước 1: Lưu thông tin file vào bảng data_files
+            const { data: fileRecord, error: fileErr } = await req.supabase
+                .from('data_files')
+                .insert([{
+                    file_name: fileName,
+                    total_records: totalRecords > 0 ? totalRecords : 0,
+                    status: 'Chưa phân bổ',
+                    untouched_count: totalRecords > 0 ? totalRecords : 0,
+                    called_count: 0,
+                    appt_count: 0,
+                    created_at: new Date().toISOString()
+                }])
+                .select()
+                .single();
 
-        if (fileErr) throw fileErr;
+            if (fileErr) throw fileErr;
+            const fileId = fileRecord.id; // Lấy ID file vừa tạo
 
-        // 2. Đọc từng dòng dữ liệu Excel và lưu vào bảng contracts
-        if (rows.length > 1) {
-            const headers = rows[0];
-            const contractRows = rows.slice(1).map(row => {
-                let rowObj = {};
-                headers.forEach((h, index) => {
-                    if (h) {
-                        const keyClean = h.toString().trim();
-                        if (keyClean === 'so_hop_dong' || keyClean === 'Số hợp đồng') rowObj.so_hop_dong = row[index] || '';
-                        if (keyClean === 'dien_thoai' || keyClean === 'Điện thoại') rowObj.dien_thoai = row[index] || '';
+            // Bước 2: Đọc dữ liệu Excel và chuẩn bị dữ liệu
+            if (rows.length > 1) {
+                const headers = rows[0];
+                let customerMap = new Map();
+                let contractRows = [];
+
+                rows.slice(1).forEach(row => {
+                    let cRow = { file_id: fileId, so_hop_dong: '', dien_thoai: '' };
+                    let cusRow = { dien_thoai: '' };
+
+                    headers.forEach((h, index) => {
+                        if (h) {
+                            const keyClean = h.toString().trim().toLowerCase();
+                            let rawVal = row[index];
+                            const val = rawVal !== undefined && rawVal !== null ? String(rawVal).trim() : '';
+
+                            // DEBUG: Bật dòng này nếu muốn xem tên cột thực tế trên console của server
+                            console.log(`Col header: [${keyClean}] -> Val: [${rawVal}]`);
+
+                            if (keyClean.includes('hop_dong') || keyClean.includes('hợp đồng') || keyClean.includes('so_hd')) cRow.so_hop_dong = val;
+                            if (keyClean.includes('dien_thoai') || keyClean.includes('điện thoại') || keyClean.includes('phone') || keyClean.includes('sdt') || keyClean.includes('so_dt')) {
+                                cRow.dien_thoai = val;
+                                cusRow.dien_thoai = val;
+                            }
+                            if (keyClean.includes('thu_tu') || keyClean.includes('thứ tự')) cRow.so_thu_tu = val ? parseInt(val) : null;
+                            if (keyClean.includes('vp_bank')) cRow.vp_bank = val;
+                            if (keyClean.includes('msdl')) cRow.msdl = val ? parseInt(val) : null;
+                            if (keyClean.includes('cv')) cRow.cv = val;
+                            
+                            // MỞ RỘNG TỪ KHÓA BẮT NGÀY THAM GIA
+                            if (keyClean.includes('ngay_tham_gia') || keyClean.includes('ngày tham gia') || keyClean.includes('ngaythamgia') || keyClean.includes('tham gia')) {
+                                cRow.ngay_tham_gia = parseFlexibleDate(rawVal);
+                            }
+
+                            if (keyClean.includes('tinh_trang') || keyClean.includes('tình trạng')) cRow.tinh_trang_hs = val;
+                            if (keyClean.includes('menh_gia') || keyClean.includes('mệnh giá') || keyClean.includes('menhgia')) cRow.menh_gia = val ? parseFloat(val) : null;
+                            if (keyClean.includes('dao_han') || keyClean.includes('đáo hạn') || keyClean.includes('daohan')) cRow.nam_dao_han = val ? parseInt(val) : null;
+                            if (keyClean.includes('ip')) cRow.ip = val ? parseInt(val) : null;
+
+                            if (keyClean.includes('cccd')) cusRow.cccd = val;
+                            if (keyClean === 'ho' || keyClean.includes('họ')) cusRow.ho = val;
+                            if (keyClean === 'ten' || keyClean.includes('tên')) cusRow.ten = val;
+                            if (keyClean.includes('gioi_tinh') || keyClean.includes('giới tính') || keyClean.includes('gioitinh')) cusRow.gioi_tinh = val;
+                            
+                            // MỞ RỘNG TỪ KHÓA BẮT NGÀY SINH
+                            if (keyClean.includes('ngay_sinh') || keyClean.includes('ngày sinh') || keyClean.includes('ngaysinh')) {
+                                cusRow.ngay_sinh = parseFlexibleDate(rawVal);
+                            }
+
+                            if (keyClean.includes('tuoi') || keyClean.includes('tuổi')) cusRow.tuoi = val ? parseInt(val) : null;
+                            if (keyClean.includes('dia_chi') || keyClean.includes('địa chỉ') || keyClean.includes('diachi')) cusRow.dia_chi = val;
+                        }
+                    });
+
+                    if (!cRow.so_hop_dong) cRow.so_hop_dong = 'HD_' + (cRow.dien_thoai || Math.random().toString(36).substring(7));
+
+                    if (cusRow.dien_thoai) {
+                        customerMap.set(cusRow.dien_thoai, {
+                            ...cusRow,
+                            ngay_tao: new Date().toISOString()
+                        });
                     }
-                });
-                return rowObj;
-            }).filter(r => r.so_hop_dong || r.dien_thoai);
 
-            if (contractRows.length > 0) {
-                await req.supabase.from('contracts').insert(contractRows);
+                    contractRows.push(cRow);
+                });
+
+                // Bước 3: Insert bảng customers
+                if (customerMap.size > 0) {
+                    const customersData = Array.from(customerMap.values());
+                    const { error: cusErr } = await req.supabase
+                        .from('customers')
+                        .upsert(customersData, { onConflict: 'dien_thoai' });
+                    
+                    if (cusErr) throw cusErr;
+                }
+
+                // Bước 4: Insert bảng contracts kèm file_id
+                if (contractRows.length > 0) {
+                    const { error: insertErr } = await req.supabase
+                        .from('contracts')
+                        .insert(contractRows);
+                    
+                    if (insertErr) throw insertErr;
+                }
             }
         }
 
-        res.json({ success: true, message: 'Upload và xử lý file thành công!' });
+        res.json({ success: true, message: 'Upload và xử lý dữ liệu thành công!' });
     } catch (error) {
+        console.error("Upload error:", error.message);
         res.status(500).json({ success: false, message: error.message });
     }
 });
 
-/**
- * Đổi tên file dữ liệu theo ID
- * Endpoint: PUT /admin/rename-file/:id
- */
 router.put('/rename-file/:id', async (req, res) => {
     try {
         const fileId = req.params.id;
@@ -248,15 +354,12 @@ router.put('/rename-file/:id', async (req, res) => {
     }
 });
 
-/**
- * Lấy danh sách leads/contracts chi tiết hiển thị cho Khung 2
- * Endpoint: GET /admin/file-leads/:fileId
- */
 router.get('/file-leads/:fileId', async (req, res) => {
     try {
         const { data, error } = await req.supabase
             .from('contracts')
-            .select('*');
+            .select('*')
+            .eq('file_id', req.params.fileId); // Đã lọc chuẩn theo fileId
 
         if (error) throw error;
 
@@ -269,13 +372,9 @@ router.get('/file-leads/:fileId', async (req, res) => {
 
 
 // ==========================================
-// 3. PHÂN BỔ DATA CHO AGENT
+// 3. PHÂN BỔ DATA CHO AGENT (ĐÃ GỘP CHUẨN)
 // ==========================================
 
-/**
- * Lấy dữ liệu cấu hình tuỳ chọn phân bổ (danh sách file và danh sách user)
- * Endpoint: GET /admin/allocation-options
- */
 router.get('/allocation-options', async (req, res) => {
     try {
         const { data: files, error: fileError } = await req.supabase
@@ -301,16 +400,12 @@ router.get('/allocation-options', async (req, res) => {
     }
 });
 
-/**
- * Lấy danh sách nhân viên có phân quyền là agent
- * Endpoint: GET /admin/agents
- */
 router.get('/agents', async (req, res) => {
     try {
         const { data, error } = await req.supabase
             .from('users')
             .select('id, ho_va_ten, ten_dang_nhap')
-            .eq('phan_quyen', 'agent');
+            .ilike('phan_quyen', 'agent');
 
         if (error) throw error;
         res.json(data);
@@ -319,10 +414,6 @@ router.get('/agents', async (req, res) => {
     }
 });
 
-/**
- * Khóa hoặc mở khóa trạng thái xử lý của file
- * Endpoint: PUT /admin/data-files/:id/lock
- */
 router.put('/data-files/:id/lock', async (req, res) => {
     try {
         const fileId = req.params.id;
@@ -342,101 +433,106 @@ router.put('/data-files/:id/lock', async (req, res) => {
 });
 
 /**
- * Xóa một file dữ liệu cùng các thông tin liên quan theo ID
- * Endpoint: DELETE /admin/data-files/:id
+ * DELETE /data-files/:fileId - Xóa sạch file và toàn bộ contracts thuộc file_id đó (Dùng req.supabase)
  */
-router.delete('/data-files/:id', async (req, res) => {
+router.delete('/data-files/:fileId', async (req, res) => {
     try {
-        const fileId = req.params.id;
-        const db = req.supabase;
+        const { fileId } = req.params;
 
-        const { error: deleteError } = await db
+        if (!fileId) {
+            return res.status(400).json({ success: false, message: 'Thiếu mã định danh file cần xóa!' });
+        }
+
+        // 1. Xóa các dòng hợp đồng thuộc file_id trong bảng contracts
+        const { error: deleteContractsError } = await req.supabase
+            .from('contracts')
+            .delete()
+            .eq('file_id', fileId);
+
+        if (deleteContractsError) {
+            throw new Error(`Không thể xóa dữ liệu hợp đồng: ${deleteContractsError.message}`);
+        }
+
+        // 2. Xóa thông tin file trong bảng data_files
+        const { error: deleteFileError } = await req.supabase
             .from('data_files')
             .delete()
             .eq('id', fileId);
 
-        if (deleteError) throw deleteError;
+        if (deleteFileError) {
+            throw new Error(`Không thể xóa thông tin file: ${deleteFileError.message}`);
+        }
 
-        return res.json({ 
+        return res.status(200).json({ 
             success: true, 
-            message: 'Đã xóa file thành công!' 
+            message: 'Đã xóa sạch file và toàn bộ dữ liệu liên quan!' 
         });
 
     } catch (error) {
-        console.error('Lỗi khi xóa file:', error);
-        return res.status(500).json({ success: false, message: 'Lỗi server: ' + error.message });
+        console.error('Delete File Error:', error.message);
+        return res.status(500).json({ success: false, message: error.message });
     }
 });
 
 /**
- * Phân bổ data file cho Agent cụ thể:
- * - Cập nhật trạng thái file thành 'Đã phân bổ'
- * - Đồng bộ danh sách hợp đồng sang bảng `lead_assignments` để Agent có thể gọi điện trên workspace.
- * Endpoint: POST /admin/data-files/:id/assign
+ * POST /data-files/:fileId/assign - Phân bổ lead từ file cho Agent chính xác
  */
-router.post('/data-files/:id/assign', async (req, res) => {
+router.post('/data-files/:fileId/assign', async (req, res) => {
     try {
-        const fileId = req.params.id;
+        const { fileId } = req.params;
         const { agent_id } = req.body;
 
-        // Bước 1: Lấy tên file gốc từ bảng data_files dựa vào fileId
-        const { data: fileData, error: fileErr } = await req.supabase
-            .from('data_files')
-            .select('file_name')
-            .eq('id', fileId)
-            .single();
+        if (!agent_id) {
+            return res.status(400).json({ success: false, message: 'Vui lòng chọn nhân sự nhận phân bổ!' });
+        }
 
-        if (fileErr || !fileData) throw new Error('Không tìm thấy thông tin file!');
-        const fileName = fileData.file_name;
-
-        // Bước 2: Truy vấn thông tin Agent từ bảng users để lấy họ tên đầy đủ
-        const { data: agentData, error: agentErr } = await req.supabase
-            .from('users')
-            .select('ho_va_ten')
-            .eq('id', agent_id)
-            .single();
-
-        if (agentErr || !agentData) throw new Error('Không tìm thấy thông tin Agent!');
-        const agentName = agentData.ho_va_ten;
-
-        // Bước 3: Cập nhật trạng thái file trong bảng data_files thành 'Đã phân bổ'
-        const { error: updateFileErr } = await req.supabase
+        // 1. Cập nhật trạng thái file
+        const { error: updateFileError } = await req.supabase
             .from('data_files')
             .update({ 
                 agent_id: agent_id, 
-                status: 'Đã phân bổ' 
+                status: 'Đã phân bổ',
+                updated_at: new Date().toISOString() 
             })
             .eq('id', fileId);
 
-        if (updateFileErr) throw updateFileErr;
+        if (updateFileError) throw new Error(updateFileError.message);
 
-        // Bước 4: Lấy danh sách toàn bộ hợp đồng hiện có để chuẩn bị phân phối
-        const { data: contracts, error: contractErr } = await req.supabase
+        // 2. Lấy danh sách contracts theo đúng fileId này
+        const { data: fileContracts, error: fetchError } = await req.supabase
             .from('contracts')
-            .select('so_hop_dong, dien_thoai');
+            .select('dien_thoai, so_hop_dong')
+            .eq('file_id', fileId);
 
-        if (contractErr) throw contractErr;
+        if (fetchError) throw new Error(fetchError.message);
 
-        // Bước 5: Map dữ liệu và insert vào bảng lead_assignments dành riêng cho Agent gọi điện
-        if (contracts && contracts.length > 0) {
-            const assignments = contracts.map(item => ({
-                so_hop_dong: item.so_hop_dong,
-                dien_thoai: item.dien_thoai,
-                nguoi_phu_trach: agentName, // Lưu tên đầy đủ của agent phụ trách
-                trang_thai_lead: 'Chưa gọi'   // Trạng thái mặc định ban đầu
-            }));
-
-            const { error: insertErr } = await req.supabase
-                .from('lead_assignments')
-                .insert(assignments);
-
-            if (insertErr) throw insertErr;
+        if (!fileContracts || fileContracts.length === 0) {
+            return res.status(400).json({ success: false, message: 'File này không chứa dữ liệu hợp đồng hoặc chưa được parse!' });
         }
 
-        res.json({ success: true, message: 'Phân bổ lead và đồng bộ vào workspace thành công!' });
-    } catch (err) {
-        console.error("Lỗi phân bổ:", err.message);
-        res.status(500).json({ success: false, message: err.message });
+        // 3. Batch insert sang bảng lead_assignments
+        const assignments = fileContracts.map(item => ({
+            dien_thoai: item.dien_thoai || null,
+            so_hop_dong: item.so_hop_dong || null,
+            agent_id: agent_id,
+            trang_thai_lead: 'Chưa gọi',
+            created_at: new Date().toISOString()
+        }));
+
+        const { error: insertError } = await req.supabase
+            .from('lead_assignments')
+            .insert(assignments);
+
+        if (insertError) throw new Error(insertError.message);
+
+        return res.status(200).json({ 
+            success: true, 
+            message: `Đã phân bổ thành công ${assignments.length} lead cho nhân sự!` 
+        });
+
+    } catch (error) {
+        console.error('API Assignment Error:', error.message);
+        return res.status(500).json({ success: false, message: error.message });
     }
 });
 
