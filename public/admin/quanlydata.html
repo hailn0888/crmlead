@@ -6,13 +6,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Quản lý Data File & Phân Bổ - CRM Lead</title>
     <link rel="icon" type="image/png" href="/uploads/favicon.png">
-    <!-- Lucide Icons -->
+    
+    <!-- ================= THƯ VIỆN & CẤU HÌNH GIAO DIỆN (HEADER) ================= -->
+    <!-- Lucide Icons: Thư viện icon đồng bộ -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- SweetAlert2 -->
+    <!-- SweetAlert2: Thư viện hiển thị hộp thoại thông báo (Alert/Confirm) -->
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <!-- File Theme chung -->
+    <!-- File Theme chung: Quản lý màu sắc động sáng/tối theo theme.js -->
     <script src="/js/theme.js"></script>
 
+    <!-- Xử lý ẩn cảnh báo không cần thiết từ Tailwind CDN trên Console -->
     <script>
     const originalConsoleWarn = console.warn;
     console.warn = function(...args) {
@@ -22,51 +25,52 @@
         originalConsoleWarn.apply(console, args);
     };
     </script>
-     <!-- Tailwind CSS CDN -->
+    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
+    <!-- SheetJS (xlsx): Thư viện xử lý đọc/ghi file Excel/CSV ở phía Client -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 
 <body class="min-h-screen flex flex-col transition-colors duration-200">
 
-    <!-- Header dùng chung -->
+    <!-- Header dùng chung của hệ thống -->
     <script src="/js/header.js"></script>
     
-    <!-- Sidebar dùng chung -->
+    <!-- Sidebar thanh menu điều hướng dọc bên trái -->
     <script src="/js/sidebar.js"></script>
 
-    <!-- Khung nội dung chính -->
+    <!-- Khung nội dung chính của trang quản lý data -->
     <div id="mainContainer" class="flex-1 flex flex-col overflow-y-auto transition-colors duration-200 pt-16 ml-64 p-6">
         
-        <!-- Tiêu đề trang & Các tab điều hướng -->
+        <!-- Tiêu đề trang & Các tab điều hướng chức năng -->
         <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
             <div>
                 <h1 class="text-xl font-bold tracking-tight">Quản lý Data File & Phân Bổ</h1>
                 <p class="text-xs opacity-70 mt-0.5">Hệ thống phân bổ, kiểm soát chất lượng và kiểm toán data tập trung.</p>
             </div>
-            <!-- Các tab chuyển đổi giao diện qua lại -->
+            <!-- Các nút bấm chuyển đổi qua lại giữa 4 Tab chức năng -->
             <div class="flex items-center space-x-2 text-xs font-medium">
-                <button onclick="switchTab(1)" id="tabBtn1" class="px-3 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 transition">1. Data File</button>
-                <button onclick="switchTab(2)" id="tabBtn2" class="px-3 py-1.5 rounded-xl border border-inherit opacity-60 hover:opacity-100 transition">2. Phân Công</button>
+                <button onclick="switchTab(1)" id="tabBtn1" class="px-3 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 transition">1. Upload Data</button>
+                <button onclick="switchTab(2)" id="tabBtn2" class="px-3 py-1.5 rounded-xl border border-inherit opacity-60 hover:opacity-100 transition">2. Phân Bổ Lead</button>
                 <button onclick="switchTab(3)" id="tabBtn3" class="px-3 py-1.5 rounded-xl border border-inherit opacity-60 hover:opacity-100 transition">3. Lọc Dữ Liệu</button>
-                <button onclick="switchTab(4)" id="tabBtn4" class="px-3 py-1.5 rounded-xl border border-inherit opacity-60 hover:opacity-100 transition">4. Chi Tiết Lịch Sử</button>
+                <button onclick="switchTab(4)" id="tabBtn4" class="px-3 py-1.5 rounded-xl border border-inherit opacity-60 hover:opacity-100 transition">4. Chi Tiết Gán Lead</button>
             </div>
         </div>
 
-        <!-- ================= TAB 1: DATA FILE ================= -->
+        <!-- ================= TAB 1: UPLOAD & QUẢN LÝ DATA FILE ================= -->
         <div id="tabContent1" class="space-y-6 flex-1 flex flex-col">
-            <!-- Khu vực Tải lên File Dữ Liệu -->
+            <!-- Khu vực Tải lên File Dữ Liệu (Hỗ trợ kéo thả hoặc chọn file) -->
             <div class="p-6 rounded-2xl border border-inherit theme-dropdown">
                 <h3 class="font-bold text-sm mb-4 flex items-center space-x-2">
                     <i data-lucide="upload-cloud" class="w-4 h-4 text-emerald-500"></i>
                     <span>Tải Lên Nhiều File Dữ Liệu (Excel/CSV)</span>
                 </h3>
                 <div class="flex flex-col sm:flex-row items-center gap-4">
-                    <!-- Drop Zone -->
+                    <!-- Drop Zone để kéo thả file -->
                     <label id="dropZone" class="w-full sm:w-auto flex-1 flex flex-col items-center justify-center p-6 border-2 border-dashed border-inherit rounded-xl cursor-pointer hover:border-emerald-500 transition text-center">
                         <i data-lucide="file-spreadsheet" class="w-8 h-8 text-emerald-500 mb-2"></i>
-                        <span id="fileNameLabel" class="text-xs font-medium opacity-80">Nhấn để chọn file hoặc kéo thả nhiều file Excel/CSV vào đây...</span>
+                        <span id="fileNameLabel" class="text-xs font-medium opacity-80">Nhấn để chọn file hoặc kéo thả nhiều file vào đây...</span>
                         <input type="file" id="excelFile" accept=".xlsx, .xls, .csv" multiple class="hidden">
                     </label>
                     <button id="btnUpload" class="w-full sm:w-auto px-6 py-4 rounded-xl bg-emerald-500 text-white hover:bg-emerald-600 transition text-xs font-medium flex items-center justify-center space-x-2 shadow-lg shadow-emerald-500/20">
@@ -76,13 +80,20 @@
                 </div>
             </div>
 
-            <!-- Danh sách Data File -->
-            <div class="rounded-2xl border border-inherit overflow-hidden theme-dropdown flex-1">
-                <div class="p-4 border-b border-inherit font-bold text-xs flex items-center justify-between">
-                    <span>Danh Sách Data File Đã Tải Lên</span>
-                    <span id="fileCountBadge" class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">0 files</span>
+            <!-- Bảng hiển thị danh sách Data File đã tải lên ở Tab 1 -->
+            <div class="rounded-2xl border border-inherit overflow-hidden theme-dropdown flex-1 flex flex-col">
+                <div class="p-4 border-b border-inherit font-bold text-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div class="flex items-center space-x-2">
+                        <span>Danh Sách Data File Đã Tải Lên</span>
+                        <span id="fileCountBadge" class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">0 files</span>
+                    </div>
+                    <!-- Ô thanh tìm kiếm trực tiếp cho Tab 1 -->
+                    <div class="relative w-full sm:w-64">
+                        <input type="text" id="searchTab1" placeholder="Tìm kiếm tên file..." class="w-full px-3 py-1.5 pl-8 rounded-xl border border-inherit bg-transparent text-xs font-normal focus:outline-none focus:border-emerald-500 transition">
+                        <i data-lucide="search" class="w-3.5 h-3.5 opacity-50 absolute left-2.5 top-2.5"></i>
+                    </div>
                 </div>
-                <div class="overflow-x-auto">
+                <div class="overflow-x-auto flex-1">
                     <table class="w-full text-left border-collapse text-xs">
                         <thead>
                             <tr class="border-b border-inherit opacity-75 font-semibold">
@@ -104,35 +115,173 @@
             </div>
         </div>
 
-        <!-- ================= TAB 2: PHÂN CÔNG ================= -->
-        <div id="tabContent2" class="hidden space-y-6 flex-1">
-            <div class="p-6 rounded-2xl border border-inherit theme-dropdown">
-                <h3 class="font-bold text-sm mb-2 flex items-center space-x-2">
-                    <i data-lucide="users" class="w-4 h-4 text-emerald-500"></i>
-                    <span>Khu Vực Phân Công Lead Cho Nhân Sự / Nhóm</span>
-                </h3>
-                <p class="text-xs opacity-70">Giao các tệp data đã tải lên cho các Agent hoặc Leader theo tiêu chí mong muốn.</p>
-                <div class="mt-6 p-12 text-center border border-dashed border-inherit rounded-xl opacity-60 text-xs">
-                    Giao diện Phân Công Lead đang sẵn sàng.
+        <!-- ================= TAB 2: PHÂN BỔ LEAD CHO NHÂN SỰ ================= -->
+        <div id="tabContent2" class="hidden space-y-6 flex-1 flex flex-col">
+            <div class="p-6 rounded-2xl border border-inherit theme-dropdown flex-1 flex flex-col">
+                <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
+                    <div>
+                        <h3 class="font-bold text-sm flex items-center space-x-2">
+                            <i data-lucide="users" class="w-4 h-4 text-emerald-500"></i>
+                            <span>Khu Vực Phân Công Data File Cho Nhân Sự</span>
+                        </h3>
+                        <p class="text-xs opacity-70 mt-0.5">Giao các tệp data đã tải lên cho các Agent hoặc khóa file khi cần thiết.</p>
+                    </div>
+                    
+                    <!-- Các bộ lọc tìm kiếm, trạng thái và chọn Agent ở Tab 2 -->
+                    <div class="flex flex-wrap items-center gap-2">
+                        <div class="relative w-full sm:w-52">
+                            <input type="text" id="searchTab2" placeholder="Tìm kiếm tên file..." class="w-full px-3 py-1.5 pl-8 rounded-xl border border-inherit bg-transparent text-xs focus:outline-none focus:border-emerald-500 transition">
+                            <i data-lucide="search" class="w-3.5 h-3.5 opacity-50 absolute left-2.5 top-2.5"></i>
+                        </div>
+                        <select id="statusFilterTab2" class="px-3 py-1.5 rounded-xl border border-inherit bg-transparent text-xs focus:outline-none focus:border-emerald-500 transition">
+                            <option value="">Tất cả trạng thái</option>
+                            <option value="Đã phân bổ">Đã phân bổ</option>
+                            <option value="Chờ phân bổ">Chờ phân bổ</option>
+                            <option value="Đã khóa">Đã khóa</option>
+                        </select>
+                        <select id="agentFilterTab2" class="px-3 py-1.5 rounded-xl border border-inherit bg-transparent text-xs focus:outline-none focus:border-emerald-500 transition">
+                            <option value="">Tất cả Agent</option>
+                        </select>
+                        <button onclick="loadDataForAllocation()" class="px-3 py-1.5 rounded-xl border border-inherit hover:opacity-100 opacity-80 transition text-xs font-medium flex items-center space-x-1">
+                            <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+                            <span>Làm mới</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto flex-1">
+                    <table class="w-full text-left border-collapse text-xs">
+                        <thead>
+                            <tr class="border-b border-inherit opacity-75 font-semibold">
+                                <th class="p-3.5 text-center w-12">STT</th>
+                                <th class="p-3.5">Tên File</th>
+                                <th class="p-3.5 text-center">Tổng Lead</th>
+                                <th class="p-3.5 text-center">Trạng Thái</th>
+                                <th class="p-3.5">Nhân Viên Gọi (Agent)</th>
+                                <th class="p-3.5 text-center">Thao Tác</th>
+                            </tr>
+                        </thead>
+                        <tbody id="allocationTableBody" class="divide-y divide-inherit">
+                            <tr>
+                                <td colspan="6" class="text-center py-8 opacity-60">Đang tải danh sách phân bổ...</td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
 
-        <!-- ================= TAB 3: LỌC DỮ LIỆU ================= -->
-        <div id="tabContent3" class="hidden space-y-6 flex-1">
+        <!-- ================= [CHỨC NĂNG TAB 3]: GIAO DIỆN LỌC DỮ LIỆU & QUẢN LÝ GỌI ================= -->
+        <div id="tabContent3" class="hidden space-y-6 flex-1 flex flex-col">
+            
+            <!-- Khung 1: Danh sách Data File Đang Phân Bổ -->
             <div class="p-6 rounded-2xl border border-inherit theme-dropdown">
-                <h3 class="font-bold text-sm mb-2 flex items-center space-x-2">
-                    <i data-lucide="filter" class="w-4 h-4 text-emerald-500"></i>
-                    <span>Lọc Dữ Liệu & Kiểm Soát Chất Lượng</span>
-                </h3>
-                <p class="text-xs opacity-70">Lọc trùng số điện thoại, kiểm tra định dạng và chất lượng nguồn data.</p>
-                <div class="mt-6 p-12 text-center border border-dashed border-inherit rounded-xl opacity-60 text-xs">
-                    Công cụ Lọc Dữ Liệu và quét trùng lặp.
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                    <div>
+                        <h3 class="font-bold text-sm flex items-center space-x-2">
+                            <i data-lucide="filter" class="w-4 h-4 text-emerald-500"></i>
+                            <span>1. Dữ liệu đang gọi & Phân bổ</span>
+                        </h3>
+                        <p class="text-xs opacity-70 mt-0.5">Danh sách các tệp dữ liệu đang được triển khai gọi và khai thác.</p>
+                    </div>
+                    
+                    <!-- Bộ lọc và tìm kiếm ở Khung 1 -->
+                    <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                        <!-- Dropdown lọc theo Nhân viên (Agent) -->
+                        <select id="agentFilterTab3" class="px-3 py-1.5 rounded-xl border border-inherit bg-transparent text-xs focus:outline-none focus:border-emerald-500 transition">
+                            <option value="">Tất cả Agent</option>
+                        </select>
+
+                        <!-- Ô tìm kiếm nhanh tên file/nhân viên -->
+                        <div class="relative flex-1 sm:w-52">
+                            <input type="text" id="searchTab3Files" placeholder="Tìm tên file..." class="w-full px-3 py-1.5 pl-8 rounded-xl border border-inherit bg-transparent text-xs focus:outline-none focus:border-emerald-500 transition">
+                            <i data-lucide="search" class="w-3.5 h-3.5 opacity-50 absolute left-2.5 top-2.5"></i>
+                        </div>
+
+                        <button onclick="loadTab3Files()" class="px-3 py-1.5 rounded-xl border border-inherit hover:opacity-100 opacity-80 transition text-xs font-medium flex items-center space-x-1">
+                            <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+                            <span>Làm mới</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse text-xs">
+                        <thead>
+                            <tr class="border-b border-inherit opacity-75 font-semibold">
+                                <th class="p-3.5 text-center w-12">STT</th>
+                                <th class="p-3.5">Tên File</th>
+                                <th class="p-3.5 text-center">Nhân Viên Gọi</th>
+                                <th class="p-3.5 text-center">Tổng Số Lead</th>
+                                <th class="p-3.5 text-center">Chưa Gọi</th>
+                                <th class="p-3.5 text-center">Đã Gọi</th>
+                                <th class="p-3.5 text-center">Đã Hẹn</th>
+                                <th class="p-3.5 text-center">Thao Tác</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tab3FileListTable" class="divide-y divide-inherit">
+                            <tr>
+                                <td colspan="8" class="text-center py-8 opacity-60">Đang tải dữ liệu Tab 3...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Khung 2: Chi tiết Lọc Dữ Liệu (Mặc định ẩn, hiện khi bấm nút xem ở Khung 1) -->
+            <div id="tab3DetailContainer" class="p-6 rounded-2xl border border-inherit theme-dropdown hidden flex-1 flex flex-col">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                    <div>
+                        <h3 id="tab3DetailTitle" class="font-bold text-sm flex items-center space-x-2">
+                            <i data-lucide="list-filter" class="w-4 h-4 text-emerald-500"></i>
+                            <span>2. Lọc dữ liệu chi tiết</span>
+                        </h3>
+                        <p class="text-xs opacity-70 mt-0.5">Xem và lọc chi tiết danh sách lead trong tệp được chọn.</p>
+                    </div>
+                    
+                    <div class="flex flex-wrap items-center gap-2">
+                        <!-- Thanh tìm kiếm trong bảng chi tiết -->
+                        <div class="relative w-full sm:w-44">
+                            <input type="text" id="tab3DetailSearch" placeholder="Tìm kiếm trong bảng..." class="w-full px-3 py-1.5 pl-8 rounded-xl border border-inherit bg-transparent text-xs focus:outline-none focus:border-emerald-500 transition">
+                            <i data-lucide="search" class="w-3.5 h-3.5 opacity-50 absolute left-2.5 top-2.5"></i>
+                        </div>
+
+                        <!-- Bộ lọc trạng thái cuộc gọi chuẩn -->
+                        <select id="tab3FilterSelect" class="px-3 py-1.5 rounded-xl border border-inherit bg-transparent text-xs focus:outline-none focus:border-emerald-500 transition">
+                            <option value="all">Hiện tất cả</option>
+                            <option value="chua_goi">Chỉ lấy lead chưa gọi</option>
+                            <option value="hen_gap_thanh_cong">Hẹn gặp thành công</option>
+                            <option value="chua_hen_duoc">Lead chưa hẹn được</option>
+                        </select>
+
+                        <!-- Nút xuất Excel & Google Sheet -->
+                        <button onclick="exportTab3Excel()" class="px-3 py-1.5 rounded-xl bg-emerald-500 text-white hover:bg-emerald-600 transition text-xs font-medium flex items-center space-x-1.5 shadow-sm">
+                            <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5"></i>
+                            <span>Xuất Excel</span>
+                        </button>
+                        <button onclick="exportTab3GoogleSheet()" class="px-3 py-1.5 rounded-xl bg-blue-500 text-white hover:bg-blue-600 transition text-xs font-medium flex items-center space-x-1.5 shadow-sm">
+                            <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+                            <span>Google Sheet</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto max-h-[500px] flex-1">
+                    <table class="w-full text-left border-collapse text-xs">
+                        <thead>
+                            <tr id="tab3DetailHeaderRow" class="border-b border-inherit opacity-75 font-semibold sticky top-0 bg-[var(--bg-main,#fff)]">
+                                <!-- Render động tiêu đề cột (Cột 1: Kết quả cuộc gọi, tiếp theo là các cột chuẩn template) -->
+                            </tr>
+                        </thead>
+                        <tbody id="tab3DetailBody" class="divide-y divide-inherit">
+                            <!-- Render động dữ liệu chi tiết lead -->
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
 
-        <!-- ================= TAB 4: CHI TIẾT LỊCH SỬ ================= -->
+        <!-- ================= TAB 4: LỊCH SỬ HOẠT ĐỘNG (AUDIT LOG) ================= -->
         <div id="tabContent4" class="hidden space-y-6 flex-1">
             <div class="p-6 rounded-2xl border border-inherit theme-dropdown">
                 <h3 class="font-bold text-sm mb-2 flex items-center space-x-2">
@@ -148,8 +297,9 @@
 
     </div>
 
-    <!-- Script điều khiển chức năng -->
+    <!-- ================= KHỐI SCRIPT XỬ LÝ LOGIC TOÀN TRANG ================= -->
     <script>
+    // [CHỨC NĂNG CHUNG]: Chuyển đổi giữa các tab giao diện (Tab 1, 2, 3, 4)
     function switchTab(tabIndex) {
         for (let i = 1; i <= 4; i++) {
             const content = document.getElementById(`tabContent${i}`);
@@ -158,6 +308,10 @@
                 if (i === tabIndex) {
                     content.classList.remove('hidden');
                     btn.className = "px-3 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 transition";
+                    
+                    if (tabIndex === 2) {
+                        loadDataForAllocation();
+                    }
                 } else {
                     content.classList.add('hidden');
                     btn.className = "px-3 py-1.5 rounded-xl border border-inherit opacity-60 hover:opacity-100 transition";
@@ -166,7 +320,7 @@
         }
     }
 
-    // Định dạng ngày: DD/MM/YYYY xuống dòng HH:MM (UTC+7)
+    // [CHỨC NĂNG CHUNG]: Định dạng ngày giờ chuẩn UTC+7 hiển thị trên giao diện
     function formatDateTimeUTC7(dateString) {
         if (!dateString) return 'N/A';
         const date = new Date(dateString);
@@ -181,6 +335,81 @@
         return `${day}/${month}/${year}<br><span class="opacity-70 text-[11px]">${hours}:${minutes}</span>`;
     }
 
+    // Khai báo biến toàn cục quản lý tên file chống trùng lặp và danh sách agent
+    let existingFileNames = new Set();
+    let systemAgents = [];
+
+    // [CHỨC NĂNG TAB 1]: Lắng nghe sự kiện gõ phím trên thanh tìm kiếm file của Tab 1
+    function initSearchTab1() {
+        const searchInput = document.getElementById('searchTab1');
+        const tableBody = document.getElementById('dataTableBody');
+
+        if (!searchInput || !tableBody) return;
+
+        // Tránh bị gán nhiều event listener trùng lặp khi fetch lại dữ liệu
+        const newSearchInput = searchInput.cloneNode(true);
+        searchInput.parentNode.replaceChild(newSearchInput, searchInput);
+
+        newSearchInput.addEventListener('input', function() {
+            const keyword = this.value.toLowerCase().trim();
+            const rows = tableBody.querySelectorAll('tr');
+
+            rows.forEach(row => {
+                if (row.cells.length < 2) return; // Bỏ qua dòng thông báo trống/đang tải
+                const fileNameCell = row.querySelector('td:nth-child(2)');
+                if (!fileNameCell) return;
+
+                const fileNameText = fileNameCell.textContent.toLowerCase();
+                if (fileNameText.includes(keyword)) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        });
+    }
+
+    // [CHỨC NĂNG TAB 2]: Logic lọc đa điều kiện (Tên file, Trạng thái, Agent)
+    function initFiltersTab2() {
+        const searchInput = document.getElementById('searchTab2');
+        const statusFilter = document.getElementById('statusFilterTab2');
+        const agentFilter = document.getElementById('agentFilterTab2');
+        const tableBody = document.getElementById('allocationTableBody');
+
+        if (!tableBody) return;
+
+        function executeTab2Filter() {
+            const keyword = searchInput ? searchInput.value.toLowerCase().trim() : '';
+            const statusVal = statusFilter ? statusFilter.value.toLowerCase().trim() : '';
+            const agentVal = agentFilter ? agentFilter.value.toLowerCase().trim() : '';
+
+            const rows = tableBody.querySelectorAll('tr');
+            rows.forEach(row => {
+                if (row.cells.length < 6) return;
+
+                const fileName = row.querySelector('td:nth-child(2)').innerText.toLowerCase();
+                const statusText = row.querySelector('td:nth-child(4)').innerText.toLowerCase();
+                const agentSelect = row.querySelector('td:nth-child(5) select');
+                const selectedAgentText = agentSelect && agentSelect.options[agentSelect.selectedIndex] ? agentSelect.options[agentSelect.selectedIndex].text.toLowerCase() : '';
+
+                let matchKeyword = !keyword || fileName.includes(keyword);
+                let matchStatus = !statusVal || statusText.includes(statusVal);
+                let matchAgent = !agentVal || selectedAgentText.includes(agentVal) || (agentSelect && agentSelect.value === agentVal);
+
+                if (matchKeyword && matchStatus && matchAgent) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        }
+
+        if (searchInput) searchInput.addEventListener('input', executeTab2Filter);
+        if (statusFilter) statusFilter.addEventListener('change', executeTab2Filter);
+        if (agentFilter) agentFilter.addEventListener('change', executeTab2Filter);
+    }
+
+    // [SỰ KIỆN KHI TẢI TRANG XONG]: Khởi tạo các sự kiện Drag & Drop, Button Upload, Fetch dữ liệu Tab 1
     document.addEventListener("DOMContentLoaded", async () => {
         if (typeof lucide !== 'undefined') lucide.createIcons();
 
@@ -197,7 +426,6 @@
             handleFilesSelection(e.target.files);
         });
 
-        // Kéo thả file
         ['dragenter', 'dragover'].forEach(eventName => {
             dropZone.addEventListener(eventName, (e) => {
                 e.preventDefault();
@@ -228,8 +456,8 @@
             }
         }
 
-        // Lấy danh sách file từ backend (Ánh xạ chuẩn schema Supabase: file_name, total_records, created_at, agent_id)
-        async function fetchFiles() {
+        // [CHỨC NĂNG TAB 1]: Tải danh sách file từ Database và render ra bảng
+        window.fetchFiles = async function() {
             try {
                 const res = await fetch('/api/admin/data-files');
                 const result = await res.json();
@@ -243,6 +471,7 @@
                     files = result.files;
                 }
 
+                existingFileNames.clear();
                 fileCountBadge.textContent = `${files.length} files`;
 
                 if (files.length === 0) {
@@ -251,13 +480,10 @@
                 }
 
                 dataTableBody.innerHTML = files.map((f, index) => {
-                    // Ánh xạ chính xác cột file_name trong bảng data_files Supabase
                     const fileName = f.file_name || f.ten_file || f.filename || f.original_name || 'Không có tên';
+                    existingFileNames.add(fileName.toLowerCase());
                     
-                    // Ánh xạ chính xác cột total_records trong bảng data_files Supabase
                     const totalLeads = f.total_records !== undefined ? f.total_records : (f.tong_so_lead || 0);
-
-                    // Logic trạng thái phân bổ dựa theo agent_id
                     const agentId = f.agent_id;
                     const isAssigned = (agentId !== null && agentId !== undefined && agentId !== '');
                     const statusText = isAssigned ? "Đã phân bổ" : "Chờ phân bổ";
@@ -267,7 +493,6 @@
 
                     const uploadDate = formatDateTimeUTC7(f.created_at || f.ngay_upload);
                     const fileId = f.id || index;
-                    const downloadUrl = f.file_path || f.url || `/uploads/data/${fileName}`;
 
                     return `
                         <tr class="hover:bg-[var(--hover-bg,rgba(0,0,0,0.03))] dark:hover:bg-[var(--hover-bg,rgba(255,255,255,0.05))] transition">
@@ -279,7 +504,7 @@
                             </td>
                             <td class="p-3.5 text-center opacity-70 leading-tight">${uploadDate}</td>
                             <td class="p-3.5 text-center space-x-1">
-                                <button onclick="downloadFileFromDB('${fileId}', '${fileName}')" class="p-1 rounded opacity-80 hover:opacity-100 hover:bg-emerald-500/10 transition inline-block" title="Tải lại file Excel từ hệ thống">
+                                <button onclick="downloadFileFromDB('${fileId}', '${fileName}')" class="p-1 rounded opacity-80 hover:opacity-100 hover:bg-emerald-500/10 transition inline-block" title="Tải lại file Excel">
                                     <i data-lucide="download" class="w-3.5 h-3.5 text-blue-500"></i>
                                 </button>
                                 <button onclick="deleteFile('${fileId}', '${fileName}')" class="p-1 rounded opacity-80 hover:opacity-100 hover:bg-red-500/10 transition inline-block" title="Xóa file">
@@ -291,20 +516,32 @@
                 }).join('');
 
                 if (typeof lucide !== 'undefined') lucide.createIcons();
+                initSearchTab1(); // Kích hoạt sự kiện tìm kiếm sau khi render xong bảng
             } catch (error) {
                 console.error("Lỗi khi tải danh sách file:", error);
                 dataTableBody.innerHTML = `<tr><td colspan="6" class="text-center py-8 text-red-500">Lỗi kết nối đến server.</td></tr>`;
             }
-        }
+        };
 
         fetchFiles();
 
-        // Xử lý upload nhiều file
+        // [CHỨC NĂNG TAB 1]: Xử lý sự kiện bấm nút Tải Lên & Xử Lý (kèm kiểm tra trùng tên file)
         btnUpload.addEventListener('click', async () => {
             if (selectedFiles.length === 0) {
                 await Swal.fire({
                     title: 'Chưa chọn file!',
                     text: 'Vui lòng chọn hoặc kéo thả ít nhất một file Excel/CSV.',
+                    icon: 'warning',
+                    confirmButtonText: 'Đóng'
+                });
+                return;
+            }
+
+            const duplicateFile = selectedFiles.find(f => existingFileNames.has(f.name.toLowerCase()));
+            if (duplicateFile) {
+                await Swal.fire({
+                    title: 'File đã tồn tại!',
+                    text: 'File đã có trên hệ thống, vui lòng đổi tên hoặc chọn file khác.',
                     icon: 'warning',
                     confirmButtonText: 'Đóng'
                 });
@@ -361,7 +598,7 @@
             }
         });
 
-        // Xử lý xóa file gọi API xuống backend
+        // [CHỨC NĂNG TAB 1]: Xóa file data khỏi cơ sở dữ liệu
         window.deleteFile = async function(id, fileName) {
             const confirm = await Swal.fire({
                 title: 'Xác nhận xóa?',
@@ -376,15 +613,12 @@
             if (confirm.isConfirmed) {
                 try {
                     const res = await fetch(`/api/admin/data-files/${id}`, { method: 'DELETE' });
-                    
-                    // Kiểm tra xem phản hồi có phải là JSON không tránh lỗi cú pháp Unexpected token '<'
                     const contentType = res.headers.get("content-type");
                     if (!contentType || !contentType.includes("application/json")) {
-                        throw new Error("Server chưa bật route API xóa hoặc trả về trang lỗi (404/500).");
+                        throw new Error("Server chưa bật route API xóa hoặc trả về trang lỗi.");
                     }
 
                     const result = await res.json();
-                    
                     if (res.ok && result.success) {
                         await Swal.fire({
                             title: 'Đã xóa!',
@@ -393,28 +627,17 @@
                             timer: 1500,
                             showConfirmButton: false
                         });
-                        fetchFiles(); // Tải lại danh sách
+                        fetchFiles();
                     } else {
-                        await Swal.fire({
-                            title: 'Lỗi!',
-                            text: result.message || 'Không thể xóa file từ server.',
-                            icon: 'error',
-                            confirmButtonText: 'Đóng'
-                        });
+                        await Swal.fire({ title: 'Lỗi!', text: result.message || 'Không thể xóa file.', icon: 'error', confirmButtonText: 'Đóng' });
                     }
                 } catch (error) {
-                    console.error('Lỗi xóa file:', error);
-                    await Swal.fire({
-                        title: 'Lỗi kết nối hoặc API!',
-                        text: error.message || 'Không thể kết nối đến server để xóa file.',
-                        icon: 'error',
-                        confirmButtonText: 'Đóng'
-                    });
+                    Swal.fire({ title: 'Lỗi kết nối!', text: error.message, icon: 'error', confirmButtonText: 'Đóng' });
                 }
             }
         };
 
-        // Hàm tải file ở tab1
+        // [CHỨC NĂNG TAB 1]: Tải xuống lại tệp Excel từ dữ liệu lưu trong DB
         window.downloadFileFromDB = async function(fileId, fileName) {
             try {
                 Swal.fire({
@@ -424,27 +647,505 @@
                     didOpen: () => { Swal.showLoading(); }
                 });
 
-                // Gọi API lấy danh sách lead thuộc về file này (đảm bảo route này tồn tại ở backend)
                 const res = await fetch(`/api/admin/file-leads/${fileId}`);
                 const result = await res.json();
 
                 if (result.success && result.leads && result.leads.length > 0) {
-                    // Sử dụng thư viện SheetJS (XLSX) để tạo và tải file Excel
                     const worksheet = XLSX.utils.json_to_sheet(result.leads);
                     const workbook = XLSX.utils.book_new();
                     XLSX.utils.book_append_sheet(workbook, worksheet, "Data");
                     XLSX.writeFile(workbook, fileName);
-                    
                     Swal.close();
                 } else {
                     Swal.fire('Thông báo', 'Không có dữ liệu chi tiết hoặc file trống.', 'info');
                 }
             } catch (error) {
-                console.error(error);
                 Swal.fire('Lỗi', 'Không thể tạo file để tải về.', 'error');
             }
         };
     });
+
+    // ================= TAB 2: LOGIC PHÂN BỔ LEAD CHO NHÂN SỰ =================
+    window.loadDataForAllocation = async function() {
+        const tbody = document.getElementById('allocationTableBody');
+        const agentFilterSelect = document.getElementById('agentFilterTab2');
+        if (!tbody) return;
+
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center py-8 opacity-60">Đang tải dữ liệu...</td></tr>`;
+
+        try {
+            const [resFiles, resAgents] = await Promise.all([
+                fetch('/api/admin/data-files'),
+                fetch('/api/admin/agents')
+            ]);
+
+            const filesResult = await resFiles.json();
+            const agentsResult = await resAgents.json();
+
+            let files = Array.isArray(filesResult) ? filesResult : (filesResult.data || filesResult.files || []);
+            systemAgents = Array.isArray(agentsResult) ? agentsResult : (agentsResult.data || agentsResult.agents || []);
+
+            if (agentFilterSelect) {
+                let agentFilterOptions = `<option value="">Tất cả Agent</option>`;
+                systemAgents.forEach(agent => {
+                    agentFilterOptions += `<option value="${agent.ho_va_ten || agent.ten_dang_nhap}">${agent.ho_va_ten || agent.ten_dang_nhap}</option>`;
+                });
+                agentFilterSelect.innerHTML = agentFilterOptions;
+            }
+
+            if (files.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" class="text-center py-8 opacity-60">Chưa có data file nào được tải lên ở Tab 1.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = files.map((file, index) => {
+                const fileId = file.id;
+                const fileName = file.file_name || file.ten_file || 'Không có tên';
+                const totalLeads = file.total_records !== undefined ? file.total_records : 0;
+                
+                const status = file.status || (file.agent_id ? 'Đã phân bổ' : 'Chờ phân bổ');
+                const isAssigned = status === 'Đã phân bổ';
+                const isLocked = status === 'Đã khóa';
+
+                let badgeClass = "bg-amber-500/10 text-amber-500 border border-amber-500/20";
+                if (isAssigned) badgeClass = "bg-blue-500/10 text-blue-500 border border-blue-500/20";
+                if (isLocked) badgeClass = "bg-red-500/10 text-red-500 border border-red-500/20";
+
+                let agentOptions = `<option value="">-- Chọn Agent --</option>`;
+                systemAgents.forEach(agent => {
+                    const selected = (file.agent_id == agent.id || file.assigned_to == agent.id) ? 'selected' : '';
+                    agentOptions += `<option value="${agent.id}" ${selected}>${agent.ho_va_ten || agent.ten_dang_nhap}</option>`;
+                });
+
+                const isDisabled = isAssigned && !isLocked ? 'disabled' : '';
+
+                return `
+                    <tr class="hover:bg-[var(--hover-bg,rgba(0,0,0,0.03))] dark:hover:bg-[var(--hover-bg,rgba(255,255,255,0.05))] transition">
+                        <td class="p-3.5 text-center font-mono opacity-60">${index + 1}</td>
+                        <td class="p-3.5 font-medium text-emerald-500">${fileName}</td>
+                        <td class="p-3.5 text-center font-mono">${totalLeads}</td>
+                        <td class="p-3.5 text-center">
+                            <span class="px-2.5 py-1 rounded-full text-[10px] font-semibold ${badgeClass}">${status}</span>
+                        </td>
+                        <td class="p-3.5">
+                            <select id="agentSelect_${fileId}" ${isDisabled} class="w-full px-2.5 py-1.5 rounded-xl border border-inherit bg-transparent text-xs focus:outline-none focus:border-emerald-500 transition">
+                                ${agentOptions}
+                            </select>
+                        </td>
+                        <td class="p-3.5 text-center space-x-1 whitespace-nowrap">
+                            ${(!isAssigned || isLocked) ? `
+                                <button onclick="assignFileToAgent('${fileId}')" class="px-2.5 py-1.5 rounded-xl bg-emerald-500 text-white hover:bg-emerald-600 transition text-[11px] font-medium shadow-sm">Phân bổ</button>
+                            ` : `
+                                <button onclick="enableEditAllocation('${fileId}')" class="px-2.5 py-1.5 rounded-xl border border-emerald-500/30 text-emerald-500 hover:bg-emerald-500/10 transition text-[11px] font-medium">Chỉnh sửa</button>
+                            `}
+                            
+                            <button onclick="toggleLockFileStatus('${fileId}', '${status}')" class="px-2.5 py-1.5 rounded-xl border border-inherit opacity-80 hover:opacity-100 transition text-[11px] font-medium">
+                                ${isLocked ? 'Mở khóa' : 'Khóa file'}
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+            initFiltersTab2();
+        } catch (error) {
+            console.error("Lỗi tải phân bổ:", error);
+            tbody.innerHTML = `<tr><td colspan="6" class="text-center py-8 text-red-500">Lỗi kết nối khi tải danh sách phân bổ.</td></tr>`;
+        }
+    };
+
+    // [CHỨC NĂNG TAB 2]: Thực hiện gán file data cho Agent được chọn
+    window.assignFileToAgent = async function(fileId) {
+        const selectEl = document.getElementById(`agentSelect_${fileId}`);
+        const agentId = selectEl ? selectEl.value : '';
+
+        if (!agentId) {
+            Swal.fire({ title: 'Chưa chọn nhân sự!', text: 'Vui lòng chọn một nhân viên gọi (Agent) trước khi phân bổ.', icon: 'warning', confirmButtonText: 'Đóng' });
+            return;
+        }
+
+        try {
+            const res = await fetch(`/api/admin/data-files/${fileId}/assign`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ agent_id: agentId })
+            });
+            const result = await res.json();
+
+            if (res.ok && (result.success !== false)) {
+                await Swal.fire({ title: 'Thành công!', text: 'Đã phân bổ file thành công.', icon: 'success', timer: 1500, showConfirmButton: false });
+                loadDataForAllocation();
+            } else {
+                throw new Error(result.message || 'Không thể phân bổ file.');
+            }
+        } catch (error) {
+            Swal.fire({ title: 'Thất bại!', text: error.message, icon: 'error', confirmButtonText: 'Đóng' });
+        }
+    };
+
+    // [CHỨC NĂNG TAB 2]: Mở khóa ô chọn Agent để chỉnh sửa lại phân bổ
+    window.enableEditAllocation = function(fileId) {
+        const selectEl = document.getElementById(`agentSelect_${fileId}`);
+        if (selectEl) {
+            selectEl.disabled = false;
+            selectEl.focus();
+
+            // Tìm nút "Chỉnh sửa" của dòng tương ứng và đổi thành nút "Phân bổ"
+            const row = selectEl.closest('tr');
+            if (row) {
+                const actionCell = row.querySelector('td:last-child');
+                const editBtn = actionCell.querySelector('button[onclick*="enableEditAllocation"]');
+                if (editBtn) {
+                    editBtn.outerHTML = `<button onclick="assignFileToAgent('${fileId}')" class="px-2.5 py-1.5 rounded-xl bg-emerald-500 text-white hover:bg-emerald-600 transition text-[11px] font-medium shadow-sm">Phân bổ</button>`;
+                }
+            }
+
+            Swal.fire({ 
+                title: 'Cho phép chỉnh sửa', 
+                text: 'Chọn lại nhân viên gọi mới, sau đó bấm Phân bổ.', 
+                icon: 'info', 
+                timer: 2000, 
+                showConfirmButton: false 
+            });
+        }
+    };
+
+    // [CHỨC NĂNG TAB 2]: Khóa hoặc Mở khóa trạng thái file dữ liệu
+    window.toggleLockFileStatus = async function(fileId, currentStatus) {
+        const newStatus = (currentStatus === 'Đã khóa') ? 'Đã phân bổ' : 'Đã khóa';
+        const actionName = (newStatus === 'Đã khóa') ? 'khóa' : 'mở khóa';
+
+        const confirm = await Swal.fire({
+            title: `Xác nhận ${actionName} file?`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Xác nhận',
+            cancelButtonText: 'Hủy'
+        });
+
+        if (confirm.isConfirmed) {
+            try {
+                const res = await fetch(`/api/admin/data-files/${fileId}/lock`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: newStatus })
+                });
+                const result = await res.json();
+
+                if (res.ok && (result.success !== false)) {
+                    await Swal.fire({ title: 'Thành công!', text: `Đã cập nhật trạng thái file thành "${newStatus}".`, icon: 'success', timer: 1500, showConfirmButton: false });
+                    loadDataForAllocation();
+                } else {
+                    throw new Error(result.message || 'Không thể thay đổi trạng thái file.');
+                }
+            } catch (error) {
+                Swal.fire({ title: 'Lỗi!', text: error.message, icon: 'error', confirmButtonText: 'Đóng' });
+            }
+        }
+    };
+
+    /**
+     * =====================================================================
+     * [CHỨC NĂNG TAB 3]: LỌC DỮ LIỆU, QUẢN LÝ TỆP PHÂN BỔ & XEM CHI TIẾT
+     * =====================================================================
+     */
+
+    // Đảm bảo không bị trùng lặp biến toàn cục
+    if (typeof window.systemAgents === 'undefined') {
+        window.systemAgents = [];
+    }
+    let currentActiveFileId = null;
+    let currentFileRawData = []; 
+    let tab3AllFilesCache = [];
+
+    /**
+     * [CHỨC NĂNG TAB 3]: Tải danh sách file "Đã phân bổ" và danh sách Agent cho Khung 1
+     */
+    async function loadTab3Files() {
+        const tbody = document.getElementById('tab3FileListTable');
+        const agentFilterSelect = document.getElementById('agentFilterTab3');
+        if (!tbody) return;
+
+        tbody.innerHTML = `<tr><td colspan="8" class="text-center py-8 opacity-60">Đang tải danh sách dữ liệu...</td></tr>`;
+
+        try {
+            const [resFiles, resAgents] = await Promise.all([
+                fetch('/api/admin/data-files'),
+                fetch('/api/admin/agents')
+            ]);
+
+            const filesResult = await resFiles.json();
+            const agentsResult = await resAgents.json();
+
+            let allFiles = Array.isArray(filesResult) ? filesResult : (filesResult.data || filesResult.files || []);
+            window.systemAgents = Array.isArray(agentsResult) ? agentsResult : (agentsResult.data || agentsResult.agents || []);
+
+            // Đổ dữ liệu vào dropdown lọc Agent ở Khung 1
+            if (agentFilterSelect) {
+                let options = `<option value="">Tất cả Agent</option>`;
+                window.systemAgents.forEach(agent => {
+                    const name = agent.ho_va_ten || agent.ten_dang_nhap;
+                    options += `<option value="${agent.id}">${name}</option>`;
+                });
+                agentFilterSelect.innerHTML = options;
+            }
+
+            // Lọc ra các file có trạng thái "Đã phân bổ" hoặc có gán agent_id
+            tab3AllFilesCache = allFiles.filter(f => f.status === 'Đã phân bổ' || f.agent_id);
+
+            renderTab3FileList(tab3AllFilesCache);
+        } catch (error) {
+            console.error('Lỗi tải dữ liệu Tab 3:', error);
+            tbody.innerHTML = `<tr><td colspan="8" class="text-center py-8 text-red-500">Lỗi kết nối khi tải danh sách Tab 3.</td></tr>`;
+        }
+    }
+
+    /**
+     * [CHỨC NĂNG TAB 3]: Render bảng danh sách file dữ liệu ở Khung 1
+     */
+    function renderTab3FileList(files) {
+        const tbody = document.getElementById('tab3FileListTable');
+        if (!tbody) return;
+
+        if (files.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="8" class="text-center py-8 opacity-60">Không có tệp dữ liệu nào đang phân bổ.</td></tr>`;
+            return;
+        }
+
+        tbody.innerHTML = files.map((file, index) => {
+            const fileId = file.id;
+            const fileName = file.file_name || file.ten_file || 'Không có tên';
+            const totalLeads = file.total_records !== undefined ? file.total_records : 0;
+            
+            let assignedAgentName = 'Chưa phân công';
+            if (file.agent_id && window.systemAgents.length > 0) {
+                const foundAgent = window.systemAgents.find(a => a.id == file.agent_id);
+                if (foundAgent) assignedAgentName = foundAgent.ho_va_ten || foundAgent.ten_dang_nhap;
+            } else if (file.nguoi_phu_trach) {
+                assignedAgentName = file.nguoi_phu_trach;
+            }
+
+            const chuaGoi = totalLeads; 
+            const daGoi = 0;
+            const daHen = 0;
+
+            return `
+                <tr class="hover:bg-[var(--hover-bg,rgba(0,0,0,0.03))] transition">
+                    <td class="p-3.5 text-center font-mono opacity-60">${index + 1}</td>
+                    <td class="p-3.5 font-medium text-emerald-500">${fileName}</td>
+                    <td class="p-3.5 text-center">${assignedAgentName}</td>
+                    <td class="p-3.5 text-center font-mono">${totalLeads}</td>
+                    <td class="p-3.5 text-center font-mono">${chuaGoi}</td>
+                    <td class="p-3.5 text-center font-mono">${daGoi}</td>
+                    <td class="p-3.5 text-center font-mono">${daHen}</td>
+                    <td class="p-3.5 text-center">
+                        <button onclick="viewTab3FileDetail('${fileId}', '${fileName}')" class="p-1.5 rounded-xl bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 transition inline-block" title="Xem chi tiết dữ liệu">
+                            <i data-lucide="eye" class="w-4 h-4"></i>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+
+    /**
+     * [CHỨC NĂNG TAB 3]: Kích hoạt hiển thị và tải nội dung Khung 2 (Chi tiết lọc dữ liệu)
+     */
+    async function viewTab3FileDetail(fileId, fileName) {
+        currentActiveFileId = fileId;
+        const container = document.getElementById('tab3DetailContainer');
+        const titleEl = document.getElementById('tab3DetailTitle');
+        
+        if (!container) return;
+        container.classList.remove('hidden');
+        titleEl.innerHTML = `<i data-lucide="list-filter" class="w-4 h-4 text-emerald-500"></i><span>2. Lọc dữ liệu chi tiết - ${fileName}</span>`;
+
+        try {
+            const res = await fetch(`/api/admin/file-leads/${fileId}`);
+            const result = await res.json();
+
+            currentFileRawData = (result.success && result.leads) ? result.leads : [];
+
+            document.getElementById('tab3DetailSearch').value = '';
+            document.getElementById('tab3FilterSelect').value = 'all';
+
+            renderTab3DetailTable(currentFileRawData);
+            container.scrollIntoView({ behavior: 'smooth' });
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        } catch (err) {
+            console.error('Lỗi tải chi tiết file Tab 3:', err);
+            Swal.fire({ title: 'Thất bại', text: 'Không thể tải nội dung chi tiết của tệp dữ liệu.', icon: 'error', confirmButtonText: 'Đóng' });
+        }
+    }
+
+    /**
+     * [CHỨC NĂNG TAB 3]: Render bảng dữ liệu chi tiết ở Khung 2 (Cột Kết quả cuộc gọi đặt đầu tiên)
+     */
+    function renderTab3DetailTable(dataList) {
+        const headerRow = document.getElementById('tab3DetailHeaderRow');
+        const bodyEl = document.getElementById('tab3DetailBody');
+
+        if (!headerRow || !bodyEl) return;
+
+        if (dataList.length === 0) {
+            headerRow.innerHTML = `<th class="p-3.5">Thông báo</th>`;
+            bodyEl.innerHTML = `<tr><td class="p-3.5 text-center opacity-60">Không có bản ghi dữ liệu nào.</td></tr>`;
+            return;
+        }
+
+        const sample = dataList[0];
+        // Loại bỏ các khóa hệ thống, đồng thời tách ket_qua_cuoc_goi ra để đưa lên đầu tiên
+        const keys = Object.keys(sample).filter(k => k !== 'id' && k !== 'file_id' && k !== 'ket_qua_cuoc_goi');
+
+        let headerHtml = `<th class="p-3.5 text-center w-12">STT</th>`;
+        headerHtml += `<th class="p-3.5 text-center font-bold text-emerald-500">KẾT QUẢ CUỘC GỌI</th>`;
+        keys.forEach(key => {
+            headerHtml += `<th class="p-3.5">${key.replace(/_/g, ' ').toUpperCase()}</th>`;
+        });
+        headerRow.innerHTML = headerHtml;
+
+        let bodyHtml = '';
+        dataList.forEach((item, index) => {
+            bodyHtml += `<tr class="hover:bg-[var(--hover-bg,rgba(0,0,0,0.03))] transition">`;
+            bodyHtml += `<td class="p-3.5 text-center font-mono opacity-60">${index + 1}</td>`;
+            
+            const callResult = item.ket_qua_cuoc_goi || 'Chưa gọi';
+            const badgeClass = item.ket_qua_cuoc_goi ? 'bg-emerald-500/10 text-emerald-500' : 'bg-gray-500/10 opacity-60';
+            bodyHtml += `<td class="p-3.5 text-center"><span class="px-2 py-1 rounded-full text-[10px] font-semibold ${badgeClass}">${callResult}</span></td>`;
+
+            keys.forEach(key => {
+                bodyHtml += `<td class="p-3.5">${item[key] !== null && item[key] !== undefined ? item[key] : ''}</td>`;
+            });
+            bodyHtml += `</tr>`;
+        });
+
+        bodyEl.innerHTML = bodyHtml;
+    }
+
+    /**
+     * [CHỨC NĂNG CHUNG]: Khai báo hàm chuyển tab ra phạm vi toàn cục (window) để sửa lỗi switchTab is not defined
+     */
+    window.switchTab = function(tabIndex) {
+        for (let i = 1; i <= 4; i++) {
+            const content = document.getElementById(`tabContent${i}`);
+            const btn = document.getElementById(`tabBtn${i}`);
+            
+            if (content && btn) {
+                if (i === tabIndex) {
+                    content.classList.remove('hidden');
+                    btn.className = "px-3 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 transition";
+                    
+                    if (tabIndex === 2) typeof loadDataForAllocation === 'function' && loadDataForAllocation();
+                    if (tabIndex === 3) loadTab3Files();
+                } else {
+                    content.classList.add('hidden');
+                    btn.className = "px-3 py-1.5 rounded-xl border border-inherit opacity-60 hover:opacity-100 transition";
+                }
+            }
+        }
+    };
+
+    /**
+     * Lấy danh sách dữ liệu hiện tại sau khi đã áp dụng các bộ lọc ở Khung 2 (Dùng chung cho hiển thị và xuất file)
+     */
+    function getFilteredTab3Data() {
+        const detailSearch = document.getElementById('tab3DetailSearch');
+        const detailFilterSelect = document.getElementById('tab3FilterSelect');
+
+        const keyword = detailSearch ? detailSearch.value.toLowerCase().trim() : '';
+        const filterVal = detailFilterSelect ? detailFilterSelect.value : 'all';
+
+        if (!currentFileRawData || currentFileRawData.length === 0) return [];
+
+        let filtered = [...currentFileRawData];
+
+        // Lọc theo 4 chuẩn trạng thái cuộc gọi yêu cầu
+        if (filterVal === 'chua_goi') {
+            filtered = filtered.filter(item => !item.ket_qua_cuoc_goi);
+        } else if (filterVal === 'hen_gap_thanh_cong') {
+            filtered = filtered.filter(item => item.ket_qua_cuoc_goi === 'Hẹn gặp thành công');
+        } else if (filterVal === 'chua_hen_duoc') {
+            filtered = filtered.filter(item => item.ket_qua_cuoc_goi && item.ket_qua_cuoc_goi !== 'Hẹn gặp thành công');
+        }
+
+        // Lọc theo từ khóa tìm kiếm nhanh
+        if (keyword) {
+            filtered = filtered.filter(item => {
+                return Object.values(item).some(val => 
+                    val !== null && val !== undefined && String(val).toLowerCase().includes(keyword)
+                );
+            });
+        }
+
+        return filtered;
+    }
+
+    /**
+     * [CHỨC NĂNG TAB 3]: Lắng nghe sự kiện tìm kiếm và lọc dữ liệu (Khung 1 & Khung 2)
+     */
+    document.addEventListener("DOMContentLoaded", () => {
+        const searchFilesInput = document.getElementById('searchTab3Files');
+        const agentFilterSelect = document.getElementById('agentFilterTab3');
+
+        function filterKhung1() {
+            const keyword = searchFilesInput ? searchFilesInput.value.toLowerCase().trim() : '';
+            const agentVal = agentFilterSelect ? agentFilterSelect.value : '';
+
+            const filtered = tab3AllFilesCache.filter(file => {
+                const fileName = (file.file_name || file.ten_file || '').toLowerCase();
+                const matchName = fileName.includes(keyword);
+                const matchAgent = !agentVal || file.agent_id == agentVal;
+                return matchName && matchAgent;
+            });
+
+            renderTab3FileList(filtered);
+        }
+
+        if (searchFilesInput) searchFilesInput.addEventListener('input', filterKhung1);
+        if (agentFilterSelect) agentFilterSelect.addEventListener('change', filterKhung1);
+
+        const detailSearch = document.getElementById('tab3DetailSearch');
+        const detailFilterSelect = document.getElementById('tab3FilterSelect');
+
+        function filterKhung2() {
+            const filtered = getFilteredTab3Data();
+            renderTab3DetailTable(filtered);
+        }
+
+        if (detailSearch) detailSearch.addEventListener('input', filterKhung2);
+        if (detailFilterSelect) detailFilterSelect.addEventListener('change', filterKhung2);
+    });
+
+    /**
+     * [CHỨC NĂNG TAB 3]: Xuất tệp Excel từ dữ liệu đang lọc ở Khung 2
+     */
+    function exportTab3Excel() {
+        const filteredData = getFilteredTab3Data();
+        if (filteredData.length === 0) {
+            Swal.fire({ title: 'Trống!', text: 'Không có dữ liệu phù hợp với bộ lọc để xuất file Excel.', icon: 'warning', confirmButtonText: 'Đóng' });
+            return;
+        }
+        const worksheet = XLSX.utils.json_to_sheet(filteredData);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "ChiTietLead");
+        XLSX.writeFile(workbook, `Danh_Sach_Lead_Loc_${Date.now()}.xlsx`);
+    }
+
+    /**
+     * [CHỨC NĂNG TAB 3]: Mở nhanh Google Sheets để xử lý dữ liệu (Xuất dữ liệu đang lọc)
+     */
+    function exportTab3GoogleSheet() {
+        const filteredData = getFilteredTab3Data();
+        if (filteredData.length === 0) {
+            Swal.fire({ title: 'Trống!', text: 'Không có dữ liệu phù hợp với bộ lọc để đẩy lên Google Sheet.', icon: 'warning', confirmButtonText: 'Đóng' });
+            return;
+        }
+        // Có thể mở trang tạo Google Sheets mới, hoặc tích hợp tạo dữ liệu tùy chọn
+        window.open('https://docs.google.com/spreadsheets/create', '_blank');
+    }
     </script>
 </body>
 </html>

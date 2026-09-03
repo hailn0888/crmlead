@@ -1,8 +1,15 @@
-// public/js/sidebar.js
+// ==========================================
+// TÊN FILE: public/js/sidebar.js
+// CHỨC NĂNG: Khởi tạo, quản lý hiển thị menu bên trái (Sidebar) theo đúng phân quyền (admin, leader, agent) 
+// và đồng bộ màu sắc theo theme, xử lý thu gọn/mở rộng menu.
+// ==========================================
+
 document.addEventListener("DOMContentLoaded", () => {
-    const phanQuyen = localStorage.getItem('phan_quyen') || 'agent';
+    // 1. Lấy thông tin phân quyền và theme hiện tại từ localStorage (chuẩn hóa về chữ thường, mặc định là agent nếu thiếu)
+    const phanQuyen = (localStorage.getItem('phan_quyen') || 'agent').trim().toLowerCase();
     const savedTheme = localStorage.getItem('theme') || 'dark';
 
+    // 2. Định nghĩa cấu trúc danh sách menu theo từng vai trò (phan_quyen)
     const menusByRole = {
         admin: [
             { name: "Tổng quan", icon: "layout-dashboard", href: "/admin/dashboard_admin.html" },
@@ -22,26 +29,28 @@ document.addEventListener("DOMContentLoaded", () => {
             { name: "Báo cáo doanh số", icon: "bar-chart-3", href: "/leader/reports.html" }
         ],
         agent: [
-            { name: "My Dashboard", icon: "layout-dashboard", href: "/agent/dashboard.html" },
-            { name: "Data Lead", icon: "user-check", href: "/agent/dataleads.html" },
-            { name: "Lịch sử cuộc gọi", icon: "phone-call", href: "/agent/calls.html" },
-            { name: "Hợp đồng bảo hiểm", icon: "shield-check", href: "/agent/contracts.html" }
+            { name: "My Dashboard", icon: "layout-dashboard", href: "/agents/dashboard_agents.html" },
+            { name: "Data Lead", icon: "user-check", href: "/agents/leads.html" },
+            { name: "Lịch sử cuộc gọi", icon: "phone-call", href: "/agents/calls.html" },
+            { name: "Hợp đồng bảo hiểm", icon: "shield-check", href: "/agents/contracts.html" }
         ]
     };
 
+    // Chọn bộ menu phù hợp với phân quyền thực tế của user đăng nhập
     const currentMenu = menusByRole[phanQuyen] || menusByRole['agent'];
     const isExpanded = localStorage.getItem('sidebar_expanded') === 'true';
     const sidebarWidth = isExpanded ? 'w-64' : 'w-12';
 
-    // Thiết lập màu sắc theo theme hiện tại
+    // Thiết lập màu sắc giao diện theo theme (light/dark)
     const isLight = savedTheme === 'light';
     const bgClass = isLight ? 'bg-slate-50 border-slate-200 text-slate-800' : 'bg-[#141414] border-[#222] text-[#999]';
     const hoverClass = isLight ? 'hover:bg-slate-200 hover:text-slate-900' : 'hover:bg-[#202020] hover:text-white';
     const borderBottomClass = isLight ? 'border-slate-200' : 'border-[#222]';
 
+    // 3. Hàm chức năng: Tạo mã HTML Sidebar và chèn trực tiếp vào DOM
     const sidebarHTML = `
     <aside id="appSidebar" class="fixed left-0 top-14 bottom-0 transition-all duration-300 z-40 flex flex-col select-none border-r ${bgClass} ${sidebarWidth}">
-        <!-- Danh sách menu -->
+        <!-- Danh sách mục menu động theo phân quyền -->
         <div class="flex-1 py-3 px-2 space-y-1 overflow-y-auto overflow-x-hidden">
             ${currentMenu.map(item => `
                 <a href="${item.href}" class="flex items-center space-x-1.5 px-1.5 py-2.5 rounded-lg transition group relative ${hoverClass}" title="${item.name}">
@@ -51,7 +60,7 @@ document.addEventListener("DOMContentLoaded", () => {
             `).join('')}
         </div>
 
-        <!-- Nút thu gọn / mở rộng Sidebar ở đáy -->
+        <!-- Nút thu gọn / mở rộng Sidebar ở chân khung -->
         <div class="p-2 border-t ${borderBottomClass}">
             <button id="toggleSidebarBtn" class="w-full flex items-center space-x-1.5 px-1.5 py-2 rounded-lg transition ${hoverClass}">
                 <i data-lucide="${isExpanded ? 'panel-left-close' : 'panel-left-open'}" class="w-5 h-5 min-w-[20px]"></i>
@@ -64,6 +73,7 @@ document.addEventListener("DOMContentLoaded", () => {
     document.body.insertAdjacentHTML('afterbegin', sidebarHTML);
     updateMainContainerMargin(isExpanded);
 
+    // Khởi tạo icon Lucide sau khi render HTML
     if (typeof lucide !== 'undefined') {
         lucide.createIcons();
     }
@@ -71,6 +81,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const toggleBtn = document.getElementById('toggleSidebarBtn');
     const sidebar = document.getElementById('appSidebar');
 
+    // 4. Hàm chức năng: Xử lý sự kiện bấm nút thu gọn/mở rộng sidebar
     toggleBtn.addEventListener('click', () => {
         const currentlyExpanded = sidebar.classList.contains('w-64');
         
@@ -89,6 +100,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
+    // 5. Hàm chức năng: Ẩn/hiện chữ và đổi icon thu gọn mở rộng
     function toggleIconAndText(sidebarEl, expand) {
         const texts = sidebarEl.querySelectorAll('.sidebar-text');
         const iconToggle = sidebarEl.querySelector('#toggleSidebarBtn i');
@@ -109,6 +121,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
+    // 6. Hàm chức năng: Điều chỉnh lề trái của khung nội dung chính theo độ rộng Sidebar
     function updateMainContainerMargin(expand) {
         const mainContainer = document.getElementById('mainContainer');
         if (mainContainer) {
@@ -117,7 +130,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
-    // Lắng nghe sự kiện chuyển đổi theme từ file theme.js để sidebar tự đổi màu theo
+    // 7. Hàm chức năng: Lắng nghe sự kiện thay đổi Theme động từ tệp theme.js
     const observer = new MutationObserver(() => {
         const currentTheme = localStorage.getItem('theme');
         if (currentTheme === 'light') {

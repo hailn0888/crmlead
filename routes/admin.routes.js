@@ -2,14 +2,29 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({ storage: multer.memoryStorage() }); // Lưu file tạm trên RAM trước khi đọc
 const XLSX = require('xlsx');
 
+// ==========================================
+// 0. KIỂM TRA TRẠNG THÁI ROUTE
+// ==========================================
+/**
+ * Route kiểm tra kết nối cơ bản
+ * Endpoint: GET /admin/
+ */
 router.get('/', (req, res) => {
     res.json({ message: "Route đang hoạt động bình thường!" });
 });
 
-// 1. QUẢN LÝ USER & GROUPS
+
+// ==========================================
+// 1. QUẢN LÝ USER & GROUPS (NHÂN SỰ & NHÓM)
+// ==========================================
+
+/**
+ * Lấy danh sách toàn bộ người dùng/nhân sự
+ * Endpoint: GET /admin/users
+ */
 router.get('/users', async (req, res) => {
     try {
         const { data: users, error: userError } = await req.supabase
@@ -19,6 +34,7 @@ router.get('/users', async (req, res) => {
 
         if (userError) throw userError;
 
+        // Chuẩn hóa dữ liệu hiển thị (nếu chưa có nhóm hay trưởng nhóm)
         const formattedData = users.map(u => ({
             ...u,
             ten_nhom: u.ten_nhom || 'Chưa có nhóm',
@@ -31,6 +47,10 @@ router.get('/users', async (req, res) => {
     }
 });
 
+/**
+ * Lấy danh sách các nhóm làm việc (Gom nhóm từ bảng users)
+ * Endpoint: GET /admin/groups
+ */
 router.get('/groups', async (req, res) => {
     try {
         const { data, error } = await req.supabase
@@ -57,6 +77,10 @@ router.get('/groups', async (req, res) => {
     }
 });
 
+/**
+ * Thêm mới một tài khoản nhân sự vào hệ thống
+ * Endpoint: POST /admin/users
+ */
 router.post('/users', async (req, res) => {
     try {
         const { ten_dang_nhap, mat_khau, ho_va_ten, phan_quyen, ten_nhom, truong_nhom } = req.body;
@@ -82,6 +106,10 @@ router.post('/users', async (req, res) => {
     }
 });
 
+/**
+ * Xóa tài khoản nhân sự theo ID
+ * Endpoint: DELETE /admin/users/:id
+ */
 router.delete('/users/:id', async (req, res) => {
     try {
         const userId = req.params.id;
@@ -97,6 +125,10 @@ router.delete('/users/:id', async (req, res) => {
     }
 });
 
+/**
+ * Khóa hoặc Mở khóa tài khoản nhân sự
+ * Endpoint: PATCH /admin/users/:id/toggle-lock
+ */
 router.patch('/users/:id/toggle-lock', async (req, res) => {
     try {
         const userId = req.params.id;
@@ -119,7 +151,14 @@ router.patch('/users/:id/toggle-lock', async (req, res) => {
 });
 
 
-// 2. QUẢN LÝ DATA FILE & BATCH
+// ==========================================
+// 2. QUẢN LÝ DATA FILE & BATCH (TẢI LÊN & XỬ LÝ EXCEL)
+// ==========================================
+
+/**
+ * Lấy danh sách các file dữ liệu đã tải lên
+ * Endpoint: GET /admin/data-files
+ */
 router.get('/data-files', async (req, res) => {
     try {
         const { data: files, error } = await req.supabase
@@ -135,6 +174,10 @@ router.get('/data-files', async (req, res) => {
     }
 });
 
+/**
+ * Tải lên file Excel, đọc dữ liệu và lưu vào data_files & contracts
+ * Endpoint: POST /admin/upload-data
+ */
 router.post('/upload-data', upload.single('file'), async (req, res) => {
     try {
         if (!req.file) {
@@ -146,42 +189,40 @@ router.post('/upload-data', upload.single('file'), async (req, res) => {
         const sheetName = workbook.SheetNames[0];
         const sheet = workbook.Sheets[sheetName];
         const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-        const totalRecords = rows.length > 0 ? rows.length : 0;
+        const totalRecords = rows.length > 1 ? rows.length - 1 : 0;
 
-        const { data: insertedFile, error: fileErr } = await req.supabase
+        // 1. Lưu thông tin tổng quan của file vào bảng data_files
+        const { error: fileErr } = await req.supabase
             .from('data_files')
             .insert([{
                 file_name: fileName,
-                total_records: totalRecords,
+                total_records: totalRecords > 0 ? totalRecords : 0,
                 status: 'Chưa phân bổ',
-                untouched_count: totalRecords,
+                untouched_count: totalRecords > 0 ? totalRecords : 0,
                 called_count: 0,
                 appt_count: 0,
                 created_at: new Date().toISOString()
-            }])
-            .select()
-            .single();
+            }]);
 
         if (fileErr) throw fileErr;
 
+        // 2. Đọc từng dòng dữ liệu Excel và lưu vào bảng contracts
         if (rows.length > 1) {
             const headers = rows[0];
             const contractRows = rows.slice(1).map(row => {
-                let rowObj = {
-                    file_id: insertedFile.id // <--- THÊM DÒNG NÀY VÀO ĐỂ GẮN ID CỦA FILE GỐC
-                };
+                let rowObj = {};
                 headers.forEach((h, index) => {
                     if (h) {
                         const keyClean = h.toString().trim();
-                        rowObj[keyClean] = row[index] || '';
+                        if (keyClean === 'so_hop_dong' || keyClean === 'Số hợp đồng') rowObj.so_hop_dong = row[index] || '';
+                        if (keyClean === 'dien_thoai' || keyClean === 'Điện thoại') rowObj.dien_thoai = row[index] || '';
                     }
                 });
                 return rowObj;
-            });
+            }).filter(r => r.so_hop_dong || r.dien_thoai);
 
-            const { error: contractErr } = await req.supabase.from('contracts').insert(contractRows);
-            if (contractErr) {
-                console.warn("Lưu vào bảng contracts:", contractErr.message);
+            if (contractRows.length > 0) {
+                await req.supabase.from('contracts').insert(contractRows);
             }
         }
 
@@ -191,6 +232,10 @@ router.post('/upload-data', upload.single('file'), async (req, res) => {
     }
 });
 
+/**
+ * Đổi tên file dữ liệu theo ID
+ * Endpoint: PUT /admin/rename-file/:id
+ */
 router.put('/rename-file/:id', async (req, res) => {
     try {
         const fileId = req.params.id;
@@ -203,35 +248,17 @@ router.put('/rename-file/:id', async (req, res) => {
     }
 });
 
-router.put('/toggle-lock-file/:id', async (req, res) => {
-    try {
-        const fileId = req.params.id;
-        const { status } = req.body;
-        const { error } = await req.supabase.from('data_files').update({ status }).eq('id', fileId);
-        if (error) throw error;
-        res.json({ success: true, message: 'Đổi trạng thái file thành công!' });
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
-    }
-});
-
+/**
+ * Lấy danh sách leads/contracts chi tiết hiển thị cho Khung 2
+ * Endpoint: GET /admin/file-leads/:fileId
+ */
 router.get('/file-leads/:fileId', async (req, res) => {
     try {
-        const fileId = req.params.fileId;
-        
-        // Truy vấn lấy dữ liệu từ bảng contracts theo file_id
         const { data, error } = await req.supabase
             .from('contracts')
-            .select('*')
-            .eq('file_id', fileId);
+            .select('*');
 
-        if (error) {
-            // Nếu lỗi do database chưa có cột file_id, ta fallback trả về toàn bộ contracts tạm thời để không bị sập 500
-            console.warn("Lỗi query theo file_id, đang lấy toàn bộ dữ liệu:", error.message);
-            const { data: allData, error: allErr } = await req.supabase.from('contracts').select('*');
-            if (allErr) throw allErr;
-            return res.json({ success: true, leads: allData || [] });
-        }
+        if (error) throw error;
 
         res.json({ success: true, leads: data || [] });
     } catch (error) {
@@ -241,7 +268,14 @@ router.get('/file-leads/:fileId', async (req, res) => {
 });
 
 
-// 3. PHÂN BỔ DATA
+// ==========================================
+// 3. PHÂN BỔ DATA CHO AGENT
+// ==========================================
+
+/**
+ * Lấy dữ liệu cấu hình tuỳ chọn phân bổ (danh sách file và danh sách user)
+ * Endpoint: GET /admin/allocation-options
+ */
 router.get('/allocation-options', async (req, res) => {
     try {
         const { data: files, error: fileError } = await req.supabase
@@ -267,65 +301,142 @@ router.get('/allocation-options', async (req, res) => {
     }
 });
 
-router.post('/assign-file', async (req, res) => {
+/**
+ * Lấy danh sách nhân viên có phân quyền là agent
+ * Endpoint: GET /admin/agents
+ */
+router.get('/agents', async (req, res) => {
     try {
-        const { file_id, agent_id } = req.body;
-        
-        const { error } = await req.supabase
-            .from('data_files')
-            .update({ 
-                status: 'Đang gọi' 
-            })
-            .eq('id', file_id);
+        const { data, error } = await req.supabase
+            .from('users')
+            .select('id, ho_va_ten, ten_dang_nhap')
+            .eq('phan_quyen', 'agent');
 
         if (error) throw error;
-        res.json({ success: true, message: 'Phân bổ file thành công!' });
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        res.json(data);
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
     }
 });
 
-// ==================================================================================
-// ===             HÀM XỬ LÝ XOÁ FILE & DỮ LIỆU LIÊN QUAN CHUẨN XÁC                ===
-// ==================================================================================
+/**
+ * Khóa hoặc mở khóa trạng thái xử lý của file
+ * Endpoint: PUT /admin/data-files/:id/lock
+ */
+router.put('/data-files/:id/lock', async (req, res) => {
+    try {
+        const fileId = req.params.id;
+        const { status } = req.body;
+
+        const { data, error } = await req.supabase
+            .from('data_files')
+            .update({ status: status })
+            .eq('id', fileId)
+            .select();
+
+        if (error) throw error;
+        res.json({ success: true, data });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+/**
+ * Xóa một file dữ liệu cùng các thông tin liên quan theo ID
+ * Endpoint: DELETE /admin/data-files/:id
+ */
 router.delete('/data-files/:id', async (req, res) => {
     try {
         const fileId = req.params.id;
-        const db = req.supabase; // Sử dụng đúng biến db từ req.supabase
+        const db = req.supabase;
 
-        // 1. Kiểm tra xem file có tồn tại không
-        const { data: fileData, error: fetchError } = await db
-            .from('data_files')
-            .select('*')
-            .eq('id', fileId)
-            .single();
-
-        if (fetchError || !fileData) {
-            return res.status(404).json({ success: false, message: 'Không tìm thấy file trong cơ sở dữ liệu!' });
-        }
-
-        // 2. Xóa các sự kiện, nhật ký cuộc gọi hoặc lịch sử tương tác liên quan đến file này ở bảng phụ
-        await db.from('call_history').delete().eq('file_id', fileId);
-        await db.from('lead_assignments').delete().eq('file_id', fileId);
-
-        // 3. Tiến hành xóa chính bản ghi file trong bảng data_files
         const { error: deleteError } = await db
             .from('data_files')
             .delete()
             .eq('id', fileId);
 
-        if (deleteError) {
-            throw deleteError;
-        }
+        if (deleteError) throw deleteError;
 
         return res.json({ 
             success: true, 
-            message: 'Đã xóa file và toàn bộ sự kiện, nhật ký cuộc gọi liên quan thành công!' 
+            message: 'Đã xóa file thành công!' 
         });
 
     } catch (error) {
         console.error('Lỗi khi xóa file:', error);
         return res.status(500).json({ success: false, message: 'Lỗi server: ' + error.message });
+    }
+});
+
+/**
+ * Phân bổ data file cho Agent cụ thể:
+ * - Cập nhật trạng thái file thành 'Đã phân bổ'
+ * - Đồng bộ danh sách hợp đồng sang bảng `lead_assignments` để Agent có thể gọi điện trên workspace.
+ * Endpoint: POST /admin/data-files/:id/assign
+ */
+router.post('/data-files/:id/assign', async (req, res) => {
+    try {
+        const fileId = req.params.id;
+        const { agent_id } = req.body;
+
+        // Bước 1: Lấy tên file gốc từ bảng data_files dựa vào fileId
+        const { data: fileData, error: fileErr } = await req.supabase
+            .from('data_files')
+            .select('file_name')
+            .eq('id', fileId)
+            .single();
+
+        if (fileErr || !fileData) throw new Error('Không tìm thấy thông tin file!');
+        const fileName = fileData.file_name;
+
+        // Bước 2: Truy vấn thông tin Agent từ bảng users để lấy họ tên đầy đủ
+        const { data: agentData, error: agentErr } = await req.supabase
+            .from('users')
+            .select('ho_va_ten')
+            .eq('id', agent_id)
+            .single();
+
+        if (agentErr || !agentData) throw new Error('Không tìm thấy thông tin Agent!');
+        const agentName = agentData.ho_va_ten;
+
+        // Bước 3: Cập nhật trạng thái file trong bảng data_files thành 'Đã phân bổ'
+        const { error: updateFileErr } = await req.supabase
+            .from('data_files')
+            .update({ 
+                agent_id: agent_id, 
+                status: 'Đã phân bổ' 
+            })
+            .eq('id', fileId);
+
+        if (updateFileErr) throw updateFileErr;
+
+        // Bước 4: Lấy danh sách toàn bộ hợp đồng hiện có để chuẩn bị phân phối
+        const { data: contracts, error: contractErr } = await req.supabase
+            .from('contracts')
+            .select('so_hop_dong, dien_thoai');
+
+        if (contractErr) throw contractErr;
+
+        // Bước 5: Map dữ liệu và insert vào bảng lead_assignments dành riêng cho Agent gọi điện
+        if (contracts && contracts.length > 0) {
+            const assignments = contracts.map(item => ({
+                so_hop_dong: item.so_hop_dong,
+                dien_thoai: item.dien_thoai,
+                nguoi_phu_trach: agentName, // Lưu tên đầy đủ của agent phụ trách
+                trang_thai_lead: 'Chưa gọi'   // Trạng thái mặc định ban đầu
+            }));
+
+            const { error: insertErr } = await req.supabase
+                .from('lead_assignments')
+                .insert(assignments);
+
+            if (insertErr) throw insertErr;
+        }
+
+        res.json({ success: true, message: 'Phân bổ lead và đồng bộ vào workspace thành công!' });
+    } catch (err) {
+        console.error("Lỗi phân bổ:", err.message);
+        res.status(500).json({ success: false, message: err.message });
     }
 });
 
