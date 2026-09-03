@@ -31,7 +31,7 @@ document.addEventListener("DOMContentLoaded", () => {
         agent: [
             { name: "My Dashboard", icon: "layout-dashboard", href: "/agents/dashboard_agents.html" },
             { name: "Data Lead", icon: "user-check", href: "/agents/leads.html" },
-            { name: "Lịch sử cuộc gọi", icon: "phone-call", href: "/agents/calls.html" },
+            { name: "Quản lý cuộc gọi/hẹn", icon: "phone-call", href: "/agents/calls.html" },
             { name: "Hợp đồng bảo hiểm", icon: "shield-check", href: "/agents/contracts.html" }
         ]
     };

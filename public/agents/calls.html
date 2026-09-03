@@ -1,0 +1,532 @@
+<!-- 
+  Tên file: public/agents/calls.html
+  Chức năng: Quản lý cuộc hẹn đầy đủ 4 tab (Hẹn gặp thành công, Hẹn đã gửi, Hẹn được gửi, Nhắc lịch chăm sóc),
+  tích hợp searchHelper.js, chuẩn màu theme.js hoàn toàn, đồng hồ đếm ngược 24h, ẩn/hiện SĐT và file theo logic nghiệp vụ.
+-->
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Quản Lý Cuộc Hẹn - CRM Lead</title>
+    
+    <link rel="icon" type="image/png" href="/uploads/favicon.png">
+    <link rel="apple-touch-icon" href="/uploads/icon.png">
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="/js/lucide.min.js"></script>
+    <!-- SweetAlert2 cho Popup -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    
+    <!-- Các script dùng chung hệ thống chuẩn -->
+    <script src="/js/header.js"></script>
+    <script src="/js/sidebar.js"></script>
+    <script src="/js/theme.js"></script>
+    <!-- Thêm helper tìm kiếm dùng chung -->
+     <script src="/js/searchHelper.js"></script>
+</head>
+<body class="font-sans antialiased transition-colors duration-200">
+
+    <!-- Khung cấu trúc chuẩn App Native bắt màu theo theme.js -->
+    <div class="flex h-screen overflow-hidden">
+        <div id="mainContainer" class="flex-1 flex flex-col overflow-y-auto transition-colors duration-200 pt-16">
+            <main class="px-4 py-4 max-w-full w-full flex flex-col gap-4">
+                
+                <!-- Tiêu đề trang -->
+                <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                    <h1 class="text-base md:text-lg font-bold flex items-center gap-2">
+                        <i data-lucide="calendar-range" class="w-5 h-5 text-red-600 dark:text-red-500"></i>
+                        <span>Quản Lý Cuộc Hẹn & Lịch Chăm Sóc</span>
+                    </h1>
+                </div>
+
+                <!-- Hệ thống 4 Tab chuyển đổi giao diện -->
+                <div class="flex border-b border-gray-200 dark:border-gray-700 gap-2 overflow-x-auto">
+                    <button onclick="switchTab(1)" id="tab-btn-1" class="px-4 py-2 text-xs font-bold border-b-2 border-red-600 text-red-600 dark:text-red-500 flex items-center gap-1.5 whitespace-nowrap transition">
+                        <i data-lucide="calendar-check" class="w-4 h-4"></i> Danh sách hẹn gặp thành công
+                    </button>
+                    <button onclick="switchTab(2)" id="tab-btn-2" class="px-4 py-2 text-xs font-semibold opacity-75 hover:opacity-100 border-b-2 border-transparent flex items-center gap-1.5 whitespace-nowrap transition">
+                        <i data-lucide="send" class="w-4 h-4"></i> Hẹn đã gửi
+                    </button>
+                    <button onclick="switchTab(3)" id="tab-btn-3" class="px-4 py-2 text-xs font-semibold opacity-75 hover:opacity-100 border-b-2 border-transparent flex items-center gap-1.5 whitespace-nowrap transition">
+                        <i data-lucide="inbox" class="w-4 h-4"></i> Hẹn được gửi
+                    </button>
+                    <button onclick="switchTab(4)" id="tab-btn-4" class="px-4 py-2 text-xs font-semibold opacity-75 hover:opacity-100 border-b-2 border-transparent flex items-center gap-1.5 whitespace-nowrap transition">
+                        <i data-lucide="bell" class="w-4 h-4"></i> Nhắc lịch chăm sóc khách hàng
+                    </button>
+                </div>
+
+                <!-- Thanh công cụ tìm kiếm & bộ lọc chung cho các tab -->
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <div class="relative">
+                        <input type="text" id="searchInput" placeholder="Tìm tên hoặc SĐT..." class="theme-card border rounded-lg px-3 py-1.5 text-xs outline-none bg-transparent w-48 md:w-56">
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button id="btn-tat-ca" class="theme-card border px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1 shadow-sm hover:opacity-80 transition">
+                            <i data-lucide="list" class="w-3.5 h-3.5"></i> Tất cả
+                        </button>
+                        <div class="relative" id="filter-container-nguoi-nhan">
+                            <select id="filter-nguoi-nhan" class="theme-card border rounded-lg px-3 py-1.5 text-xs outline-none bg-transparent cursor-pointer">
+                                <option value="">Chọn người nhận/gửi</option>
+                            </select>
+                        </div>
+                        <div class="relative" id="filter-container-trang-thai">
+                            <select id="filter-trang-thai" class="theme-card border rounded-lg px-3 py-1.5 text-xs outline-none bg-transparent cursor-pointer">
+                                <option value="">Tất cả trạng thái</option>
+                            </select>
+                        </div>
+                        <div class="relative flex items-center">
+                            <input type="date" id="filter-ngay" class="theme-card border rounded-lg px-3 py-1.5 text-xs outline-none bg-transparent cursor-pointer">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ================= TAB 1: DANH SÁCH HẸN GẶP THÀNH CÔNG ================= -->
+                <div id="tab-content-1" class="tab-content block">
+                    <div class="theme-card border rounded-xl shadow-sm overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse text-xs">
+                                <thead>
+                                    <tr class="border-b border-gray-200 dark:border-gray-700 opacity-80 bg-black/5 dark:bg-white/5 font-semibold">
+                                        <th class="p-3 text-center w-12">STT</th>
+                                        <th class="p-3 min-w-[220px]">Khách hàng</th>
+                                        <th class="p-3 min-w-[130px]">Số ĐT</th>
+                                        <th class="p-3 min-w-[200px]">Địa chỉ</th>
+                                        <th class="p-3 min-w-[150px]">Trạng thái</th>
+                                        <th class="p-3 min-w-[160px]">DMO</th>
+                                        <th class="p-3 min-w-[140px]">File đính kèm</th>
+                                        <th class="p-3 text-center min-w-[110px]">Thao tác</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="table-body-1" class="divide-y divide-gray-200 dark:divide-gray-700"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ================= TAB 2: HẸN ĐÃ GỬI ================= -->
+                <div id="tab-content-2" class="tab-content hidden">
+                    <div class="theme-card border rounded-xl shadow-sm overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse text-xs">
+                                <thead>
+                                    <tr class="border-b border-gray-200 dark:border-gray-700 opacity-80 bg-black/5 dark:bg-white/5 font-semibold">
+                                        <th class="p-3 text-center w-12">STT</th>
+                                        <th class="p-3 min-w-[220px]">Khách hàng</th>
+                                        <th class="p-3 min-w-[180px]">Báo cáo hẹn</th>
+                                        <th class="p-3 min-w-[180px]">DMO</th>
+                                        <th class="p-3 min-w-[140px]">File đính kèm</th>
+                                        <th class="p-3 min-w-[150px]">Trạng thái</th>
+                                        <th class="p-3 text-center min-w-[110px]">Thao tác</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="table-body-2" class="divide-y divide-gray-200 dark:divide-gray-700"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ================= TAB 3: HẸN ĐƯỢC GỬI ================= -->
+                <div id="tab-content-3" class="tab-content hidden">
+                    <div class="theme-card border rounded-xl shadow-sm overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse text-xs">
+                                <thead>
+                                    <tr class="border-b border-gray-200 dark:border-gray-700 opacity-80 bg-black/5 dark:bg-white/5 font-semibold">
+                                        <th class="p-3 text-center w-12">STT</th>
+                                        <th class="p-3 min-w-[200px]">Khách hàng</th>
+                                        <th class="p-3 min-w-[130px]">Số ĐT</th>
+                                        <th class="p-3 min-w-[180px]">Địa chỉ</th>
+                                        <th class="p-3 min-w-[180px]">Ghi chú</th>
+                                        <th class="p-3 min-w-[180px]">Người gửi</th>
+                                        <th class="p-3 min-w-[140px]">File đính kèm</th>
+                                        <th class="p-3 min-w-[160px]">Trạng thái</th>
+                                        <th class="p-3 text-center min-w-[150px]">Thao tác</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="table-body-3" class="divide-y divide-gray-200 dark:divide-gray-700"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ================= TAB 4: NHẮC LỊCH CHĂM SÓC KHÁCH HÀNG ================= -->
+                <div id="tab-content-4" class="tab-content hidden">
+                    <div class="theme-card border rounded-xl p-8 text-center shadow-sm">
+                        <i data-lucide="construction" class="w-10 h-10 mx-auto text-amber-500 mb-3"></i>
+                        <h2 class="font-bold text-sm mb-1">Tính năng đang được phát triển</h2>
+                        <p class="opacity-75 text-xs">Logic Nhắc lịch chăm sóc khách hàng sẽ được cập nhật trong phiên bản tiếp theo.</p>
+                    </div>
+                </div>
+
+            </main>
+        </div>
+    </div>
+
+    <!-- Script xử lý toàn bộ logic 4 tab, API, đếm ngược 24h và tương tác -->
+    <script>
+        let currentActiveTab = 1;
+        let callList = [];
+        let agentUsersList = [];
+
+        // --- CHUYỂN TAB ---
+        function switchTab(tabIndex) {
+            currentActiveTab = tabIndex;
+            for (let i = 1; i <= 4; i++) {
+                const content = document.getElementById(`tab-content-${i}`);
+                const btn = document.getElementById(`tab-btn-${i}`);
+                if (i === tabIndex) {
+                    content.classList.remove('hidden');
+                    content.classList.add('block');
+                    btn.classList.add('border-red-600', 'text-red-600', 'dark:text-red-500', 'font-bold');
+                    btn.classList.remove('border-transparent', 'opacity-75');
+                } else {
+                    content.classList.remove('block');
+                    content.classList.add('hidden');
+                    btn.classList.remove('border-red-600', 'text-red-600', 'dark:text-red-500', 'font-bold');
+                    btn.classList.add('border-transparent', 'opacity-75');
+                }
+            }
+            document.getElementById('searchInput').value = '';
+            renderCurrentTab();
+        }
+
+        // --- TẢI DỮ LIỆU TỪ SERVER ---
+        async function fetchData() {
+            try {
+                const resCalls = await fetch('/api/call-history?ket_qua=Hẹn gặp thành công');
+                const dataCalls = await resCalls.json();
+                if (dataCalls.success) {
+                    callList = dataCalls.data || [];
+                }
+
+                const resUsers = await fetch('/api/users?phan_quyen=agent');
+                const dataUsers = await resUsers.json();
+                if (dataUsers.success) {
+                    agentUsersList = dataUsers.data || [];
+                    initFilterNguoiNhan();
+                }
+
+                renderCurrentTab();
+            } catch (error) {
+                console.error('Lỗi khi tải dữ liệu:', error);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Lỗi tải dữ liệu',
+                    text: 'Không thể kết nối tới máy chủ để lấy dữ liệu.',
+                    confirmButtonColor: '#dc2626'
+                });
+            }
+        }
+
+        function formatDateTimeVN(isoString) {
+            if (!isoString) return '-';
+            const date = new Date(isoString);
+            if (isNaN(date.getTime())) return isoString;
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const year = date.getFullYear();
+            return `${hours}:${minutes} ngày ${day}/${month}/${year}`;
+        }
+
+        function initFilterNguoiNhan() {
+            const select = document.getElementById('filter-nguoi-nhan');
+            select.innerHTML = '<option value="">Chọn người nhận/gửi</option>';
+            agentUsersList.forEach(agent => {
+                const opt = document.createElement('option');
+                opt.value = agent.ten_dang_nhap;
+                opt.textContent = `${agent.ho_va_ten} (${agent.ten_dang_nhap})`;
+                select.appendChild(opt);
+            });
+        }
+
+        function renderCurrentTab() {
+            if (currentActiveTab === 1) renderTab1();
+            if (currentActiveTab === 2) renderTab2();
+            if (currentActiveTab === 3) renderTab3();
+        }
+
+        // ================= RENDER TAB 1 =================
+        function renderTab1() {
+            const tbody = document.getElementById('table-body-1');
+            tbody.innerHTML = '';
+
+            if (!callList || callList.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="8" class="p-6 text-center opacity-70 text-xs">Không có cuộc hẹn gặp thành công nào.</td></tr>`;
+                return;
+            }
+
+            callList.forEach((item, index) => {
+                const customer = item.customers || {};
+                const hoTen = `${customer.ho || ''} ${customer.ten || ''}`.trim() || '-';
+                const sdt = customer.dien_thoai || item.dien_thoai || '-';
+                const diaChi = customer.dia_chi || 'Chưa cập nhật';
+                
+                let trangThaiBadge = `<span class="px-2 py-1 bg-amber-500/20 text-amber-600 dark:text-amber-400 rounded-md font-medium text-xs inline-flex items-center gap-1"><i data-lucide="clock" class="w-3 h-3"></i> Không gửi hẹn</span>`;
+                if (item.trang_thai_gui === 'Đã gửi') {
+                    const thoiGianGuiFormatted = formatDateTimeVN(item.thoi_gian_gui);
+                    trangThaiBadge = `
+                        <span class="px-2 py-1 bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-md font-medium text-xs inline-flex items-center gap-1">
+                            <i data-lucide="check" class="w-3 h-3"></i> Gửi hẹn
+                        </span>
+                        <div class="text-[11px] opacity-75 mt-1">${thoiGianGuiFormatted}</div>
+                    `;
+                }
+
+                let dmoHtml = `<span class="opacity-75 italic text-xs">Chưa gửi</span>`;
+                if (item.trang_thai_gui === 'Đã gửi' && item.nguoi_nhan_ten) {
+                    dmoHtml = `<span class="text-xs font-medium">${item.nguoi_nhan_ten}</span><br><span class="text-[11px] italic opacity-75">(${item.nguoi_nhan_username})</span>`;
+                }
+
+                let fileHtml = `<span class="opacity-65 text-xs">---</span>`;
+                if (item.file_dinh_kem) {
+                    fileHtml = `<a href="/uploads/${item.file_dinh_kem}" target="_blank" class="text-red-600 dark:text-red-400 underline truncate max-w-[120px] inline-flex items-center gap-1 text-xs" title="${item.file_dinh_kem}"><i data-lucide="file-text" class="w-3 h-3"></i>${item.file_dinh_kem}</a>`;
+                }
+
+                let ghiChuHtml = `<span class="italic text-[11px] opacity-80">Ghi chú: ${item.ghi_chu || '-'}</span>`;
+                if (item.lich_su_goi && item.lich_su_goi.length > 0) {
+                    item.lich_su_goi.forEach(ls => {
+                        ghiChuHtml += `<br><span class="text-[11px] italic opacity-75">Gọi lần ${ls.lan}: ${ls.ghi_chu}</span>`;
+                    });
+                }
+
+                const tr = document.createElement('tr');
+                tr.className = 'border-b border-gray-100 dark:border-gray-800 hover:bg-black/5 dark:hover:bg-white/5 transition';
+                tr.innerHTML = `
+                    <td class="p-3 text-center font-medium text-xs">${index + 1}</td>
+                    <td class="p-3">
+                        <div class="font-bold text-xs">${hoTen}</div>
+                        <div class="mt-1">${ghiChuHtml}</div>
+                    </td>
+                    <td class="p-3">
+                        <a href="tel:${sdt}" class="text-red-600 dark:text-red-400 font-semibold inline-flex items-center gap-1 text-xs">
+                            <i data-lucide="phone" class="w-3 h-3"></i> ${sdt}
+                        </a>
+                    </td>
+                    <td class="p-3 opacity-90 text-xs">${diaChi}</td>
+                    <td class="p-3">${trangThaiBadge}</td>
+                    <td class="p-3">${dmoHtml}</td>
+                    <td class="p-3">${fileHtml}</td>
+                    <td class="p-3 text-center">
+                        <button onclick="openGuiHenPopup(${item.id})" class="theme-card border px-3 py-1.5 rounded-lg text-xs font-medium inline-flex items-center justify-center gap-1.5 shadow-sm w-full bg-red-600 text-white hover:bg-red-700 transition" title="Gửi cuộc hẹn">
+                            <i data-lucide="send" class="w-3.5 h-3.5"></i> Gửi hẹn
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+            if (typeof initTableSearch === 'function') initTableSearch('searchInput', null, 'table-body-1', [2, 3]);
+        }
+
+        // ================= RENDER TAB 2: HẸN ĐÃ GỬI =================
+        function renderTab2() {
+            const tbody = document.getElementById('table-body-2');
+            tbody.innerHTML = '';
+
+            const sentList = callList.filter(item => item.trang_thai_gui === 'Đã gửi');
+
+            if (!sentList || sentList.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" class="p-6 text-center opacity-70 text-xs">Chưa có cuộc hẹn nào được gửi đi.</td></tr>`;
+                return;
+            }
+
+            sentList.forEach((item, index) => {
+                const customer = item.customers || {};
+                const hoTen = `${customer.ho || ''} ${customer.ten || ''}`.trim() || '-';
+                const sdt = customer.dien_thoai || item.dien_thoai || '-';
+
+                let dmoHtml = `<span class="text-xs font-medium">${item.nguoi_nhan_ten || '-'}</span><br><span class="text-[11px] italic opacity-75">(${item.nguoi_nhan_username || '-'})</span><br><span class="text-[10px] opacity-70">nhận lúc ${formatDateTimeVN(item.thoi_gian_gui)}</span>`;
+
+                let fileHtml = `<span class="opacity-65 text-xs">---</span>`;
+                if (item.file_dinh_kem) {
+                    fileHtml = `<a href="/uploads/${item.file_dinh_kem}" target="_blank" class="text-red-600 dark:text-red-400 underline truncate max-w-[120px] inline-flex items-center gap-1 text-xs" title="${item.file_dinh_kem}"><i data-lucide="file-text" class="w-3 h-3"></i>${item.file_dinh_kem}</a>`;
+                }
+
+                let statusText = item.trang_thai_tiep_nhan || 'Chờ tiếp nhận';
+                let statusBadgeClass = 'bg-amber-500/20 text-amber-600 dark:text-amber-400';
+                if (statusText === 'Đã tiếp nhận') statusBadgeClass = 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-bold';
+                if (statusText === 'Không tiếp nhận') statusBadgeClass = 'bg-red-500/20 text-red-600 dark:text-red-400';
+
+                let trangThaiBadge = `<span class="px-2 py-1 ${statusBadgeClass} rounded-md text-xs inline-flex items-center gap-1">${statusText}</span>`;
+
+                const tr = document.createElement('tr');
+                tr.className = 'border-b border-gray-100 dark:border-gray-800 hover:bg-black/5 dark:hover:bg-white/5 transition';
+                tr.innerHTML = `
+                    <td class="p-3 text-center font-medium text-xs">${index + 1}</td>
+                    <td class="p-3">
+                        <div class="font-bold text-xs">${hoTen}</div>
+                        <div class="text-[11px] opacity-80 mt-0.5"><i data-lucide="phone" class="w-3 h-3 inline"></i> ${sdt}</div>
+                    </td>
+                    <td class="p-3 text-xs opacity-90">${item.bao_cao_hen || 'Chưa có báo cáo'}</td>
+                    <td class="p-3">${dmoHtml}</td>
+                    <td class="p-3">${fileHtml}</td>
+                    <td class="p-3">${trangThaiBadge}</td>
+                    <td class="p-3 text-center flex items-center justify-center gap-2">
+                        <button onclick="viewCustomerDetail(${item.id})" class="theme-card border p-1.5 rounded-lg text-xs hover:bg-black/5 dark:hover:bg-white/5 transition" title="Xem thông tin hồ sơ khách hàng">
+                            <i data-lucide="eye" class="w-4 h-4 text-blue-600"></i>
+                        </button>
+                        <button onclick="thuHoiHen(${item.id})" class="theme-card border p-1.5 rounded-lg text-xs hover:bg-black/5 dark:hover:bg-white/5 transition" title="Thu hồi hẹn">
+                            <i data-lucide="rotate-ccw" class="w-4 h-4 text-red-600"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+            if (typeof initTableSearch === 'function') initTableSearch('searchInput', null, 'table-body-2', [2]);
+        }
+
+        // ================= RENDER TAB 3: HẸN ĐƯỢC GỬI =================
+        function renderTab3() {
+            const tbody = document.getElementById('table-body-3');
+            tbody.innerHTML = '';
+
+            const receivedList = callList.filter(item => item.trang_thai_gui === 'Đã gửi'); 
+
+            if (!receivedList || receivedList.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="9" class="p-6 text-center opacity-70 text-xs">Không có cuộc hẹn nào được gửi đến bạn.</td></tr>`;
+                return;
+            }
+
+            receivedList.forEach((item, index) => {
+                const customer = item.customers || {};
+                const hoTen = `${customer.ho || ''} ${customer.ten || ''}`.trim() || '-';
+                
+                const isAccepted = item.trang_thai_tiep_nhan === 'Đã tiếp nhận';
+                const sdtDisplay = isAccepted ? (customer.dien_thoai || item.dien_thoai || '-') : '<span>********</span> <span class="text-[10px] italic opacity-60">(Ẩn)</span>';
+
+                let diaChi = customer.dia_chi || '-';
+                let ghiChu = item.ghi_chu || '-';
+                let nguoiGuiHtml = `<span class="text-xs font-medium">${item.nguoi_gui_ten || 'Lê Ngô Hải'}</span><br><span class="text-[11px] italic opacity-75">(ngohaile)</span><br><span class="text-[10px] opacity-70">lúc ${formatDateTimeVN(item.thoi_gian_gui)}</span>`;
+
+                let fileHtml = `<span class="opacity-65 text-xs">---</span>`;
+                if (item.file_dinh_kem) {
+                    if (isAccepted) {
+                        fileHtml = `<a href="/uploads/${item.file_dinh_kem}" target="_blank" class="text-red-600 dark:text-red-400 underline truncate max-w-[120px] inline-flex items-center gap-1 text-xs"><i data-lucide="file-text" class="w-3 h-3"></i>${item.file_dinh_kem}</a>`;
+                    } else {
+                        fileHtml = `<span class="text-[11px] italic opacity-60 flex items-center gap-1"><i data-lucide="lock" class="w-3 h-3"></i> Cần tiếp nhận để xem</span>`;
+                    }
+                }
+
+                let statusHtml = '';
+                let actionHtml = '';
+
+                if (isAccepted) {
+                    statusHtml = `<span class="font-bold text-xs text-emerald-600 dark:text-emerald-400">Đã tiếp nhận</span>`;
+                    actionHtml = `<button onclick="openBaoCaoHenPopup(${item.id})" class="theme-card border px-3 py-1.5 rounded-lg text-xs font-medium bg-red-600 text-white hover:bg-red-700 transition w-full">Báo cáo hẹn</button>`;
+                } else {
+                    statusHtml = `<div id="countdown-${item.id}" class="text-[11px] font-mono font-bold text-amber-600">23:59:59</div><span class="text-[11px] opacity-75">Chờ tiếp nhận</span>`;
+                    actionHtml = `
+                        <div class="flex items-center gap-1.5">
+                            <button onclick="tiepNhanHen(${item.id}, true)" class="theme-card border px-2.5 py-1.5 rounded-lg text-xs font-medium bg-emerald-600 text-white hover:bg-emerald-700 transition">Tiếp nhận</button>
+                            <button onclick="tiepNhanHen(${item.id}, false)" class="theme-card border px-2.5 py-1.5 rounded-lg text-xs font-medium bg-red-600 text-white hover:bg-red-700 transition">Không tiếp nhận</button>
+                        </div>
+                    `;
+                }
+
+                const tr = document.createElement('tr');
+                tr.className = 'border-b border-gray-100 dark:border-gray-800 hover:bg-black/5 dark:hover:bg-white/5 transition';
+                tr.innerHTML = `
+                    <td class="p-3 text-center font-medium text-xs">${index + 1}</td>
+                    <td class="p-3 font-bold text-xs">${hoTen}</td>
+                    <td class="p-3 text-xs">${sdtDisplay}</td>
+                    <td class="p-3 opacity-90 text-xs">${diaChi}</td>
+                    <td class="p-3 italic text-xs opacity-80">${ghiChu}</td>
+                    <td class="p-3">${nguoiGuiHtml}</td>
+                    <td class="p-3">${fileHtml}</td>
+                    <td class="p-3">${statusHtml}</td>
+                    <td class="p-3 text-center">${actionHtml}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+            if (typeof initTableSearch === 'function') initTableSearch('searchInput', null, 'table-body-3', [2]);
+        }
+
+        // --- CÁC HÀM THAO TÁC NGHIỆP VỤ ---
+        function openGuiHenPopup(leadId) {
+            Swal.fire('Thông báo', 'Mở popup gửi hẹn cho hồ sơ #' + leadId, 'info');
+        }
+
+        function viewCustomerDetail(leadId) {
+            Swal.fire('Thông tin hồ sơ', 'Xem chi tiết hồ sơ khách hàng của hẹn #' + leadId, 'info');
+        }
+
+        function thuHoiHen(leadId) {
+            Swal.fire({
+                title: 'Xác nhận thu hồi cuộc hẹn?',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Đồng ý thu hồi',
+                cancelButtonText: 'Hủy',
+                confirmButtonColor: '#dc2626'
+            }).then((res) => {
+                if (res.isConfirmed) {
+                    Swal.fire('Thành công', 'Đã thu hồi cuộc hẹn.', 'success');
+                }
+            });
+        }
+
+        function tiepNhanHen(leadId, isAccepted) {
+            const status = isAccepted ? 'Đã tiếp nhận' : 'Không tiếp nhận';
+            const item = callList.find(l => l.id === leadId);
+            if (item) {
+                item.trang_thai_tiep_nhan = status;
+                renderTab3();
+                Swal.fire({
+                    icon: isAccepted ? 'success' : 'info',
+                    title: status,
+                    timer: 1200,
+                    showConfirmButton: false
+                });
+            }
+        }
+
+        function openBaoCaoHenPopup(leadId) {
+            Swal.fire({
+                title: '<div class="text-sm md:text-base font-bold">Báo Cáo Cuộc Hẹn</div>',
+                html: `<textarea id="bao-cao-text" rows="4" class="theme-card border rounded-lg p-2 w-full outline-none bg-transparent text-xs" placeholder="Nhập kết quả/báo cáo cuộc hẹn..."></textarea>`,
+                showCancelButton: true,
+                confirmButtonText: 'Lưu báo cáo',
+                cancelButtonText: 'Hủy',
+                confirmButtonColor: '#dc2626',
+                preConfirm: () => {
+                    return document.getElementById('bao-cao-text').value;
+                }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    const item = callList.find(l => l.id === leadId);
+                    if (item) {
+                        item.bao_cao_hen = result.value;
+                        Swal.fire('Thành công', 'Đã lưu báo cáo hẹn.', 'success');
+                        renderTab2();
+                    }
+                }
+            });
+        }
+
+        // Sự kiện bộ lọc
+        document.getElementById('btn-tat-ca').addEventListener('click', function() {
+            document.getElementById('searchInput').value = '';
+            document.getElementById('filter-nguoi-nhan').value = '';
+            document.getElementById('filter-trang-thai').value = '';
+            document.getElementById('filter-ngay').value = '';
+            fetchData();
+        });
+
+        // Khởi chạy khi tải trang
+        document.addEventListener('DOMContentLoaded', () => {
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+            fetchData();
+        });
+    </script>
+</body>
+</html>

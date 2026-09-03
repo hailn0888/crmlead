@@ -129,7 +129,7 @@ router.get('/leads', async (req, res) => {
                 .in('so_hop_dong', soHopDongs);
             
             if (contractsData) {
-                contractsData.forEach(c => contractsMap.set(c.so_hop_dong, c));
+                contractsData.forEach(c => contractsMap.set(String(c.so_hop_dong).trim(), c));
             }
         }
 
@@ -142,14 +142,18 @@ router.get('/leads', async (req, res) => {
                 .in('dien_thoai', dienThoais);
             
             if (customersData) {
-                customersData.forEach(cus => customersMap.set(cus.dien_thoai, cus));
+                customersData.forEach(cus => customersMap.set(String(cus.dien_thoai).trim(), cus));
             }
         }
 
         // 4. Ghép nối dữ liệu trả về cho frontend
         const formattedData = assignments.map(item => {
-            const contract = contractsMap.get(item.so_hop_dong) || {};
-            const customer = customersMap.get(item.dien_thoai || contract.dien_thoai) || {};
+            const contractKey = item.so_hop_dong ? String(item.so_hop_dong).trim() : '';
+            const phoneKey = item.dien_thoai ? String(item.dien_thoai).trim() : '';
+
+            const contract = contractsMap.get(contractKey) || {};
+            const customer = customersMap.get(phoneKey || String(contract.dien_thoai || '').trim()) || {};
+            
             return {
                 ...item,
                 contracts: contract,
@@ -173,28 +177,75 @@ router.post('/calls', async (req, res) => {
             return res.status(400).json({ success: false, message: 'Thiếu dữ liệu bắt buộc!' });
         }
 
+        // 1. Lưu vào bảng call_history (BỎ HOÀN TOÀN so_hop_dong ra vì bảng này không có cột đó)
         const { error: historyError } = await supabase
             .from('call_history')
-            .insert([{ dien_thoai, ten_agent, ket_qua_cuoc_goi, ghi_chu, thoi_gian_goi }]);
+            .insert([{ 
+                dien_thoai, 
+                ten_agent, 
+                ket_qua_cuoc_goi, 
+                ghi_chu, 
+                thoi_gian_goi: thoi_gian_goi || new Date() 
+            }]);
 
         if (historyError) throw historyError;
 
-        const { error: updateError } = await supabase
-            .from('lead_assignments')
-            .update({
-                trang_thai: 'Đã gọi',
-                ket_qua_moi_nhat: ket_qua_cuoc_goi,
-                ghi_chu_moi_nhat: ghi_chu,
-                ngay_cap_hat: new Date()
-            })
-            .eq('dien_thoai', dien_thoai);
+        // 2. Cập nhật trạng thái mới nhất vào lead_assignments (Dùng so_hop_dong hoặc dien_thoai để định danh)
+        const updatePayload = {
+            trang_thai_lead: 'Đã gọi',
+            ket_qua_moi_nhat: ket_qua_cuoc_goi,
+            ghi_chu_moi_nhat: ghi_chu
+        };
 
+        let query = supabase
+            .from('lead_assignments')
+            .update(updatePayload);
+
+        if (so_hop_dong) {
+            query = query.eq('so_hop_dong', so_hop_dong);
+        } else {
+            query = query.eq('dien_thoai', dien_thoai);
+        }
+
+        const { error: updateError } = await query;
         if (updateError) throw updateError;
 
         res.json({ success: true, message: 'Đã lưu kết quả cuộc gọi thành công!' });
     } catch (error) {
         console.error("Lỗi lưu kết quả gọi:", error);
         res.status(500).json({ success: false, message: 'Không thể lưu kết quả gọi' });
+    }
+});
+
+// API: Lấy lịch sử cuộc gọi kèm thông tin khách hàng
+router.get('/calls', async (req, res) => {
+    try {
+        const { agent, date } = req.query;
+        
+        let query = supabase
+            .from('call_history')
+            .select(`
+                id,
+                dien_thoai,
+                ten_agent,
+                ket_qua_cuoc_goi,
+                ghi_chu,
+                thoi_gian_goi,
+                customers:dien_thoai (ho, ten, dia_chi)
+            `)
+            .order('thoi_gian_goi', { ascending: false });
+
+        if (agent) {
+            query = query.eq('ten_agent', agent);
+        }
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        res.json({ success: true, data: data || [] });
+    } catch (error) {
+        console.error("Lỗi lấy lịch sử cuộc gọi:", error);
+        res.status(500).json({ success: false, message: 'Không thể lấy lịch sử cuộc gọi' });
     }
 });
 
