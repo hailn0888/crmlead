@@ -19,14 +19,18 @@ document.getElementById('loginForm').addEventListener('submit', async function (
         const result = await response.json();
 
         if (result.success) {
-            localStorage.setItem('userRole', result.user.phan_quyen);
+            // LƯU CẢ 2 KEY ĐỂ SIDEBAR KHÔNG BAO GIỜ BỊ LỆCH
+            const role = result.user.phan_quyen;
+            localStorage.setItem('phan_quyen', role);
+            localStorage.setItem('userRole', role);
             localStorage.setItem('userName', result.user.ho_va_ten);
 
-            if (result.user.phan_quyen === 'admin') {
+            if (role === 'admin') {
                 window.location.href = '/admin/dashboard_admin.html';
-            } else if (result.user.phan_quyen === 'leader') {
-                window.location.href = '/leaders/dashboard_leaders.html';
-            } else if (result.user.phan_quyen === 'agent') {
+            } else if (role === 'leader') {
+                // Sửa lại đúng chuẩn folder /leader/ thay vì /leaders/
+                window.location.href = '/leader/dashboard.html';
+            } else if (role === 'agent') {
                 window.location.href = '/agents/dashboard_agents.html';
             }
         } else {
