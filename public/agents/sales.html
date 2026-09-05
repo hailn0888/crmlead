@@ -1,208 +1,290 @@
-<!-- 
-  Tên file: public/agents/sales.html
-  Chức năng: Quản lý doanh số cá nhân (FYC, FYP, Hợp đồng), đồng bộ giao diện hệ thống.
-  Vị trí: public/agents/sales.html
--->
 <!DOCTYPE html>
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Doanh Số Cá Nhân - CRM Lead</title>
-    
+    <title>Quản Lý Doanh Số & Thu Nhập - Prudential 2026</title>
     <link rel="icon" type="image/png" href="/uploads/favicon.png">
-    <link rel="apple-touch-icon" href="/uploads/icon.png">
-
-    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Lucide Icons -->
+    <script>
+        tailwind.config = {
+            darkMode: 'class'
+        }
+    </script>
     <script src="/js/lucide.min.js"></script>
-    <!-- SweetAlert2 cho Popup -->
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    
-    <!-- Nạp theme.js đầu tiên để đồng bộ màu sắc và font chữ toàn hệ thống -->
-    <script src="/js/theme.js"></script>
-    <script src="/js/searchHelper.js"></script>
-    <script src="/js/ai.js"></script>
     <script src="/js/header.js"></script>
     <script src="/js/sidebar.js"></script>
-
-    <style>
-        .theme-action-btn {
-            background-color: #dc2626; /* Light: Đỏ Prudential */
-            color: #ffffff;
-            transition: opacity 0.2s;
-        }
-        .theme-action-btn:hover {
-            opacity: 0.9;
-        }
-        .dark .theme-action-btn, [data-theme="dark"] .theme-action-btn, body.dark .theme-action-btn {
-            background-color: #16a34a; /* Dark: Xanh lá */
-            color: #ffffff;
-        }
-    </style>
+    <script src="/js/theme.js"></script>
 </head>
-<body class="bg-theme-bg text-theme-text min-h-screen flex flex-col transition-colors duration-200">
+<body class="bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-sans antialiased transition-colors duration-200">
 
-    <!-- Khung cấu trúc chuẩn App Native -->
     <div class="flex h-screen overflow-hidden">
         <div id="mainContainer" class="flex-1 flex flex-col overflow-y-auto transition-colors duration-200 pt-16">
-            <main class="px-4 py-4 max-w-full w-full flex flex-col gap-4">
+            <main class="px-4 py-6 max-w-7xl mx-auto w-full flex flex-col gap-6">
                 
-                <!-- Header Tiêu đề & Bộ lọc thời gian -->
-                <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                <!-- Header -->
+                <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
                     <div>
-                        <h1 class="text-lg font-bold flex items-center gap-2">
-                            <i data-lucide="line-chart" class="w-5 h-5 text-red-600 dark:text-green-500"></i>
-                            <span>Doanh Số Cá Nhân</span>
+                        <h1 class="text-xl font-bold flex items-center gap-2.5 text-slate-900 dark:text-white">
+                            <i data-lucide="calculator" class="w-6 h-6 text-red-600 dark:text-red-500"></i>
+                            <span>Quản Lý Doanh Số & Thu Nhập 2026</span>
                         </h1>
-                        <p class="text-xs opacity-75 mt-0.5">Theo dõi dòng tiền FYC, FYP và tiến độ chỉ tiêu kinh doanh</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Mô phỏng thu nhập, hạng Pru-Elite & Tiến độ MDRT 2027</p>
                     </div>
-
                     <div class="flex items-center gap-2">
-                        <select id="filterTime" class="theme-card border text-xs rounded-lg px-3 py-2 outline-none">
-                            <option value="thang_nay">Tháng này</option>
-                            <option value="thang_truoc">Tháng trước</option>
-                            <option value="quy_nay">Quý này</option>
-                            <option value="nam_2026" selected>Năm 2026</option>
-                        </select>
-                        <button onclick="exportReport()" class="theme-action-btn text-xs font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 shadow-sm">
-                            <i data-lucide="download" class="w-4 h-4"></i>
-                            <span>Xuất báo cáo</span>
-                        </button>
+                        <span class="px-3 py-1 bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 rounded-full text-xs font-semibold">Pru1 2026 Engine</span>
                     </div>
                 </div>
 
-                <!-- Thống kê tổng quan (KPIs) -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                    <!-- Card FYC -->
-                    <div class="theme-card border rounded-xl p-4 shadow-sm relative overflow-hidden">
-                        <div class="flex justify-between items-start">
-                            <div>
-                                <span class="text-xs opacity-75 font-medium">Tổng FYC thực nhận</span>
-                                <h3 id="totalFYC" class="text-xl font-extrabold mt-1 text-red-600 dark:text-green-500">0 VNĐ</h3>
-                            </div>
-                            <div class="p-2 rounded-lg bg-red-50 dark:bg-green-950/30 text-red-600 dark:text-green-500">
-                                <i data-lucide="wallet" class="w-5 h-5"></i>
-                            </div>
-                        </div>
-                        <div class="mt-3 text-[11px] opacity-70 flex items-center gap-1">
-                            <i data-lucide="trending-up" class="w-3.5 h-3.5 text-green-500"></i>
-                            <span>Đạt chỉ tiêu thu nhập tháng</span>
-                        </div>
-                    </div>
-
-                    <!-- Card FYP -->
-                    <div class="theme-card border rounded-xl p-4 shadow-sm relative overflow-hidden">
-                        <div class="flex justify-between items-start">
-                            <div>
-                                <span class="text-xs opacity-75 font-medium">Tổng AFYP quy đổi</span>
-                                <h3 id="totalFYP" class="text-xl font-extrabold mt-1">0 VNĐ</h3>
-                            </div>
-                            <div class="p-2 rounded-lg bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400">
-                                <i data-lucide="award" class="w-5 h-5"></i>
-                            </div>
-                        </div>
-                        <div class="mt-3 text-[11px] opacity-70 flex items-center gap-1">
-                            <i data-lucide="target" class="w-3.5 h-3.5 text-amber-500"></i>
-                            <span>Tiến độ MDRT 2026</span>
-                        </div>
-                    </div>
-
-                    <!-- Card Số hợp đồng -->
-                    <div class="theme-card border rounded-xl p-4 shadow-sm relative overflow-hidden">
-                        <div class="flex justify-between items-start">
-                            <div>
-                                <span class="text-xs opacity-75 font-medium">Hợp đồng phát hành</span>
-                                <h3 id="totalContracts" class="text-xl font-extrabold mt-1">0 HĐ</h3>
-                            </div>
-                            <div class="p-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400">
-                                <i data-lucide="file-check" class="w-5 h-5"></i>
-                            </div>
-                        </div>
-                        <div class="mt-3 text-[11px] opacity-70 flex items-center gap-1">
-                            <i data-lucide="check-circle-2" class="w-3.5 h-3.5 text-blue-500"></i>
-                            <span>Tỷ lệ duy trì (K2): 100%</span>
-                        </div>
-                    </div>
-
-                    <!-- Card Case Size Trung Bằng -->
-                    <div class="theme-card border rounded-xl p-4 shadow-sm relative overflow-hidden">
-                        <div class="flex justify-between items-start">
-                            <div>
-                                <span class="text-xs opacity-75 font-medium">Case Size trung bình</span>
-                                <h3 id="avgCaseSize" class="text-xl font-extrabold mt-1">0 VNĐ</h3>
-                            </div>
-                            <div class="p-2 rounded-lg bg-purple-50 dark:bg-purple-950/30 text-purple-600 dark:text-purple-400">
-                                <i data-lucide="calculator" class="w-5 h-5"></i>
-                            </div>
-                        </div>
-                        <div class="mt-3 text-[11px] opacity-70 flex items-center gap-1">
-                            <i data-lucide="sparkles" class="w-3.5 h-3.5 text-purple-500"></i>
-                            <span>Phí trung bình / khách hàng</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Bảng danh sách hợp đồng/doanh số -->
-                <div class="theme-card border rounded-xl shadow-sm overflow-hidden mt-2">
-                    <div class="p-4 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                        <h2 class="font-bold text-sm flex items-center gap-2">
-                            <i data-lucide="list-ordered" class="w-4 h-4"></i>
-                            <span>Chi Tiết Doanh Số Hợp Đồng</span>
+                <!-- Input Controls Section -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    
+                    <!-- Chỉ số kinh doanh quý -->
+                    <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col gap-4">
+                        <h2 class="text-sm font-bold text-red-600 dark:text-red-400 uppercase tracking-wider flex items-center gap-2">
+                            <i data-lucide="sliders" class="w-4 h-4"></i> Chỉ Số Kinh Doanh Quý
                         </h2>
-                        <div class="relative w-full sm:w-64">
-                            <input type="text" id="searchContract" placeholder="Tìm theo tên KH, số HĐ..." class="w-full text-xs border rounded-lg pl-8 pr-3 py-1.5 bg-transparent outline-none">
-                            <i data-lucide="search" class="w-3.5 h-3.5 absolute left-2.5 top-2.5 opacity-50"></i>
+                        
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Doanh số FYC Quý (VNĐ)</label>
+                            <input type="number" id="inputFYC" value="120000000" step="5000000" class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-bold text-red-600 dark:text-red-400 focus:outline-none focus:ring-2 focus:ring-red-500">
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Hoa hồng SYC (Năm 2)</label>
+                                <input type="number" id="inputSYC" value="30000000" step="1000000" class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-red-500">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Hoa hồng RYC (Tái tục)</label>
+                                <input type="number" id="inputRYC" value="20000000" step="1000000" class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-red-500">
+                            </div>
+                        </div>
+
+                        <div>
+                            <div class="flex justify-between text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                                <span>Tỷ lệ duy trì hợp đồng (TLDTPTT - K2)</span>
+                                <span id="k2Val" class="font-bold text-red-600 dark:text-red-400">85%</span>
+                            </div>
+                            <input type="range" id="inputK2" min="50" max="100" value="85" class="w-full accent-red-600">
+                            <div class="flex justify-between text-[10px] text-slate-400 dark:text-slate-500 mt-1">
+                                <span><65% (0%)</span>
+                                <span>65% (60%)</span>
+                                <span>80% (100%)</span>
+                                <span>≥90% (110%)</span>
+                            </div>
                         </div>
                     </div>
 
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left text-xs">
-                            <thead class="uppercase opacity-75 border-b bg-black/5 dark:bg-white/5">
-                                <tr>
-                                    <th class="p-3">Số HĐ</th>
-                                    <th class="p-3">Khách hàng</th>
-                                    <th class="p-3">Sản phẩm</th>
-                                    <th class="p-3 text-right">Phí định kỳ (FYP)</th>
-                                    <th class="p-3 text-right">Hoa hồng (FYC)</th>
-                                    <th class="p-3 text-center">Ngày phát hành</th>
-                                    <th class="p-3 text-center">Trạng thái</th>
-                                </tr>
-                            </thead>
-                            <tbody id="salesTableBody" class="divide-y divide-gray-200/10">
-                                <!-- Trạng thái trống dữ liệu -->
-                                <tr>
-                                    <td colspan="7" class="text-center py-8 opacity-60">
-                                        <i data-lucide="folder-open" class="w-8 h-8 mx-auto mb-2 opacity-50"></i>
-                                        <span>Chưa có dữ liệu doanh số được ghi nhận</span>
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
+                    <!-- Thi đua & Tích lũy -->
+                    <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col gap-4">
+                        <h2 class="text-sm font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider flex items-center gap-2">
+                            <i data-lucide="award" class="w-4 h-4"></i> Thi Đua & Tích Luỹ Lũy Kế
+                        </h2>
+
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Tổng FYP Lũy kế Tới Hiện Tại</label>
+                            <input type="number" id="inputFYPAcc" value="550000000" step="10000000" class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-bold text-amber-600 dark:text-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-500">
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Quý Xét Duyệt</label>
+                                <select id="selectQuarter" class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-800 dark:text-slate-100 focus:outline-none">
+                                    <option value="1">Quý 1 (31/03)</option>
+                                    <option value="2" selected>Quý 2 (30/06)</option>
+                                    <option value="3">Quý 3 (30/09)</option>
+                                    <option value="4">Quý 4 (31/12)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Số Tháng Active/Quý</label>
+                                <select id="selectActiveMonths" class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-800 dark:text-slate-100 focus:outline-none">
+                                    <option value="1">1 Tháng (FYC≥5tr)</option>
+                                    <option value="2">2 Tháng</option>
+                                    <option value="3" selected>3 Tháng Full Active</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">FYC 6 Tháng Gần Nhất (Xét Thưởng CSKH)</label>
+                            <input type="number" id="inputFYC6M" value="45000000" class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-800 dark:text-slate-100 focus:outline-none">
+                        </div>
                     </div>
+
+                    <!-- Summary Card Red Gradient -->
+                    <div class="bg-gradient-to-br from-red-600 to-rose-700 text-white p-5 rounded-2xl shadow-lg flex flex-col justify-between">
+                        <div>
+                            <span class="text-xs text-red-100 font-semibold uppercase tracking-wider">Ước Tính Tổng Thu Nhập Quý</span>
+                            <div class="text-3xl font-extrabold mt-1" id="totalIncomeDisplay">0 VNĐ</div>
+                            <p class="text-xs text-red-100/90 mt-2">Đã bao gồm Hoa hồng + Thưởng Chuyên nghiệp + Thưởng Pru-Elite + TCSKH.</p>
+                        </div>
+
+                        <div class="pt-4 border-t border-white/20 flex justify-between items-center text-xs">
+                            <div>
+                                <span class="opacity-80 block">Danh hiệu Pru-Elite</span>
+                                <span class="font-bold text-sm text-yellow-300" id="peBadge">Chưa đạt</span>
+                            </div>
+                            <div class="text-right">
+                                <span class="opacity-80 block">Trạng thái MDRT 2027</span>
+                                <span class="font-bold text-sm text-amber-200" id="mdrtStatus">Chưa đạt</span>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- KPI & Details Breakdown -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    
+                    <!-- Tiến độ MDRT 2027 -->
+                    <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                                <i data-lucide="target" class="w-4 h-4 text-red-600 dark:text-red-500"></i> Tiến Độ MDRT 2027 (FYP Target: 1.073.645.200 VNĐ)
+                            </h3>
+                            <span class="text-xs font-bold text-red-600 dark:text-red-400" id="mdrtPercent">0%</span>
+                        </div>
+                        <div class="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-3 mb-4 overflow-hidden">
+                            <div id="mdrtProgressBar" class="bg-gradient-to-r from-red-500 to-amber-500 h-3 rounded-full transition-all duration-500" style="width: 0%"></div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2 text-xs">
+                            <div class="p-2.5 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-100 dark:border-slate-700/50">
+                                <span class="text-slate-500 dark:text-slate-400 block">Thiếu MDRT</span>
+                                <span class="font-bold text-slate-800 dark:text-slate-200" id="mdrtGap">0 VNĐ</span>
+                            </div>
+                            <div class="p-2.5 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-100 dark:border-slate-700/50">
+                                <span class="text-slate-500 dark:text-slate-400 block">Thưởng Tiến Độ Quý</span>
+                                <span class="font-bold text-emerald-600 dark:text-emerald-400" id="mdrtBonusQ">0 VNĐ</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Bảng Chi Tiết Thu Nhập -->
+                    <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
+                        <h3 class="font-bold text-sm text-slate-900 dark:text-white mb-3 flex items-center gap-2">
+                            <i data-lucide="pie-chart" class="w-4 h-4 text-emerald-600 dark:text-emerald-500"></i> Phân Tích Cấu Trúc Thu Nhập Quý
+                        </h3>
+                        <div class="space-y-2 text-xs">
+                            <div class="flex justify-between py-1.5 border-b border-slate-100 dark:border-slate-700/60">
+                                <span class="text-slate-600 dark:text-slate-400">Hoa hồng gốc trong Quý (FYC + SYC):</span>
+                                <span class="font-semibold text-slate-800 dark:text-slate-200" id="valBaseCommission">0 VNĐ</span>
+                            </div>
+                            <div class="flex justify-between py-1.5 border-b border-slate-100 dark:border-slate-700/60">
+                                <span class="text-slate-600 dark:text-slate-400">Thưởng Hoạt động Chuyên nghiệp (Memo 00071):</span>
+                                <span class="font-semibold text-emerald-600 dark:text-emerald-400" id="valProfBonus">0 VNĐ</span>
+                            </div>
+                            <div class="flex justify-between py-1.5 border-b border-slate-100 dark:border-slate-700/60">
+                                <span class="text-slate-600 dark:text-slate-400">Thưởng Khai thác hiệu quả (25% SYC):</span>
+                                <span class="font-semibold text-emerald-600 dark:text-emerald-400" id="valSycBonus">0 VNĐ</span>
+                            </div>
+                            <div class="flex justify-between py-1.5 border-b border-slate-100 dark:border-slate-700/60">
+                                <span class="text-slate-600 dark:text-slate-400">Thưởng Pru-Elite Quý (Memo 01601):</span>
+                                <span class="font-semibold text-purple-600 dark:text-purple-400" id="valPruEliteBonus">0 VNĐ</span>
+                            </div>
+                            <div class="flex justify-between py-1.5">
+                                <span class="text-slate-600 dark:text-slate-400">Thưởng Chăm sóc Khách hàng (TCSKH):</span>
+                                <span class="font-semibold text-blue-600 dark:text-blue-400" id="valCskhBonus">0 VNĐ</span>
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
 
             </main>
         </div>
     </div>
 
-    <!-- Script khởi tạo icons & Logic hệ thống -->
     <script>
         document.addEventListener("DOMContentLoaded", function() {
-            if (typeof lucide !== 'undefined') {
-                lucide.createIcons();
-            }
-        });
+            if (typeof lucide !== 'undefined') lucide.createIcons();
 
-        function exportReport() {
-            Swal.fire({
-                icon: 'info',
-                title: 'Xuất Báo Cáo',
-                text: 'Tính năng xuất file Excel doanh số đang được cập nhật.',
-                confirmButtonColor: '#dc2626'
-            });
-        }
+            const fmt = num => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(num);
+
+            function calculate() {
+                const fyc = parseFloat(document.getElementById('inputFYC').value) || 0;
+                const syc = parseFloat(document.getElementById('inputSYC').value) || 0;
+                const ryc = parseFloat(document.getElementById('inputRYC').value) || 0;
+                const fypAcc = parseFloat(document.getElementById('inputFYPAcc').value) || 0;
+                const k2 = parseFloat(document.getElementById('inputK2').value) || 0;
+                const quarter = parseInt(document.getElementById('selectQuarter').value);
+                const activeMonths = parseInt(document.getElementById('selectActiveMonths').value);
+                const fyc6m = parseFloat(document.getElementById('inputFYC6M').value) || 0;
+
+                document.getElementById('k2Val').innerText = k2 + '%';
+
+                // 1. K2 Ratio
+                let k2Ratio = 0;
+                if (k2 >= 90) k2Ratio = 1.1;
+                else if (k2 >= 80) k2Ratio = 1.0;
+                else if (k2 >= 70) k2Ratio = 0.8;
+                else if (k2 >= 65) k2Ratio = 0.6;
+
+                // 2. Bonus Professional Activity
+                let profRate = 0;
+                if (fyc >= 130000000) profRate = 0.7;
+                else if (fyc >= 75000000) profRate = 0.5;
+                else if (fyc >= 40000000) profRate = 0.35;
+                else if (fyc >= 20000000) profRate = 0.20;
+                else if (fyc >= 10000000) profRate = 0.15;
+
+                const profBonus = fyc * profRate * k2Ratio;
+                const sycBonus = syc * 0.25 * k2Ratio;
+
+                // 3. Pru-Elite
+                let peRank = 'Chưa đạt';
+                let peRate = 0;
+                if (k2 >= 65) {
+                    if (fyc >= 180000000 && activeMonths >= 3) { peRank = 'Kim Cương'; peRate = 0.20; }
+                    else if (fyc >= 90000000 && activeMonths >= 3) { peRank = 'Bạch Kim'; peRate = 0.18; }
+                    else if (fyc >= 50000000 && activeMonths >= 2) { peRank = 'Vàng'; peRate = 0.15; }
+                }
+                const pruEliteBonus = fyc * peRate * k2Ratio;
+
+                // 4. CSKH Bonus
+                const cskhBonus = (fyc6m >= 10000000) ? (ryc * 0.10) : 0;
+
+                // 5. MDRT 2027
+                const mdrtTarget = 1073645200;
+                const mdrtTargetsQ = { 1: 250000000, 2: 500000000, 3: 750000000, 4: 1073645200 };
+                const mdrtBonusQBase = { 1: 5000000, 2: 10000000, 3: 15000000, 4: 20000000 };
+
+                let mdrtBonusQ = 0;
+                if (fypAcc >= mdrtTargetsQ[quarter]) {
+                    mdrtBonusQ = mdrtBonusQBase[quarter] * k2Ratio;
+                }
+
+                const mdrtPct = Math.min(100, Math.round((fypAcc / mdrtTarget) * 100));
+                const mdrtGap = Math.max(0, mdrtTarget - fypAcc);
+
+                // 6. Total Income
+                const totalBaseCommission = fyc + syc;
+                const totalIncome = totalBaseCommission + profBonus + sycBonus + pruEliteBonus + cskhBonus + mdrtBonusQ;
+
+                // Update UI
+                document.getElementById('totalIncomeDisplay').innerText = fmt(totalIncome);
+                document.getElementById('valBaseCommission').innerText = fmt(totalBaseCommission);
+                document.getElementById('valProfBonus').innerText = fmt(profBonus);
+                document.getElementById('valSycBonus').innerText = fmt(sycBonus);
+                document.getElementById('valPruEliteBonus').innerText = fmt(pruEliteBonus);
+                document.getElementById('valCskhBonus').innerText = fmt(cskhBonus);
+
+                document.getElementById('peBadge').innerText = peRank;
+                document.getElementById('mdrtStatus').innerText = fypAcc >= mdrtTarget ? 'ĐÃ ĐẠT MDRT' : `Đạt ${mdrtPct}% Target`;
+
+                document.getElementById('mdrtPercent').innerText = mdrtPct + '%';
+                document.getElementById('mdrtProgressBar').style.width = mdrtPct + '%';
+                document.getElementById('mdrtGap').innerText = fmt(mdrtGap);
+                document.getElementById('mdrtBonusQ').innerText = fmt(mdrtBonusQ);
+            }
+
+            const inputs = ['inputFYC', 'inputSYC', 'inputRYC', 'inputFYPAcc', 'inputK2', 'selectQuarter', 'selectActiveMonths', 'inputFYC6M'];
+            inputs.forEach(id => document.getElementById(id).addEventListener('input', calculate));
+
+            calculate();
+        });
     </script>
 </body>
 </html>
