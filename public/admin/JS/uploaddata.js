@@ -1,4 +1,4 @@
-// public/admin/js/uploaddata.js
+// public/admin/js/uploaddata.js || Frontend của Admin
 // Đóng/Mở Modal Upload
 function toggleUploadModal(isOpen) {
     const modal = document.getElementById('uploadModal');

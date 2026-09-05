@@ -29,11 +29,14 @@ document.addEventListener("DOMContentLoaded", () => {
             { name: "Báo cáo doanh số", icon: "bar-chart-3", href: "/leader/reports.html" }
         ],
         agent: [
-            { name: "My Dashboard", icon: "layout-dashboard", href: "/agents/dashboard_agents.html" },
+            { name: "Tổng quan", icon: "layout-dashboard", href: "/agents/dashboard_agents.html" },
+            { name: "Thiết lập mục tiêu cá nhân", icon: "goal", href: "/agents/goals.html" },
             { name: "Data Lead", icon: "user-check", href: "/agents/leads.html" },
             { name: "Quản lý cuộc gọi/hẹn", icon: "phone-call", href: "/agents/calls.html" },
-            { name: "Hợp đồng bảo hiểm", icon: "shield-check", href: "/agents/contracts.html" }
-        ]
+            { name: "Doanh số cá nhân", icon: "shield-check", href: "/agents/sales.html" },
+            { name: "Công cụ tính FYC", icon: "calculator", href: "/agents/fyc.html" },
+            { name: "Thi đua - Memo", icon: "goal", href: "/agents/memos.html" }
+        ]   
     };
 
     // Chọn bộ menu phù hợp với phân quyền thực tế của user đăng nhập

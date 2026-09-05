@@ -25,6 +25,7 @@ app.use('/api/auth', require('./routes/auth.quenmatkhau'));
 app.use('/api/admin', require('./routes/admin.routes'));
 app.use('/api/leader', require('./routes/leader.routes'));
 app.use('/api/agent', require('./routes/agent.routes'));
+app.use('/api/calls', require('./routes/calls.routes'));
 
 app.get('/', (req, res) => {
     res.sendFile(__dirname + '/public/login.html');

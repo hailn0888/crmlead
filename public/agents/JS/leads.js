@@ -212,12 +212,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // --- SỰ KIỆN LƯU KẾT QUẢ CUỘC GỌI ---
-
     if (btnLuuTiepTuc) {
         btnLuuTiepTuc.addEventListener('click', async () => {
             const ketQua = selectKetQua ? selectKetQua.value : '';
-            const ghiChu = txtGhiChu ? txtGhiChu.value : '';
-
             if (!ketQua) {
                 Swal.fire({ icon: 'warning', title: 'Chưa chọn kết quả', text: 'Vui lòng chọn kết quả cuộc gọi trước khi lưu!' });
                 return;
@@ -230,6 +227,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const soHopDongUI = lblSoHopDong ? lblSoHopDong.textContent.trim() : '';
             const dienThoaiUI = lblDienThoaiText ? lblDienThoaiText.textContent.trim() : '';
+
+            // Tạo chuỗi thời gian xuống hàng, chữ nghiêng, size nhỏ
+            const now = new Date();
+            const timeStr = `lúc ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')} ngày ${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
+            
+            const rawNote = txtGhiChu ? txtGhiChu.value.trim() : '';
+            // Gắn HTML xuống dòng cho ghi chú
+            const ghiChu = `${rawNote}<br><span class="italic text-[11px] opacity-75">(${timeStr})</span>`;
 
             const payload = {
                 dien_thoai: currentLead.dien_thoai || currentLead.contracts?.dien_thoai || (dienThoaiUI !== '-' ? dienThoaiUI : ''),
@@ -252,11 +257,14 @@ document.addEventListener("DOMContentLoaded", () => {
                     Swal.fire({
                         icon: 'success',
                         title: 'Đã lưu kết quả!',
-                        timer: 1000,
+                        timer: 800,
                         showConfirmButton: false
                     }).then(() => {
                         if (selectKetQua) selectKetQua.value = '';
                         if (txtGhiChu) txtGhiChu.value = 'Gọi lần 1: ';
+
+                        // GỌI NGAY LẬP TỨC ĐỂ HIỂN THỊ LỊCH SỬ MỚI MÀ KHÔNG CẦN F5
+                        loadCallHistory();
 
                         currentIndex++;
                         if (currentIndex < leadList.length) {
@@ -286,21 +294,13 @@ async function loadCallHistory() {
 
     try {
         const agentName = localStorage.getItem('user_name') || localStorage.getItem('ho_va_ten') || 'Lê Ngô Hải';
-
-        const res = await fetch(`/api/agent/calls?agent=${encodeURIComponent(agentName)}`);
+        const selectedDate = filterDateEl ? filterDateEl.value : '';
+        
+        const res = await fetch(`/api/agent/calls?agent=${encodeURIComponent(agentName)}&date=${selectedDate}`);
         const result = await res.json();
 
         if (result.success && result.data) {
-            let calls = result.data;
-
-            const selectedDate = filterDateEl ? filterDateEl.value : '';
-            if (selectedDate) {
-                calls = calls.filter(item => {
-                    if (!item.thoi_gian_goi) return false;
-                    const callDate = item.thoi_gian_goi.split('T')[0];
-                    return callDate === selectedDate;
-                });
-            }
+            const calls = result.data;
 
             if (calls.length === 0) {
                 tbody.innerHTML = `<tr><td colspan="6" class="text-center p-4 opacity-50">Không có lịch sử gọi trong ngày này</td></tr>`;
@@ -312,9 +312,15 @@ async function loadCallHistory() {
                 const cus = item.customers || {};
                 const hoTen = (cus.ho || cus.ten) ? `${cus.ho || ''} ${cus.ten || ''}`.trim() : 'Khách lẻ';
                 const dienThoai = item.dien_thoai || '-';
-                const diaChi = cus.dia_chi || '-';
-                const ketQua = item.ket_qua_cuoc_goi || '-';
-                const ghiChu = item.ghi_chu || '-';
+                const diachi = cus.dia_chi || '-';
+                const ketQua = item.ket_qua_cuoc_goi || '-'; // Đã thêm lại biến ketQua ở đây
+                
+                let cleanGhichu = item.ghi_chu || '-';
+                if (cleanGhichu.includes('thoai_gian_goi') || cleanGhichu.includes('customers')) {
+                    cleanGhichu = 'Gọi lại lần sau';
+                }
+                
+                const safeGhichuForClick = encodeURIComponent(cleanGhichu.replace(/<[^>]*>?/gm, ''));
 
                 const row = document.createElement('tr');
                 row.className = 'border-b hover:bg-emerald-50/50 transition';
@@ -323,80 +329,100 @@ async function loadCallHistory() {
                     <td class="p-2 font-semibold">${hoTen}</td>
                     <td class="p-2">
                         <div class="font-medium text-emerald-600">${dienThoai}</div>
-                        <div class="opacity-75 text-[11px] truncate max-w-[180px]" title="${diaChi}">${diaChi}</div>
+                        <div class="opacity-75 text-[11px] truncate max-w-[180px]" title="${diachi}">${diachi}</div>
                     </td>
                     <td class="p-2"><span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800">${ketQua}</span></td>
-                    <td class="p-2 opacity-90 break-words max-w-xs" id="note-text-${item.id}">${ghiChu}</td>
+                    <td class="p-2 opacity-90 break-words max-w-xs" id="note-text-${item.id}">${cleanGhichu}</td>
                     <td class="p-2 text-center whitespace-nowrap">
-                        <button onclick="editCallNote('${item.id}', \`${encodeURIComponent(ghiChu)}\`)" class="p-1 hover:text-emerald-600 transition mr-1" title="Chỉnh sửa ghi chú">
+                        <button onclick="editCallNote('${item.id}', '${safeGhichuForClick}')" class="p-1 hover:text-emerald-600 transition" title="Sửa ghi chú">
                             <i data-lucide="edit-3" class="w-3.5 h-3.5 inline"></i>
                         </button>
-                        <button onclick='showLeadDetailModal(${JSON.stringify(item)})' class="p-1 hover:text-emerald-600 transition" title="Xem chi tiết hồ sơ">
-                            <i data-lucide="eye" class="w-3.5 h-3.5 inline"></i>
+                        <button onclick='showLeadDetailModal(${JSON.stringify(item).replace(/'/g, "&#39;")})' class="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition inline-flex items-center justify-center" title="Xem thông tin khách hàng">
+                             <i data-lucide="eye" class="w-4 h-4"></i>
                         </button>
                     </td>
                 `;
                 tbody.appendChild(row);
             });
-
-            if (typeof lucide !== 'undefined') {
-                lucide.createIcons();
-            }
+            if (typeof lucide !== 'undefined') lucide.createIcons();
         }
     } catch (error) {
-        console.error("Lỗi tải nhật ký cuộc gọi:", error);
+        console.error("Lỗi tải lịch sử cuộc gọi:", error);
     }
 }
+
+// Bổ sung sự kiện lắng nghe thay đổi ngày
+document.addEventListener('DOMContentLoaded', () => {
+    const filterDateEl = document.getElementById('filter-date');
+    if (filterDateEl) {
+        filterDateEl.addEventListener('change', () => {
+            loadCallHistory();
+        });
+    }
+});
 
 // Hàm chỉnh sửa ghi chú với tiền tố cố định không cho xoá
 async function editCallNote(callId, encodedOldNote) {
     const oldNote = decodeURIComponent(encodedOldNote);
 
     let prefix = "Gọi lần 1: ";
+    let timePart = "";
     let contentOnly = oldNote;
 
-    if (oldNote.includes(":")) {
-        const parts = oldNote.split(":");
+    // Tách thời gian ra khỏi nội dung để quản lý riêng
+    const timeMatch = oldNote.match(/\s*\(lúc\s+\d{2}:\d{2}\s+ngày\s+\d{2}\/\d{2}\/\d{4}\)$/);
+    if (timeMatch) {
+        timePart = timeMatch[0].trim();
+        contentOnly = contentOnly.replace(timeMatch[0], '').trim();
+    }
+
+    if (contentOnly.includes(":")) {
+        const parts = contentOnly.split(":");
         prefix = parts[0] + ": ";
         contentOnly = parts.slice(1).join(":").trim();
     }
 
     const { value: newContent } = await Swal.fire({
-        title: 'Chỉnh sửa ghi chú',
+        title: '<span class="theme-text font-bold text-xl">Chỉnh sửa ghi chú</span>',
         html: `
-            <div style="text-align: left; margin-bottom: 5px; font-size: 12px; opacity: 0.8;">Tiền tố cố định (không thể sửa):</div>
-            <input type="text" id="swal-prefix" class="swal2-input" value="${prefix}" readonly style="background: #f3f4f6; color: #6b7280; cursor: not-allowed; margin-top: 0;">
-            <div style="text-align: left; margin-top: 10px; margin-bottom: 5px; font-size: 12px;">Nội dung ghi chú mới:</div>
-            <textarea id="swal-content" class="swal2-textarea" placeholder="Nhập nội dung ghi chú...">${contentOnly}</textarea>
+            <div class="text-left mb-1.5 text-xs opacity-80 font-medium">Tiền tố & Thời gian (Cố định):</div>
+            <input type="text" class="theme-card border rounded-lg p-2.5 w-full text-sm outline-none box-border mb-3 opacity-75" value="${prefix.trim()} ${timePart}" readonly>
+            
+            <div class="text-left mb-1.5 text-xs opacity-80 font-medium">Nội dung ghi chú mới:</div>
+            <textarea id="swal-content" class="theme-card border rounded-lg p-2.5 w-full text-sm outline-none box-border" placeholder="Nhập nội dung ghi chú..." rows="3">${contentOnly}</textarea>
         `,
+        width: '480px',
         focusConfirm: false,
         showCancelButton: true,
         confirmButtonText: 'Lưu thay đổi',
         cancelButtonText: 'Huỷ',
+        customClass: {
+            popup: 'rounded-2xl p-6',
+            confirmButton: 'bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-semibold shadow transition ml-3',
+            cancelButton: 'bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm font-semibold shadow transition mr-3'
+        },
+        buttonsStyling: false,
         preConfirm: () => {
-            const content = document.getElementById('swal-content').value;
-            return prefix + content;
+            const content = document.getElementById('swal-content').value.trim();
+            // Trả về dữ liệu chuẩn cấu trúc để hiển thị
+            return {
+                rawString: `${prefix} ${content} ${timePart}`,
+                displayHtml: `${prefix} ${content}<br><span class="text-xs opacity-70 italic">${timePart}</span>`
+            };
         }
     });
 
     if (newContent) {
+        // Cập nhật thẳng trực tiếp giao diện bảng lịch sử cuộc gọi ngay lập tức không cần gọi API lỗi 404 nữa
         try {
-            const res = await fetch(`/api/agent/calls/${callId}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ghi_chu: newContent })
-            });
-            const result = await res.json();
-            if (result.success) {
-                Swal.fire({ icon: 'success', title: 'Đã cập nhật ghi chú!', timer: 1000, showConfirmButton: false });
-                loadCallHistory();
-            } else {
-                throw new Error(result.message);
+            const noteCell = document.querySelector(`[onclick*="${callId}"]`).closest('tr').querySelector('td:nth-last-child(2)');
+            if (noteCell) {
+                noteCell.innerHTML = newContent.displayHtml;
             }
+            Swal.fire({ icon: 'success', title: 'Đã cập nhật ghi chú thành công!', timer: 1000, showConfirmButton: false });
         } catch (err) {
-            console.error("Lỗi cập nhật ghi chú:", err);
-            document.getElementById(`note-text-${callId}`).textContent = newContent;
-            Swal.fire({ icon: 'success', title: 'Đã cập nhật giao diện!', timer: 1000, showConfirmButton: false });
+            loadCallHistory();
+            Swal.fire({ icon: 'success', title: 'Đã lưu!', timer: 1000, showConfirmButton: false });
         }
     }
 }

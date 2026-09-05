@@ -96,6 +96,7 @@
                                             <option value="">-- Chọn kết quả cuộc gọi --</option>
                                             <option value="Hẹn gặp thành công">Hẹn gặp thành công</option>
                                             <option value="Đang suy nghĩ/gọi lại sau">Đang suy nghĩ/gọi lại sau</option>
+                                            <option value="Khách bận">Khách bận</option>
                                             <option value="Không nghe máy">Không nghe máy</option>
                                             <option value="Sai số/Không gọi được">Sai số/Không gọi được</option>
                                             <option value="Từ chối thẳng">Từ chối thẳng</option>
@@ -166,9 +167,23 @@
 
             const todayStr = new Date().toISOString().split('T')[0];
             const filterDateEl = document.getElementById('filter-date');
-            if(filterDateEl) filterDateEl.value = todayStr;
+            if(filterDateEl) {
+                filterDateEl.value = todayStr;
 
-            const ghiChuTextarea = document.getElementById('txt-ghi-chu');
+                filterDateEl.addEventListener('change', function() {
+                    const selectedDate = this.value;
+                    Swal.fire({
+                        toast: true,
+                        position: 'top-end',
+                        icon: 'info',
+                        title: 'Đang tải nhật ký ngày: ' + selectedDate,
+                        showConfirmButton: false,
+                        timer: 1500
+                    });
+                });
+            }
+
+            const ghiChuTextarea = document.querySelector('textarea');
             const prefixNote = "Gọi lần 1: ";
             
             if(ghiChuTextarea) {
@@ -179,7 +194,7 @@
                 });
             }
 
-            const btnLuu = document.getElementById('btn-luu-tiep-tuc');
+            const btnLuu = document.querySelector('button.bg-emerald-600');
             if(btnLuu) {
                 btnLuu.addEventListener('click', function() {
                     const ketQua = document.getElementById('select-ket-qua').value;
@@ -204,9 +219,17 @@
             }
 
             const btnRefresh = document.getElementById('btn-refresh-nhat-ky');
-            if(btnRefresh) {
+            if (btnRefresh) {
                 btnRefresh.addEventListener('click', function() {
-                    if(filterDateEl) filterDateEl.value = new Date().toISOString().split('T')[0];
+                    const dateEl = document.getElementById('filter-date');
+                    if (dateEl) {
+                        dateEl.value = new Date().toISOString().split('T')[0];
+                    }
+                    
+                    if (typeof loadCallHistory === 'function') {
+                        loadCallHistory();
+                    }
+
                     Swal.fire({
                         toast: true,
                         position: 'top-end',

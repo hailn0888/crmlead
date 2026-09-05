@@ -217,7 +217,7 @@ router.post('/calls', async (req, res) => {
     }
 });
 
-// API: Lấy lịch sử cuộc gọi kèm thông tin khách hàng
+// API: Lấy lịch sử cuộc gọi kèm thông tin khách hàng (Đã fix lọc theo ngày)
 router.get('/calls', async (req, res) => {
     try {
         const { agent, date } = req.query;
@@ -239,6 +239,13 @@ router.get('/calls', async (req, res) => {
             query = query.eq('ten_agent', agent);
         }
 
+        // Bổ sung logic lọc theo khoảng thời gian của ngày được chọn
+        if (date) {
+            const startDate = `${date}T00:00:00`;
+            const endDate = `${date}T23:59:59`;
+            query = query.gte('thoi_gian_goi', startDate).lte('thoi_gian_goi', endDate);
+        }
+
         const { data, error } = await query;
         if (error) throw error;
 
@@ -249,4 +256,18 @@ router.get('/calls', async (req, res) => {
     }
 });
 
+// API: Lấy danh sách đồng nghiệp (Agent) để chọn gửi hẹn
+router.get('/colleagues', async (req, res) => {
+    try {
+        const { data, error } = await supabase
+            .from('users')
+            .select('id, ho_va_ten, ten_dang_nhap')
+            .ilike('phan_quyen', 'agent');
+
+        if (error) throw error;
+        res.json({ success: true, data: data || [] });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
 module.exports = router;
