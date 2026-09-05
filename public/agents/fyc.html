@@ -1,62 +1,810 @@
-<!-- 
-  Tên file: public/agents/fyc.html
-  Chức năng: Công cụ tính FYC, hiển thị thông báo đang phát triển theo chuẩn giao diện hệ thống.
-  Vị trí: public/agents/fyc.html
--->
 <!DOCTYPE html>
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Công Cụ Tính FYC - CRM Lead</title>
-    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Công cụ tính FYC - Hoa hồng bảo hiểm</title>
+
     <link rel="icon" type="image/png" href="/uploads/favicon.png">
     <link rel="apple-touch-icon" href="/uploads/icon.png">
-
+    
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Lucide Icons -->
-    <script src="/js/lucide.min.js"></script>
-    <!-- SweetAlert2 cho Popup -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- SweetAlert2 CDN -->
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     
-    <!-- Các script dùng chung hệ thống chuẩn -->
-    <script src="/js/header.js"></script>
-    <script src="/js/sidebar.js"></script>
+    <!-- Nạp theme.js đầu tiên để đồng bộ màu sắc và font chữ toàn hệ thống -->
     <script src="/js/theme.js"></script>
+    <script src="/js/searchHelper.js"></script>
+    <script src="/js/ai.js"></script>
+
+    <style>
+        .theme-action-btn {
+            background-color: #dc2626; /* Light: Đỏ */
+            color: #ffffff;
+            transition: opacity 0.2s;
+        }
+        .theme-action-btn:hover {
+            opacity: 0.9;
+        }
+        .dark .theme-action-btn, [data-theme="dark"] .theme-action-btn, body.dark .theme-action-btn {
+            background-color: #16a34a; /* Dark: Xanh lá */
+            color: #ffffff;
+        }
+    </style>
 </head>
-<body class="font-sans antialiased transition-colors duration-200">
+<body class="bg-theme-bg text-theme-text min-h-screen flex flex-col transition-colors duration-200">
 
-    <!-- Khung cấu trúc chuẩn App Native bắt màu theo theme.js -->
-    <div class="flex h-screen overflow-hidden">
-        <div id="mainContainer" class="flex-1 flex flex-col overflow-y-auto transition-colors duration-200 pt-16">
-            <main class="px-4 py-4 max-w-full w-full flex flex-col gap-4">
+    <!-- Header Container -->
+    <div id="header-container"></div>
+
+    <div class="flex flex-1 pt-16">
+        <!-- Sidebar Container -->
+        <div id="sidebar-container"></div>
+
+        <!-- Main Content -->
+        <main class="flex-1 p-6 lg:p-8 ml-0 lg:ml-64 transition-all duration-200">
+            <div class="max-w-6xl mx-auto space-y-6">
                 
-                <!-- Tiêu đề trang -->
-                <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                    <h1 class="text-base md:text-lg font-bold flex items-center gap-2">
-                        <i data-lucide="calculator" class="w-5 h-5 text-red-600 dark:text-red-500"></i>
-                        <span>Công Cụ Tính FYC</span>
-                    </h1>
+                <!-- Page Title -->
+                <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b pb-4 border-theme-border">
+                    <div>
+                        <h1 class="text-2xl font-bold tracking-tight flex items-center gap-2">
+                            <i data-lucide="calculator" class="w-7 h-7 text-theme-primary"></i>
+                            Tính Toán Hoa Hồng (FYC) Dự Thảo
+                        </h1>
+                        <p class="text-sm text-theme-muted mt-1">
+                            Tính toán tỷ lệ và dòng tiền hoa hồng đa niên độ (Năm 1 đến Năm 6++) theo biểu phí mới nhất của Prudential.
+                        </p>
+                    </div>
+                    <button id="btn-reset" class="px-4 py-2 bg-theme-card hover:opacity-80 text-sm font-medium rounded-lg border border-theme-border transition-colors flex items-center gap-2 self-start md:self-auto">
+                        <i data-lucide="rotate-ccw" class="w-4 h-4"></i> Làm mới
+                    </button>
                 </div>
 
-                <!-- Giao diện thông báo tính năng đang phát triển -->
-                <div class="theme-card border rounded-xl p-12 text-center shadow-sm flex flex-col items-center justify-center my-6">
-                    <i data-lucide="construction" class="w-12 h-12 mx-auto text-amber-500 mb-3"></i>
-                    <h2 class="font-bold text-base mb-1">CHỨC NĂNG ĐANG ĐƯỢC PHÁT TRIỂN</h2>
-                    <p class="opacity-75 text-xs">Logic Công cụ tính FYC sẽ được cập nhật trong phiên bản tiếp theo.</p>
+                <!-- Form Card -->
+                <div class="bg-theme-card rounded-xl shadow-sm border border-theme-border p-6 space-y-6">
+                    
+                    <!-- Phần 1: Sản phẩm chính -->
+                    <div>
+                        <h2 class="text-lg font-semibold mb-4 flex items-center gap-2 text-theme-primary">
+                            <i data-lucide="shield-check" class="w-5 h-5"></i> 1. Sản phẩm chính
+                        </h2>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <!-- Dropdown Sản phẩm chính -->
+                            <div class="relative md:col-span-3">
+                                <label class="block text-sm font-medium mb-1">Chọn sản phẩm chính <span class="text-theme-primary">*</span></label>
+                                <input type="text" id="main-product-input" list="main-products-list" placeholder="-- Gõ hoặc chọn sản phẩm chính --" 
+                                    class="w-full px-3 py-2 border rounded-lg bg-transparent border-theme-border focus:ring-2 focus:ring-theme-primary focus:outline-none">
+                                <datalist id="main-products-list">
+                                    <option value="PRU - Đầu Tư Vững Tiến (ULR9)">
+                                    <option value="PRU - Bảo Vệ Tối Đa 2.0 (VLM1)">
+                                    <option value="PRU - Chủ Động Cuộc Sống (VLR6)">
+                                    <option value="PRU - Bảo Vệ Tối Ưu (VLR7)">
+                                    <option value="PRU - Hành Trang Trưởng Thành (VLR8)">
+                                    <option value="PRU - Vững Chắc (VLR5)">
+                                    <option value="PRU - Tương Lai Tươi Sáng (EUS5)">
+                                    <option value="PRU - Cuộc Sống Bình An (CIM2)">
+                                    <option value="PRU - Thiết Thực (CIS1)">
+                                    <option value="Pru - Yên Tâm Vui Khoẻ (TLA9)">
+                                </datalist>
+                            </div>
+
+                            <!-- Phí bảo hiểm sản phẩm chính -->
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Phí bảo hiểm thực thu (VNĐ) <span class="text-theme-primary">*</span></label>
+                                <input type="text" id="main-product-premium" placeholder="Ví dụ: 300.000.000"
+                                    class="w-full px-3 py-2 border rounded-lg bg-transparent border-theme-border focus:ring-2 focus:ring-theme-primary focus:outline-none">
+                            </div>
+
+                            <!-- Thời hạn đóng phí sản phẩm chính -->
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Thời hạn đóng phí (năm) <span class="text-theme-primary">*</span></label>
+                                <input type="number" id="main-product-term" placeholder="Ví dụ: 20" min="1" max="40"
+                                    class="w-full px-3 py-2 border rounded-lg bg-transparent border-theme-border focus:ring-2 focus:ring-theme-primary focus:outline-none">
+                            </div>
+
+                            <!-- Tiêu chí đi kèm -->
+                            <div id="additional-criteria-box" class="md:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-4 bg-theme-bg p-4 rounded-lg border border-theme-border hidden">
+                                <div id="plan-type-wrapper" class="md:col-span-2">
+                                    <label class="block text-sm font-medium mb-1">Kế hoạch bảo hiểm</label>
+                                    <select id="plan-type" class="w-full px-3 py-2 border rounded-lg bg-theme-card border-theme-border focus:ring-2 focus:ring-theme-primary focus:outline-none">
+                                        <option value="CoBan">Cơ bản</option>
+                                        <option value="NangCao">Nâng Cao</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr class="border-theme-border">
+
+                    <!-- Phần 2: Sản phẩm bán cùng (Sản phẩm bổ trợ) -->
+                    <div>
+                        <div class="flex items-center justify-between mb-4">
+                            <h2 class="text-lg font-semibold flex items-center gap-2 text-theme-primary">
+                                <i data-lucide="layers" class="w-5 h-5"></i> 2. Sản phẩm bán cùng (Sản phẩm bổ trợ)
+                            </h2>
+                            <button type="button" id="btn-add-rider" class="px-3.5 py-2 text-sm font-bold rounded-xl shadow-md flex items-center gap-1.5 theme-action-btn">
+                                <i data-lucide="plus" class="w-4 h-4"></i> Thêm sản phẩm
+                            </button>
+                        </div>
+
+                        <div id="riders-container" class="space-y-4"></div>
+                        <p id="no-rider-msg" class="text-sm text-theme-muted italic">Chưa có sản phẩm bán cùng nào được thêm.</p>
+                    </div>
+
+                    <!-- Nút tính toán -->
+                    <div class="pt-4">
+                        <button id="btn-calculate" class="w-full py-3.5 font-bold rounded-xl shadow-lg flex items-center justify-center gap-2 theme-action-btn text-base">
+                            <i data-lucide="calculator" class="w-5 h-5"></i> Tính Tổng Dòng Tiền Hoa Hồng (FYC)
+                        </button>
+                    </div>
+
                 </div>
 
-            </main>
-        </div>
+                <!-- Kết quả hiển thị -->
+                <div id="result-card" class="bg-theme-card rounded-xl shadow-sm border border-theme-border p-6 hidden space-y-6">
+                    <div class="flex flex-col md:flex-row md:items-center justify-between border-b pb-3 border-theme-border gap-2">
+                        <h2 class="text-xl font-bold flex items-center gap-2">
+                            <i data-lucide="receipt" class="w-6 h-6 text-theme-primary"></i> Bảng Chi Tiết Dòng Tiền Hoa Hồng (Năm 1 đến Năm 6++)
+                        </h2>
+                        <div class="text-sm bg-theme-bg px-3 py-1.5 rounded-lg border border-theme-border">
+                            <span class="text-theme-muted">Tổng phí đóng hàng năm:</span> 
+                            <span id="total-annual-premium" class="font-bold text-theme-primary ml-1">0 VNĐ</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Tổng hợp tóm tắt 6 cột -->
+                    <div class="grid grid-cols-2 md:grid-cols-6 gap-3">
+                        <div class="p-3 bg-theme-bg rounded-xl border border-theme-border">
+                            <span class="text-xs text-theme-muted">Năm 1</span>
+                            <p id="sum-y1" class="text-sm font-bold mt-1 text-theme-primary">0 VNĐ</p>
+                        </div>
+                        <div class="p-3 bg-theme-bg rounded-xl border border-theme-border">
+                            <span class="text-xs text-theme-muted">Năm 2</span>
+                            <p id="sum-y2" class="text-sm font-bold mt-1 text-theme-primary">0 VNĐ</p>
+                        </div>
+                        <div class="p-3 bg-theme-bg rounded-xl border border-theme-border">
+                            <span class="text-xs text-theme-muted">Năm 3</span>
+                            <p id="sum-y3" class="text-sm font-bold mt-1 text-theme-primary">0 VNĐ</p>
+                        </div>
+                        <div class="p-3 bg-theme-bg rounded-xl border border-theme-border">
+                            <span class="text-xs text-theme-muted">Năm 4</span>
+                            <p id="sum-y4" class="text-sm font-bold mt-1 text-theme-primary">0 VNĐ</p>
+                        </div>
+                        <div class="p-3 bg-theme-bg rounded-xl border border-theme-border">
+                            <span class="text-xs text-theme-muted">Năm 5</span>
+                            <p id="sum-y5" class="text-sm font-bold mt-1 text-theme-primary">0 VNĐ</p>
+                        </div>
+                        <div class="p-3 bg-theme-bg rounded-xl border border-theme-border">
+                            <span class="text-xs text-theme-primary font-medium">Năm 6++</span>
+                            <p id="sum-y6" class="text-sm font-bold mt-1 text-theme-primary">0 VNĐ</p>
+                        </div>
+                    </div>
+
+                    <!-- Bảng chi tiết -->
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse text-sm">
+                            <thead>
+                                <tr class="border-b border-theme-border bg-theme-bg">
+                                    <th class="p-3 font-semibold">Loại / Tên sản phẩm</th>
+                                    <th class="p-3 font-semibold">Phí bảo hiểm</th>
+                                    <th class="p-3 font-semibold text-center">Năm 1</th>
+                                    <th class="p-3 font-semibold text-center">Năm 2</th>
+                                    <th class="p-3 font-semibold text-center">Năm 3</th>
+                                    <th class="p-3 font-semibold text-center">Năm 4</th>
+                                    <th class="p-3 font-semibold text-center">Năm 5</th>
+                                    <th class="p-3 font-semibold text-right">Năm 6++</th>
+                                </tr>
+                            </thead>
+                            <tbody id="result-table-body"></tbody>
+                        </table>
+                    </div>
+
+                    <!-- Nút lưu làm doanh số cá nhân -->
+                    <div class="flex flex-col sm:flex-row items-center justify-end gap-3 pt-4 border-t border-theme-border">
+                        <button id="btn-save-personal" class="w-full sm:w-auto px-6 py-3 font-bold rounded-xl shadow-md flex items-center justify-center gap-2 theme-action-btn">
+                            <i data-lucide="save" class="w-5 h-5"></i> Lưu làm doanh số
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+        </main>
     </div>
 
-    <!-- Script khởi tạo icons hệ thống -->
+    <!-- Datalist cho sản phẩm bổ trợ -->
+    <datalist id="rider-products-list">
+        <option value="PRU - Hành trang vui khoẻ">
+        <option value="BH Hỗ trợ viện phí mở rộng (HSR9)">
+        <option value="BH Hỗ trợ đóng phí BLNT (CIW9)">
+        <option value="BH Bệnh lý nghiêm trọng (CIR9)">
+        <option value="BH Nhân thọ có kỳ hạn (TLR9)">
+        <option value="BH Tai nạn (ADD9)">
+        <option value="BH Bệnh hiểm nghèo (CIR3)">
+        <option value="BH Từ bỏ thu phí bệnh hiểm nghèo (OPW7)">
+        <option value="BH Sức khoẻ dành cho trẻ em (KID3)">
+    </datalist>
+
+    <script src="/js/header.js"></script>
+    <script src="/js/sidebar.js"></script>
+
+    <!-- Logic tính toán FYC -->
     <script>
-        document.addEventListener("DOMContentLoaded", function() {
-            if (typeof lucide !== 'undefined') {
-                lucide.createIcons();
+        let lastCalculatedData = null;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            if (window.lucide) lucide.createIcons();
+
+            const btnAddRider = document.getElementById('btn-add-rider');
+            const ridersContainer = document.getElementById('riders-container');
+            const noRiderMsg = document.getElementById('no-rider-msg');
+            const btnCalculate = document.getElementById('btn-calculate');
+            const btnReset = document.getElementById('btn-reset');
+            const mainProductInput = document.getElementById('main-product-input');
+            const additionalCriteriaBox = document.getElementById('additional-criteria-box');
+            const mainProductPremiumInput = document.getElementById('main-product-premium');
+
+            function formatCurrencyInput(inputElement) {
+                let value = inputElement.value.replace(/\D/g, '');
+                if (value) {
+                    value = parseInt(value, 10).toLocaleString('vi-VN');
+                }
+                inputElement.value = value;
             }
+
+            function parseCurrencyValue(formattedString) {
+                if (!formattedString) return 0;
+                return parseInt(formattedString.replace(/\./g, ''), 10) || 0;
+            }
+
+            mainProductPremiumInput.addEventListener('input', (e) => {
+                formatCurrencyInput(e.target);
+            });
+
+            function handleMainProductChange() {
+                const val = mainProductInput.value;
+                if (val.includes("PRU - Bảo Vệ Tối Đa 2.0 (VLM1)")) {
+                    additionalCriteriaBox.classList.remove('hidden');
+                } else {
+                    additionalCriteriaBox.classList.add('hidden');
+                }
+            }
+
+            mainProductInput.addEventListener('input', handleMainProductChange);
+            mainProductInput.addEventListener('change', handleMainProductChange);
+
+            function getSpbtCount() {
+                const rows = ridersContainer.querySelectorAll('.rider-row');
+                let count = 0;
+                rows.forEach(row => {
+                    const rName = row.querySelector('.rider-name').value.trim();
+                    const rPrem = parseCurrencyValue(row.querySelector('.rider-premium').value);
+                    if (rName !== '' && rPrem > 0) {
+                        count++;
+                    }
+                });
+                return count;
+            }
+
+            btnAddRider.addEventListener('click', () => {
+                noRiderMsg.style.display = 'none';
+                const rowId = 'rider-row-' + Date.now();
+                const html = `
+                    <div id="${rowId}" class="rider-row grid grid-cols-1 md:grid-cols-12 gap-3 items-end p-4 bg-theme-bg rounded-xl border border-theme-border relative">
+                        <div class="md:col-span-5">
+                            <label class="block text-xs font-medium mb-1">Sản phẩm bán cùng <span class="text-theme-primary">+</span></label>
+                            <input type="text" list="rider-products-list" placeholder="+ Chọn hoặc gõ tên sản phẩm bổ trợ" 
+                                class="rider-name w-full px-3 py-2 border rounded-lg bg-transparent border-theme-border text-sm focus:ring-2 focus:ring-theme-primary focus:outline-none">
+                        </div>
+                        <div class="md:col-span-3">
+                            <label class="block text-xs font-medium mb-1">Phí bảo hiểm (VNĐ) *</label>
+                            <input type="text" placeholder="Nhập phí (VD: 40.000.000)" 
+                                class="rider-premium w-full px-3 py-2 border rounded-lg bg-transparent border-theme-border text-sm focus:ring-2 focus:ring-theme-primary focus:outline-none">
+                        </div>
+                        <div class="md:col-span-3">
+                            <label class="block text-xs font-medium mb-1">Thời hạn đóng phí (năm) *</label>
+                            <input type="number" placeholder="Bắt buộc nhập số" min="1" max="40" 
+                                class="rider-term w-full px-3 py-2 border rounded-lg bg-transparent border-theme-border text-sm focus:ring-2 focus:ring-theme-primary focus:outline-none" required>
+                        </div>
+                        <div class="md:col-span-1 flex justify-end">
+                            <button type="button" onclick="document.getElementById('${rowId}').remove(); checkRiderEmpty();" class="p-2 bg-theme-card text-theme-primary hover:opacity-80 rounded-lg border border-theme-border transition-colors">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+                ridersContainer.insertAdjacentHTML('beforeend', html);
+                
+                const newlyAddedRow = document.getElementById(rowId);
+                const premInput = newlyAddedRow.querySelector('.rider-premium');
+                premInput.addEventListener('input', (e) => {
+                    formatCurrencyInput(e.target);
+                });
+
+                if (window.lucide) lucide.createIcons();
+            });
+
+            window.checkRiderEmpty = function() {
+                if (ridersContainer.children.length === 0) {
+                    noRiderMsg.style.display = 'block';
+                }
+            }
+
+            function calculateMainRateByYear(product, term, year, spbtCount, planType) {
+                let rate = 0;
+
+                if (product.includes("PRU - Đầu Tư Vững Tiến (ULR9)")) {
+                    if (year === 1) {
+                        if (spbtCount <= 1) rate = 24.00;
+                        else if (spbtCount <= 3) rate = 27.00;
+                        else rate = 30.00;
+                    } else if (year === 2) rate = 12.50;
+                    else if (year === 3) rate = 10.00;
+                    else if (year === 4) rate = 5.00;
+                    else if (year === 5) rate = 2.50;
+                    else rate = 0.00;
+                } else if (product.includes("PRU - Bảo Vệ Tối Đa 2.0 (VLM1)")) {
+                    if (year === 1) {
+                        if (planType === "CoBan") {
+                            if (spbtCount <= 1) rate = 26.00;
+                            else if (spbtCount <= 3) rate = 28.00;
+                            else rate = 24.00;
+                        } else { 
+                            if (spbtCount <= 1) rate = 28.00;
+                            else if (spbtCount <= 3) rate = 26.00;
+                            else rate = 30.00;
+                        }
+                    } else if (year === 2) rate = 15.00;
+                    else if (year === 3) rate = 7.50;
+                    else rate = 0.00;
+                } else if (product.includes("PRU - Chủ Động Cuộc Sống (VLR6)") || product.includes("PRU - Bảo Vệ Tối Ưu (VLR7)") || product.includes("PRU - Hành Trang Trưởng Thành (VLR8)")) {
+                    if (year === 1) rate = 30.00;
+                    else if (year === 2) rate = 20.00;
+                    else if (year === 3) rate = 7.50;
+                    else rate = 0.00;
+                } else if (product.includes("PRU - Vững Chắc (VLR5)")) {
+                    if (year === 1) rate = 30.00;
+                    else if (year === 2) rate = 20.00;
+                    else if (year === 3) rate = 10.00;
+                    else rate = 0.00;
+                } else if (product.includes("PRU - Tương Lai Tươi Sáng (EUS5)")) {
+                    if (year === 1) {
+                        if (term >= 18) rate = 30.00;
+                        else if (term === 17) rate = 30.00;
+                        else if (term === 16) rate = 30.00;
+                        else if (term === 15) rate = 30.00;
+                        else if (term === 14) rate = 30.00;
+                        else if (term === 13) rate = 29.00;
+                        else if (term === 12) rate = 28.00;
+                        else if (term === 11) rate = 26.00;
+                        else if (term === 10) rate = 24.00;
+                        else if (term === 9) rate = 23.00;
+                        else rate = 19.00;
+                    } else if (year === 2) {
+                        if (term >= 18) rate = 20.00;
+                        else if (term === 17) rate = 19.00;
+                        else if (term === 16) rate = 18.00;
+                        else if (term === 15) rate = 17.00;
+                        else if (term === 14) rate = 16.00;
+                        else if (term === 13) rate = 15.00;
+                        else if (term === 12) rate = 14.00;
+                        else if (term === 11) rate = 13.00;
+                        else if (term === 10) rate = 12.00;
+                        else if (term === 9) rate = 11.00;
+                        else rate = 10.00;
+                    } else if (year === 3) {
+                        if (term >= 16) rate = 10.00;
+                        else if (term >= 13) rate = 7.50;
+                        else if (term >= 11) rate = 5.00;
+                        else rate = 4.00;
+                    } else if (year === 4) {
+                        if (term >= 18) rate = 10.00;
+                        else if (term >= 15) rate = 7.50;
+                        else if (term >= 11) rate = 5.00;
+                        else if (term === 10) rate = 4.00;
+                        else rate = 0.00;
+                    } else {
+                        rate = 0.00;
+                    }
+                } else if (product.includes("PRU - Cuộc Sống Bình An (CIM2)")) {
+                    if (year === 1) {
+                        if (term >= 15) rate = 30.00;
+                        else if (term === 14) rate = 30.00;
+                        else if (term === 13) rate = 30.00;
+                        else if (term === 12) rate = 30.00;
+                        else if (term === 11) rate = 30.00;
+                        else if (term === 10) rate = 30.00;
+                        else if (term === 9) rate = 28.00;
+                        else if (term === 8) rate = 26.00;
+                        else if (term === 7) rate = 24.00;
+                        else if (term === 6) rate = 22.00;
+                        else rate = 20.00;
+                    } else if (year === 2) {
+                        if (term >= 15) rate = 20.00;
+                        else if (term === 14) rate = 18.50;
+                        else if (term === 13) rate = 17.00;
+                        else if (term === 12) rate = 15.50;
+                        else if (term === 11) rate = 14.00;
+                        else if (term === 10) rate = 12.50;
+                        else if (term === 9) rate = 11.00;
+                        else if (term === 8) rate = 9.50;
+                        else if (term === 7) rate = 8.00;
+                        else if (term === 6) rate = 6.50;
+                        else rate = 5.00;
+                    } else {
+                        rate = 0.00;
+                    }
+                } else if (product.includes("PRU - Thiết Thực (CIS1)")) {
+                    if (year <= 3) rate = 20.00;
+                    else if (year === 4) rate = 15.00;
+                    else if (year === 5) rate = 10.00;
+                    else rate = 0.00;
+                } else if (product.includes("Pru - Yên Tâm Vui Khoẻ (TLA9)")) {
+                    if (year === 1) {
+                        if (term >= 20) rate = 40.00;
+                        else if (term >= 15) rate = 35.00;
+                        else if (term >= 10) rate = 30.00;
+                        else rate = 25.00;
+                    } else if (year === 2) rate = 10.00;
+                    else if (year === 3) rate = 15.00;
+                    else rate = 0.00;
+                } else {
+                    if (year === 1) rate = 25.00;
+                    else if (year === 2) rate = 15.00;
+                    else if (year === 3) rate = 10.00;
+                    else if (year === 4) rate = 5.00;
+                    else if (year === 5) rate = 2.50;
+                    else rate = 0.00;
+                }
+                return rate;
+            }
+
+            function calculateRiderRateByYear(product, term, year) {
+                let rate = 0;
+
+                if (product.includes("PRU - Hành trang vui khoẻ")) {
+                    if (year === 1) rate = 20.00;
+                    else if (year === 2) rate = 15.00;
+                    else if (year === 3) rate = 10.00;
+                    else if (year === 4) rate = 5.00;
+                    else if (year === 5) rate = 2.50;
+                    else rate = 0.00;
+                } else if (product.includes("HSR9")) {
+                    if (year === 1) rate = 20.00;
+                    else if (year === 2) rate = 12.50;
+                    else if (year === 3) rate = 10.00;
+                    else if (year === 4) rate = 5.00;
+                    else if (year === 5) rate = 2.50;
+                    else rate = 0.00;
+                } else if (product.includes("CIW9") || product.includes("CIR9")) {
+                    if (year === 1) rate = 20.00;
+                    else if (year === 2) rate = 15.00;
+                    else if (year === 3) rate = 20.00;
+                    else if (year === 4) rate = 10.00;
+                    else rate = 0.00;
+                } else if (product.includes("TLR9")) {
+                    if (year === 1) rate = 30.00;
+                    else if (year === 2) rate = 15.00;
+                    else if (year === 3) rate = 10.00;
+                    else rate = 0.00;
+                } else if (product.includes("ADD9")) {
+                    if (year === 1) rate = 20.00;
+                    else if (year === 2) rate = 15.00;
+                    else if (year === 3 || year === 4) rate = 10.00;
+                    else rate = 0.00;
+                } else {
+                    if (year === 1) rate = 20.00;
+                    else if (year === 2) rate = 15.00;
+                    else if (year === 3) rate = 10.00;
+                    else if (year === 4) rate = 5.00;
+                    else if (year === 5) rate = 2.50;
+                    else rate = 0.00;
+                }
+                return rate;
+            }
+
+            btnCalculate.addEventListener('click', () => {
+                const mainProduct = document.getElementById('main-product-input').value.trim();
+                const mainPremium = parseCurrencyValue(mainProductPremiumInput.value);
+                const mainTerm = parseInt(document.getElementById('main-product-term').value) || 0;
+                const spbtCount = getSpbtCount();
+                const planTypeSelect = document.getElementById('plan-type');
+                const planType = planTypeSelect ? planTypeSelect.value : 'CoBan';
+
+                if (!mainProduct || mainPremium <= 0 || mainTerm <= 0) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Thiếu thông tin',
+                        text: 'Vui lòng điền đầy đủ tên sản phẩm chính, phí bảo hiểm và thời hạn đóng phí hợp lệ!',
+                        confirmButtonColor: '#dc2626'
+                    });
+                    return;
+                }
+
+                let totalAnnualPremium = mainPremium;
+
+                const mainFycY1 = mainPremium * (calculateMainRateByYear(mainProduct, mainTerm, 1, spbtCount, planType) / 100);
+                const mainFycY2 = mainPremium * (calculateMainRateByYear(mainProduct, mainTerm, 2, spbtCount, planType) / 100);
+                const mainFycY3 = mainPremium * (calculateMainRateByYear(mainProduct, mainTerm, 3, spbtCount, planType) / 100);
+                const mainFycY4 = mainPremium * (calculateMainRateByYear(mainProduct, mainTerm, 4, spbtCount, planType) / 100);
+                const mainFycY5 = mainPremium * (calculateMainRateByYear(mainProduct, mainTerm, 5, spbtCount, planType) / 100);
+                const mainFycY6 = mainPremium * (calculateMainRateByYear(mainProduct, mainTerm, 6, spbtCount, planType) / 100);
+
+                let totalY1 = mainFycY1;
+                let totalY2 = mainFycY2;
+                let totalY3 = mainFycY3;
+                let totalY4 = mainFycY4;
+                let totalY5 = mainFycY5;
+                let totalY6 = mainFycY6;
+
+                let ridersListArray = [];
+                let tableRowsHtml = `
+                    <tr class="border-b border-theme-border bg-theme-bg">
+                        <td class="p-3">
+                            <span class="block font-bold text-theme-primary">${mainProduct}</span>
+                            <span class="text-xs text-theme-muted">Sản phẩm chính (${mainTerm} năm)</span>
+                        </td>
+                        <td class="p-3 font-semibold text-theme-primary">${mainPremium.toLocaleString('vi-VN')} VNĐ</td>
+                        <td class="p-3 text-center">${mainFycY1.toLocaleString('vi-VN')}</td>
+                        <td class="p-3 text-center">${mainFycY2.toLocaleString('vi-VN')}</td>
+                        <td class="p-3 text-center">${mainFycY3.toLocaleString('vi-VN')}</td>
+                        <td class="p-3 text-center">${mainFycY4.toLocaleString('vi-VN')}</td>
+                        <td class="p-3 text-center">${mainFycY5.toLocaleString('vi-VN')}</td>
+                        <td class="p-3 text-right font-bold">${mainFycY6.toLocaleString('vi-VN')}</td>
+                    </tr>
+                `;
+
+                const riderRowElements = ridersContainer.querySelectorAll('.rider-row');
+                let hasError = false;
+
+                riderRowElements.forEach(row => {
+                    const rName = row.querySelector('.rider-name').value.trim();
+                    const rPrem = parseCurrencyValue(row.querySelector('.rider-premium').value);
+                    const rTerm = row.querySelector('.rider-term').value.trim();
+
+                    if (!rTerm) {
+                        hasError = true;
+                        return;
+                    }
+
+                    if (rName && rPrem > 0) {
+                        totalAnnualPremium += rPrem;
+                        const rTermNum = parseInt(rTerm) || 1;
+                        const rY1 = rPrem * (calculateRiderRateByYear(rName, rTermNum, 1) / 100);
+                        const rY2 = rPrem * (calculateRiderRateByYear(rName, rTermNum, 2) / 100);
+                        const rY3 = rPrem * (calculateRiderRateByYear(rName, rTermNum, 3) / 100);
+                        const rY4 = rPrem * (calculateRiderRateByYear(rName, rTermNum, 4) / 100);
+                        const rY5 = rPrem * (calculateRiderRateByYear(rName, rTermNum, 5) / 100);
+                        const rY6 = rPrem * (calculateRiderRateByYear(rName, rTermNum, 6) / 100);
+
+                        totalY1 += rY1;
+                        totalY2 += rY2;
+                        totalY3 += rY3;
+                        totalY4 += rY4;
+                        totalY5 += rY5;
+                        totalY6 += rY6;
+
+                        ridersListArray.push({
+                            name: rName,
+                            premium: rPrem,
+                            term: rTermNum,
+                            fyc: { y1: rY1, y2: rY2, y3: rY3, y4: rY4, y5: rY5, y6: rY6 }
+                        });
+
+                        tableRowsHtml += `
+                            <tr class="border-b border-theme-border">
+                                <td class="p-3">
+                                    <span class="block font-medium">+ ${rName}</span>
+                                    <span class="text-xs text-theme-muted">Sản phẩm bổ trợ (${rTermNum} năm)</span>
+                                </td>
+                                <td class="p-3 font-medium">${rPrem.toLocaleString('vi-VN')} VNĐ</td>
+                                <td class="p-3 text-center">${rY1.toLocaleString('vi-VN')}</td>
+                                <td class="p-3 text-center">${rY2.toLocaleString('vi-VN')}</td>
+                                <td class="p-3 text-center">${rY3.toLocaleString('vi-VN')}</td>
+                                <td class="p-3 text-center">${rY4.toLocaleString('vi-VN')}</td>
+                                <td class="p-3 text-center">${rY5.toLocaleString('vi-VN')}</td>
+                                <td class="p-3 text-right font-bold">${rY6.toLocaleString('vi-VN')}</td>
+                            </tr>
+                        `;
+                    }
+                });
+
+                if (hasError) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Chưa đủ thông tin phụ phẩm',
+                        text: 'Vui lòng không để trống thời hạn đóng phí ở các sản phẩm bán cùng!',
+                        confirmButtonColor: '#dc2626'
+                    });
+                    return;
+                }
+
+                lastCalculatedData = {
+                    mainProduct: mainProduct,
+                    mainPremium: mainPremium,
+                    mainTerm: mainTerm,
+                    totalAnnualPremium: totalAnnualPremium,
+                    fyc: { y1: totalY1, y2: totalY2, y3: totalY3, y4: totalY4, y5: totalY5, y6: totalY6 },
+                    riders: ridersListArray
+                };
+
+                document.getElementById('total-annual-premium').innerText = totalAnnualPremium.toLocaleString('vi-VN') + ' VNĐ';
+                document.getElementById('sum-y1').innerText = totalY1.toLocaleString('vi-VN') + ' VNĐ';
+                document.getElementById('sum-y2').innerText = totalY2.toLocaleString('vi-VN') + ' VNĐ';
+                document.getElementById('sum-y3').innerText = totalY3.toLocaleString('vi-VN') + ' VNĐ';
+                document.getElementById('sum-y4').innerText = totalY4.toLocaleString('vi-VN') + ' VNĐ';
+                document.getElementById('sum-y5').innerText = totalY5.toLocaleString('vi-VN') + ' VNĐ';
+                document.getElementById('sum-y6').innerText = totalY6.toLocaleString('vi-VN') + ' VNĐ';
+
+                document.getElementById('result-table-body').innerHTML = tableRowsHtml;
+
+                const resultCard = document.getElementById('result-card');
+                resultCard.classList.remove('hidden');
+                resultCard.scrollIntoView({ behavior: 'smooth' });
+            });
+
+            // Xử lý sự kiện bấm nút Lưu làm doanh số
+            const btnSavePersonal = document.getElementById('btn-save-personal');
+            if (btnSavePersonal) {
+                btnSavePersonal.addEventListener('click', () => {
+                    if (!lastCalculatedData) {
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Chưa có dữ liệu',
+                            text: 'Vui lòng tính toán dòng tiền FYC trước khi bấm lưu doanh số!',
+                            confirmButtonColor: '#dc2626'
+                        });
+                        return;
+                    }
+
+                    let summaryHtml = `
+                        <div class="text-left space-y-2 mt-2 max-h-48 overflow-y-auto p-3 bg-theme-bg rounded-lg border border-theme-border text-xs">
+                            <div class="font-bold text-theme-primary">▪ Sản phẩm chính: ${lastCalculatedData.mainProduct}</div>
+                            <div class="text-theme-muted pl-3">Phí: ${lastCalculatedData.mainPremium.toLocaleString('vi-VN')} VNĐ (${lastCalculatedData.mainTerm} năm)</div>
+                    `;
+
+                    if (lastCalculatedData.riders && lastCalculatedData.riders.length > 0) {
+                        lastCalculatedData.riders.forEach(r => {
+                            summaryHtml += `
+                                <div class="font-medium text-theme-text mt-1">▪ Bổ trợ: ${r.name}</div>
+                                <div class="text-theme-muted pl-3">Phí: ${r.premium.toLocaleString('vi-VN')} VNĐ (${r.term} năm)</div>
+                            `;
+                        });
+                    } else {
+                        summaryHtml += `<div class="italic text-theme-muted mt-1">▪ Không có sản phẩm bổ trợ đi kèm.</div>`;
+                    }
+                    summaryHtml += `</div>`;
+
+                    Swal.fire({
+                        title: 'Xác nhận lưu doanh số hợp đồng',
+                        html: `
+                            ${summaryHtml}
+                            <div class="text-left space-y-3 mt-4 text-sm">
+                                <div>
+                                    <label class="block font-medium mb-1">Ngày phát hành hợp đồng</label>
+                                    <input type="date" id="swal-issue-date" value="${new Date().toISOString().split('T')[0]}" class="w-full px-3 py-2 border rounded-lg bg-theme-card border-theme-border">
+                                </div>
+                                <div>
+                                    <label class="block font-medium mb-1">Phương thức đóng phí</label>
+                                    <select id="swal-payment-mode" class="w-full px-3 py-2 border rounded-lg bg-theme-card border-theme-border">
+                                        <option value="YEAR">Định kỳ năm (100% phí hàng năm)</option>
+                                        <option value="HALF">Định kỳ nửa năm (50% x 2 kỳ)</option>
+                                        <option value="QUARTER">Định kỳ quý (25% x 4 kỳ)</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block font-medium mb-1">Tỷ lệ hưởng hoa hồng (%)</label>
+                                    <select id="swal-split-rate" class="w-full px-3 py-2 border rounded-lg bg-theme-card border-theme-border">
+                                        <option value="100">100% (Đại lý trực tiếp)</option>
+                                        <option value="50">50% (Đại lý hỗ trợ / chia sẻ)</option>
+                                    </select>
+                                </div>
+                            </div>
+                        `,
+                        confirmButtonText: 'Lưu & Sang trang Doanh số',
+                        showCancelButton: true,
+                        cancelButtonText: 'Hủy',
+                        confirmButtonColor: '#16a34a',
+                        preConfirm: () => {
+                            const issueDate = document.getElementById('swal-issue-date').value;
+                            const paymentMode = document.getElementById('swal-payment-mode').value;
+                            const splitRate = parseFloat(document.getElementById('swal-split-rate').value) / 100;
+
+                            if (!issueDate) {
+                                Swal.showValidationMessage('Vui lòng chọn ngày phát hành hợp đồng!');
+                                return false;
+                            }
+
+                            return { issueDate, paymentMode, splitRate };
+                        }
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            const { issueDate, paymentMode, splitRate } = result.value;
+
+                            // Tự động tạo mảng các kỳ đóng phí (Installments) dựa trên phương thức
+                            let installments = [];
+                            let baseDate = new Date(issueDate);
+
+                            let numPeriods = 1;
+                            let fycMultiplier = 1;
+
+                            if (paymentMode === 'HALF') {
+                                numPeriods = 2;
+                                fycMultiplier = 0.5;
+                            } else if (paymentMode === 'QUARTER') {
+                                numPeriods = 4;
+                                fycMultiplier = 0.25;
+                            }
+
+                            for (let i = 0; i < numPeriods; i++) {
+                                let dueDateObj = new Date(baseDate);
+                                if (paymentMode === 'HALF') {
+                                    dueDateObj.setMonth(dueDateObj.getMonth() + (i * 6));
+                                } else if (paymentMode === 'QUARTER') {
+                                    dueDateObj.setMonth(dueDateObj.getMonth() + (i * 3));
+                                }
+
+                                // Kỳ đầu tiên (i === 0): Nếu ngày phát hành rơi vào đúng tháng hiện tại hoặc gần đó, có thể auto pending hoặc mặc định chờ bấm "Đã đóng phí" theo đúng yêu cầu của bạn.
+                                installments.push({
+                                    periodIndex: i + 1,
+                                    dueDate: dueDateObj.toISOString().split('T')[0],
+                                    status: 'pending', // Mặc định là chờ đóng, chưa cộng doanh số
+                                    paidDate: null,
+                                    fycAmount: lastCalculatedData.fyc.y1 * splitRate * fycMultiplier // Phân bổ FYC năm 1 theo kỳ
+                                });
+                            }
+
+                            // Quy đổi FYC tổng theo tỷ lệ chia
+                            let adjustedFyc = {};
+                            Object.keys(lastCalculatedData.fyc).forEach(key => {
+                                adjustedFyc[key] = lastCalculatedData.fyc[key] * splitRate;
+                            });
+
+                            let personalSalesHistory = JSON.parse(localStorage.getItem('prudential_personal_sales') || '[]');
+                            
+                            const record = {
+                                id: 'SALE-' + Date.now(),
+                                timestamp: new Date().toISOString(),
+                                issueDate: issueDate,
+                                paymentMode: paymentMode,
+                                splitRate: splitRate * 100,
+                                installments: installments, // Lưu danh sách các kỳ phân bổ
+                                ...lastCalculatedData,
+                                fyc: adjustedFyc
+                            };
+
+                            personalSalesHistory.push(record);
+                            localStorage.setItem('prudential_personal_sales', JSON.stringify(personalSalesHistory));
+
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Đã lưu thành công!',
+                                text: `Hợp đồng đã được ghi nhận và phân bổ kỳ đóng phí. Đang chuyển sang trang doanh số...`,
+                                confirmButtonColor: '#16a34a',
+                                timer: 1500,
+                                showConfirmButton: false
+                            }).then(() => {
+                                window.location.href = 'sales.html';
+                            });
+                        }
+                    });
+                });
+            }
+
+            btnReset.addEventListener('click', () => {
+                mainProductInput.value = '';
+                mainProductPremiumInput.value = '';
+                document.getElementById('main-product-term').value = '';
+                additionalCriteriaBox.classList.add('hidden');
+                ridersContainer.innerHTML = '';
+                noRiderMsg.style.display = 'block';
+                document.getElementById('result-card').classList.add('hidden');
+                lastCalculatedData = null;
+            });
         });
     </script>
 </body>

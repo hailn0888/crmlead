@@ -66,16 +66,19 @@
                         <button id="btn-tat-ca" class="theme-card border px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1 shadow-sm hover:opacity-80 transition">
                             <i data-lucide="list" class="w-3.5 h-3.5"></i> Tất cả
                         </button>
+                        <!-- Bộ lọc "Chọn người nhận": chỉ hiện ở Tab 1 và Tab 2 (JS sẽ ẩn/hiện + đổ option) -->
                         <div class="relative" id="filter-container-nguoi-nhan">
                             <select id="filter-nguoi-nhan" class="theme-card border rounded-lg px-3 py-1.5 text-xs outline-none bg-transparent cursor-pointer">
-                                <option value="">Chọn người nhận/gửi</option>
+                                <option value="">Chọn người nhận</option>
                             </select>
                         </div>
+                        <!-- Bộ lọc trạng thái: option thay đổi theo từng tab (JS đổ động) -->
                         <div class="relative" id="filter-container-trang-thai">
                             <select id="filter-trang-thai" class="theme-card border rounded-lg px-3 py-1.5 text-xs outline-none bg-transparent cursor-pointer">
                                 <option value="">Tất cả trạng thái</option>
                             </select>
                         </div>
+                        <!-- Bộ lọc theo ngày: Tab1 lọc theo thời gian gọi, Tab2/Tab3 lọc theo thời gian gửi -->
                         <div class="relative flex items-center">
                             <input type="date" id="filter-ngay" class="theme-card border rounded-lg px-3 py-1.5 text-xs outline-none bg-transparent cursor-pointer">
                         </div>
@@ -128,6 +131,7 @@
                 </div>
 
                 <!-- ================= TAB 3: HẸN ĐƯỢC GỬI ================= -->
+                <!-- FIX: đã bỏ cột "Địa chỉ" theo yêu cầu (địa chỉ đã hiện trong cột Khách hàng) -->
                 <div id="tab-content-3" class="tab-content hidden">
                     <div class="theme-card border rounded-xl shadow-sm overflow-hidden">
                         <div class="overflow-x-auto">
@@ -135,10 +139,9 @@
                                 <thead>
                                     <tr class="border-b border-gray-200 dark:border-gray-700 opacity-80 bg-black/5 dark:bg-white/5 font-semibold">
                                         <th class="p-3 text-center w-12">STT</th>
-                                        <th class="p-3 min-w-[200px]">Khách hàng</th>
+                                        <th class="p-3 min-w-[220px]">Khách hàng</th>
                                         <th class="p-3 min-w-[130px]">Số ĐT</th>
-                                        <th class="p-3 min-w-[180px]">Địa chỉ</th>
-                                        <th class="p-3 min-w-[180px]">Ghi chú</th>
+                                        <th class="p-3 min-w-[220px]">Ghi chú</th>
                                         <th class="p-3 min-w-[180px]">Người gửi</th>
                                         <th class="p-3 min-w-[140px]">File đính kèm</th>
                                         <th class="p-3 min-w-[160px]">Trạng thái</th>
@@ -166,10 +169,25 @@
 
     <!-- Script xử lý toàn bộ logic 4 tab, API, đếm ngược 24h và tương tác -->
     <script>
+        // ==========================================================================
+        // BIẾN TRẠNG THÁI TOÀN CỤC
+        // ==========================================================================
         let currentActiveTab = 1;
-        let callList = [];
-        let colleaguesList = [];
-        let agentUsersList = [];
+
+        // Mỗi tab có nguồn dữ liệu RIÊNG (khác API, khác chiều dữ liệu) - không dùng
+        // chung 1 mảng như bản cũ nữa, vì Tab 3 cần lấy hẹn của NGƯỜI KHÁC gửi tới,
+        // hoàn toàn khác chiều với Tab 1/2 (hẹn của CHÍNH mình).
+        let tab1List = [];
+        let tab2List = [];
+        let tab3List = [];
+
+        let colleaguesList = []; // Danh sách DMO (dùng cho popup Gửi hẹn + bộ lọc)
+        let countdownIntervalId = null;
+
+        // Tên hiển thị (ho_va_ten) của agent đang đăng nhập, lưu ở localStorage lúc login
+        function getCurrentAgentName() {
+            return localStorage.getItem('agentName') || "Lê Ngô Hải";
+        }
 
         // --- CHUYỂN TAB ---
         function switchTab(tabIndex) {
@@ -190,28 +208,75 @@
                 }
             }
             document.getElementById('searchInput').value = '';
+            document.getElementById('filter-nguoi-nhan').value = '';
+            document.getElementById('filter-trang-thai').value = '';
+            // Đổi tab = đổi hẳn nguồn dữ liệu -> phải fetch lại, không chỉ render lại
+            fetchData();
+        }
+
+        // ==========================================================================
+        // TẢI DỮ LIỆU: mỗi tab gọi đúng API riêng của mình
+        // ==========================================================================
+        async function fetchData() {
+            if (currentActiveTab === 1) await fetchTab1();
+            else if (currentActiveTab === 2) await fetchTab2();
+            else if (currentActiveTab === 3) await fetchTab3();
             renderCurrentTab();
         }
 
-        // --- TẢI DỮ LIỆU TỪ SERVER ---
-        async function fetchData() {
+        async function fetchTab1() {
             try {
-                const agentName = localStorage.getItem('agentName') || "Lê Ngô Hải"; 
-                
-                const res = await fetch(`/api/calls/successful-appointments?agent=${encodeURIComponent(agentName)}`);
+                const agentName = getCurrentAgentName();
+                const date = document.getElementById('filter-ngay').value;
+                let url = `/api/calls/successful-appointments?agent=${encodeURIComponent(agentName)}`;
+                if (date) url += `&date=${date}`;
+
+                const res = await fetch(url);
                 const result = await res.json();
-                
                 if (!result.success) throw new Error(result.message);
 
-                callList = result.data || [];
-                renderCurrentTab();
+                tab1List = result.data || [];
+                populateFiltersForActiveTab();
             } catch (err) {
-                console.error("Lỗi khi tải dữ liệu:", err);
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Lỗi tải dữ liệu',
-                    text: 'Không thể kết nối tới máy chủ để lấy dữ liệu.'
-                });
+                console.error("Lỗi tải Tab 1:", err);
+                Swal.fire({ icon: 'error', title: 'Lỗi tải dữ liệu', text: 'Không thể kết nối tới máy chủ.' });
+            }
+        }
+
+        async function fetchTab2() {
+            try {
+                const agentName = getCurrentAgentName();
+                const date = document.getElementById('filter-ngay').value;
+                let url = `/api/calls/sent-appointments?agent=${encodeURIComponent(agentName)}`;
+                if (date) url += `&date=${date}`;
+
+                const res = await fetch(url);
+                const result = await res.json();
+                if (!result.success) throw new Error(result.message);
+
+                tab2List = result.data || [];
+                populateFiltersForActiveTab();
+            } catch (err) {
+                console.error("Lỗi tải Tab 2:", err);
+                Swal.fire({ icon: 'error', title: 'Lỗi tải dữ liệu', text: 'Không thể kết nối tới máy chủ.' });
+            }
+        }
+
+        async function fetchTab3() {
+            try {
+                const agentName = getCurrentAgentName();
+                const date = document.getElementById('filter-ngay').value;
+                let url = `/api/calls/received-appointments?agent=${encodeURIComponent(agentName)}`;
+                if (date) url += `&date=${date}`;
+
+                const res = await fetch(url);
+                const result = await res.json();
+                if (!result.success) throw new Error(result.message);
+
+                tab3List = result.data || [];
+            } catch (err) {
+                console.error("Lỗi tải Tab 3:", err);
+                Swal.fire({ icon: 'error', title: 'Lỗi tải dữ liệu', text: 'Không thể kết nối tới máy chủ.' });
             }
         }
 
@@ -233,44 +298,165 @@
             if (currentActiveTab === 3) renderTab3();
         }
 
-        // ================= RENDER TAB 1 =================
+        // ==========================================================================
+        // TÍNH TRẠNG THÁI (3 mức) DÙNG CHUNG CHO TAB 1 VÀ BỘ LỌC
+        // ==========================================================================
+        function computeStatusTab1(item) {
+            if (item.trang_thai_tiep_nhan === 'Đã tiếp nhận') return 'Đã gửi';
+            if (item.trang_thai_gui === 'Đã gửi') return 'Chờ tiếp nhận';
+            return 'Chưa gửi';
+        }
+
+        function computeStatusTab2(item) {
+            return item.trang_thai_tiep_nhan === 'Đã tiếp nhận' ? 'Đã tiếp nhận' : 'Chờ tiếp nhận';
+        }
+
+        // ==========================================================================
+        // BỘ LỌC: đổ option động theo tab đang xem + áp dụng lọc client-side
+        // (lọc theo ngày đã xử lý ở backend qua query param date)
+        // ==========================================================================
+        function populateFiltersForActiveTab() {
+            const trangThaiSelect = document.getElementById('filter-trang-thai');
+            const nguoiNhanSelect = document.getElementById('filter-nguoi-nhan');
+            const containerNguoiNhan = document.getElementById('filter-container-nguoi-nhan');
+
+            // Giữ lại lựa chọn hiện tại (nếu có) để không bị mất khi refetch do đổi ngày
+            const currentTrangThai = trangThaiSelect.value;
+            const currentNguoiNhan = nguoiNhanSelect.value;
+
+            trangThaiSelect.innerHTML = '<option value="">Tất cả trạng thái</option>';
+            nguoiNhanSelect.innerHTML = '<option value="">Chọn người nhận</option>';
+
+            let list = [];
+            let statusOptions = [];
+            let showNguoiNhan = false;
+
+            if (currentActiveTab === 1) {
+                list = tab1List;
+                statusOptions = ['Chưa gửi', 'Chờ tiếp nhận', 'Đã gửi'];
+                showNguoiNhan = true;
+            } else if (currentActiveTab === 2) {
+                list = tab2List;
+                statusOptions = ['Chờ tiếp nhận', 'Đã tiếp nhận'];
+                showNguoiNhan = true;
+            }
+
+            statusOptions.forEach(s => {
+                trangThaiSelect.innerHTML += `<option value="${s}">${s}</option>`;
+            });
+
+            containerNguoiNhan.style.display = showNguoiNhan ? 'block' : 'none';
+
+            if (showNguoiNhan) {
+                const seen = new Map();
+                list.forEach(item => {
+                    if (item.nguoi_nhan_username && !seen.has(item.nguoi_nhan_username)) {
+                        seen.set(item.nguoi_nhan_username, item.nguoi_nhan_ten);
+                    }
+                });
+                seen.forEach((ten, username) => {
+                    nguoiNhanSelect.innerHTML += `<option value="${username}">${ten} (${username})</option>`;
+                });
+            }
+
+            trangThaiSelect.value = currentTrangThai;
+            nguoiNhanSelect.value = currentNguoiNhan;
+        }
+
+        // Lọc client-side theo lựa chọn hiện tại của 2 dropdown (người nhận / trạng thái)
+        function getFilteredList(list, computeStatusFn) {
+            let filtered = [...list];
+            const nguoiNhan = document.getElementById('filter-nguoi-nhan').value;
+            const trangThai = document.getElementById('filter-trang-thai').value;
+
+            if (nguoiNhan) {
+                filtered = filtered.filter(item => item.nguoi_nhan_username === nguoiNhan);
+            }
+            if (trangThai && computeStatusFn) {
+                filtered = filtered.filter(item => computeStatusFn(item) === trangThai);
+            }
+            return filtered;
+        }
+
+        // ==========================================================================
+        // ĐẾM NGƯỢC 24H (dùng chung cho Tab 2 và Tab 3)
+        // Mỗi phần tử cần đếm ngược phải có class="countdown-timer" và
+        // thuộc tính data-deadline="<mốc thời gian tính bằng mili-giây>"
+        // ==========================================================================
+        function startCountdownTimers() {
+            if (countdownIntervalId) clearInterval(countdownIntervalId);
+            countdownIntervalId = setInterval(() => {
+                const timers = document.querySelectorAll('.countdown-timer');
+                let anyExpired = false;
+                timers.forEach(el => {
+                    const deadline = Number(el.dataset.deadline);
+                    const remaining = deadline - Date.now();
+                    if (remaining <= 0) {
+                        el.textContent = '00:00:00';
+                        anyExpired = true;
+                    } else {
+                        const totalSec = Math.floor(remaining / 1000);
+                        const h = String(Math.floor(totalSec / 3600)).padStart(2, '0');
+                        const m = String(Math.floor((totalSec % 3600) / 60)).padStart(2, '0');
+                        const s = String(totalSec % 60).padStart(2, '0');
+                        el.textContent = `${h}:${m}:${s}`;
+                    }
+                });
+                // Khi có ít nhất 1 đồng hồ về 0 -> đồng bộ lại với server
+                // (server sẽ tự động thu hồi hẹn quá hạn ở đầu mỗi API GET)
+                if (anyExpired) fetchData();
+            }, 1000);
+        }
+
+        // ================= RENDER TAB 1: DANH SÁCH HẸN GẶP THÀNH CÔNG =================
         function renderTab1() {
             const tbody = document.getElementById('table-body-1');
             tbody.innerHTML = '';
 
-            if (!callList || callList.length === 0) {
+            const list = getFilteredList(tab1List, computeStatusTab1);
+
+            if (!list || list.length === 0) {
                 tbody.innerHTML = `<tr><td colspan="8" class="p-6 text-center opacity-70 text-xs">Không có cuộc hẹn gặp thành công nào.</td></tr>`;
                 return;
             }
 
-            callList.forEach((item, index) => {
+            list.forEach((item, index) => {
                 const customer = item.customers || {};
                 const hoTen = `${customer.ho || ''} ${customer.ten || ''}`.trim() || '-';
                 const sdt = customer.dien_thoai || item.dien_thoai || '-';
                 const diaChi = customer.dia_chi || 'Chưa cập nhật';
-                
-                let trangThaiBadge = `<span class="px-2 py-1 bg-amber-500/20 text-amber-600 dark:text-amber-400 rounded-md font-medium text-xs inline-flex items-center gap-1 justify-center"><i data-lucide="clock" class="w-3 h-3"></i> Không gửi hẹn</span>`;
-                if (item.trang_thai_gui === 'Đã gửi') {
-                    const thoiGianGuiFormatted = formatDateTimeVN(item.thoi_gian_gui);
-                    trangThaiBadge = `
-                        <span class="px-2 py-1 bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-md font-medium text-xs inline-flex items-center gap-1 justify-center">
-                            <i data-lucide="check" class="w-3 h-3"></i> Gửi hẹn
-                        </span>
-                        <div class="text-[11px] opacity-75 mt-1 text-center">${thoiGianGuiFormatted}</div>
-                    `;
+
+                // Trạng thái 3 mức: Chưa gửi / Chờ tiếp nhận / Đã gửi
+                const status = computeStatusTab1(item);
+                let trangThaiBadge = '';
+                if (status === 'Đã gửi') {
+                    trangThaiBadge = `<span class="px-2 py-1 bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-md font-medium text-xs inline-flex items-center gap-1 justify-center"><i data-lucide="check-check" class="w-3 h-3"></i> Đã gửi</span>`;
+                } else if (status === 'Chờ tiếp nhận') {
+                    trangThaiBadge = `<span class="px-2 py-1 bg-amber-500/20 text-amber-600 dark:text-amber-400 rounded-md font-medium text-xs inline-flex items-center gap-1 justify-center"><i data-lucide="clock" class="w-3 h-3"></i> Chờ tiếp nhận</span>`;
+                } else {
+                    trangThaiBadge = `<span class="px-2 py-1 bg-gray-400/20 text-gray-600 dark:text-gray-400 rounded-md font-medium text-xs inline-flex items-center gap-1 justify-center"><i data-lucide="x" class="w-3 h-3"></i> Chưa gửi</span>`;
+                }
+                if (item.thoi_gian_gui && status !== 'Chưa gửi') {
+                    trangThaiBadge += `<div class="text-[11px] opacity-75 mt-1 text-center">${formatDateTimeVN(item.thoi_gian_gui)}</div>`;
                 }
 
                 let dmoHtml = `<span class="opacity-75 italic text-xs">Chưa gửi</span>`;
-                if (item.trang_thai_gui === 'Đã gửi' && item.nguoi_nhan_ten) {
+                if (status !== 'Chưa gửi' && item.nguoi_nhan_ten) {
                     dmoHtml = `<span class="text-xs font-medium">${item.nguoi_nhan_ten}</span><br><span class="text-[11px] italic opacity-75">(${item.nguoi_nhan_username})</span>`;
                 }
 
                 let fileHtml = `<span class="opacity-65 text-xs">---</span>`;
                 if (item.file_dinh_kem) {
-                    fileHtml = `<a href="/uploads/${item.file_dinh_kem}" target="_blank" class="text-red-600 dark:text-red-400 underline truncate max-w-[120px] inline-flex items-center gap-1 text-xs justify-center" title="${item.file_dinh_kem}"><i data-lucide="file-text" class="w-3 h-3"></i>${item.file_dinh_kem}</a>`;
+                    fileHtml = `<a href="/uploads/${item.file_dinh_kem}" target="_blank" class="text-red-600 dark:text-red-400 underline inline-flex items-center gap-1 text-xs justify-center" title="${item.file_dinh_kem}"><i data-lucide="file-text" class="w-3 h-3"></i>File</a>`;
                 }
 
                 let ghiChuHtml = `<span class="italic text-[11px] opacity-80">Ghi chú: ${item.ghi_chu || '-'}</span>`;
+
+                // Nút "Gửi hẹn" chỉ bật khi trạng thái = 'Chưa gửi' theo yêu cầu
+                const sendDisabled = status !== 'Chưa gửi';
+                const sendBtnHtml = sendDisabled
+                    ? `<button disabled class="p-2 rounded-lg text-gray-400 opacity-50 cursor-not-allowed inline-flex items-center justify-center" title="Đã gửi hẹn - không thể gửi lại"><i data-lucide="send" class="w-4 h-4"></i></button>`
+                    : `<button onclick="openGuiHenPopup(${item.id})" class="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition inline-flex items-center justify-center" title="Gửi cuộc hẹn"><i data-lucide="send" class="w-4 h-4"></i></button>`;
 
                 const tr = document.createElement('tr');
                 tr.className = 'border-b border-gray-100 dark:border-gray-800 hover:bg-black/5 dark:hover:bg-white/5 transition';
@@ -291,9 +477,7 @@
                     <td class="p-3 text-center">${fileHtml}</td>
                     <td class="p-3 text-center">
                         <div class="flex items-center justify-center gap-1">
-                            <button onclick="openGuiHenPopup(${item.id})" class="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition inline-flex items-center justify-center" title="Gửi cuộc hẹn">
-                                <i data-lucide="send" class="w-4 h-4"></i>
-                            </button>
+                            ${sendBtnHtml}
                             <button onclick='showLeadDetailModal(${JSON.stringify(item).replace(/'/g, "&#39;")})' class="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition inline-flex items-center justify-center" title="Xem thông tin khách hàng">
                                 <i data-lucide="eye" class="w-4 h-4"></i>
                             </button>
@@ -304,7 +488,7 @@
             });
 
             if (typeof lucide !== 'undefined') lucide.createIcons();
-            if (typeof initTableSearch === 'function') initTableSearch('searchInput', null, 'table-body-1', [2, 3]);
+            if (typeof initTableSearch === 'function') initTableSearch('searchInput', null, 'table-body-1', [1, 3]);
         }
 
         // ================= RENDER TAB 2: HẸN ĐÃ GỬI =================
@@ -312,58 +496,70 @@
             const tbody = document.getElementById('table-body-2');
             tbody.innerHTML = '';
 
-            const sentList = callList.filter(item => item.trang_thai_gui === 'Đã gửi');
+            const list = getFilteredList(tab2List, computeStatusTab2);
 
-            if (!sentList || sentList.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="7" class="p-6 text-center opacity-70 text-xs">Chưa có cuộc hẹn nào được gửi đi.</td></tr>`;
+            if (!list || list.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" class="p-6 text-center opacity-70 text-xs">Chưa có cuộc hẹn nào đã gửi.</td></tr>`;
                 return;
             }
 
-            sentList.forEach((item, index) => {
+            list.forEach((item, index) => {
                 const customer = item.customers || {};
                 const hoTen = `${customer.ho || ''} ${customer.ten || ''}`.trim() || '-';
-                const sdt = customer.dien_thoai || item.dien_thoai || '-';
 
-                let dmoHtml = `<span class="text-xs font-medium">${item.nguoi_nhan_ten || '-'}</span><br><span class="text-[11px] italic opacity-75">(${item.nguoi_nhan_username || '-'})</span><br><span class="text-[10px] opacity-70">nhận lúc ${formatDateTimeVN(item.thoi_gian_gui)}</span>`;
+                // Cột "Báo cáo hẹn": lấy trực tiếp bao_cao_hen, mặc định khi null
+                const baoCaoText = item.bao_cao_hen || 'DMO chưa trả kết quả hẹn';
+
+                const dmoHtml = item.nguoi_nhan_ten
+                    ? `<span class="text-xs font-medium">${item.nguoi_nhan_ten}</span><br><span class="text-[11px] italic opacity-75">(${item.nguoi_nhan_username})</span>`
+                    : '-';
 
                 let fileHtml = `<span class="opacity-65 text-xs">---</span>`;
                 if (item.file_dinh_kem) {
-                    fileHtml = `<a href="/uploads/${item.file_dinh_kem}" target="_blank" class="text-red-600 dark:text-red-400 underline truncate max-w-[120px] inline-flex items-center gap-1 text-xs" title="${item.file_dinh_kem}"><i data-lucide="file-text" class="w-3 h-3"></i>${item.file_dinh_kem}</a>`;
+                    fileHtml = `<a href="/uploads/${item.file_dinh_kem}" target="_blank" class="text-red-600 dark:text-red-400 underline inline-flex items-center gap-1 text-xs"><i data-lucide="file-text" class="w-3 h-3"></i>File</a>`;
                 }
 
-                let statusText = item.trang_thai_tiep_nhan || 'Chờ tiếp nhận';
-                let statusBadgeClass = 'bg-amber-500/20 text-amber-600 dark:text-amber-400';
-                if (statusText === 'Đã tiếp nhận') statusBadgeClass = 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-bold';
-                if (statusText === 'Không tiếp nhận') statusBadgeClass = 'bg-red-500/20 text-red-600 dark:text-red-400';
+                const daTiepNhan = item.trang_thai_tiep_nhan === 'Đã tiếp nhận';
+                let trangThaiHtml = '';
 
-                let trangThaiBadge = `<span class="px-2 py-1 ${statusBadgeClass} rounded-md text-xs inline-flex items-center gap-1">${statusText}</span>`;
+                if (daTiepNhan) {
+                    trangThaiHtml = `<span class="font-bold text-xs text-emerald-600 dark:text-emerald-400">Đã tiếp nhận</span>`;
+                } else {
+                    // Đếm ngược 24h kể từ thời điểm gửi hẹn - khi về 0, server tự thu hồi
+                    const deadline = new Date(item.thoi_gian_gui).getTime() + 24 * 60 * 60 * 1000;
+                    trangThaiHtml = `
+                        <div class="countdown-timer text-[11px] font-mono font-bold text-amber-600" data-deadline="${deadline}">--:--:--</div>
+                        <span class="text-[11px] opacity-75">Chờ tiếp nhận</span>
+                    `;
+                }
+
+                // Cột Thao tác: chỉ có nút Thu hồi + xem chi tiết khách hàng (theo đúng yêu cầu)
+                const actionHtml = `
+                    <div class="flex items-center justify-center gap-1">
+                        <button onclick="thuHoiHen(${item.id})" class="border px-2.5 py-1.5 rounded-lg text-xs font-medium bg-gray-600 text-white hover:bg-gray-700 transition">Thu hồi</button>
+                        <button onclick='showLeadDetailModal(${JSON.stringify(item).replace(/'/g, "&#39;")})' class="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition" title="Xem thông tin khách hàng">
+                            <i data-lucide="eye" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                `;
 
                 const tr = document.createElement('tr');
                 tr.className = 'border-b border-gray-100 dark:border-gray-800 hover:bg-black/5 dark:hover:bg-white/5 transition';
                 tr.innerHTML = `
                     <td class="p-3 text-center font-medium text-xs">${index + 1}</td>
-                    <td class="p-3">
-                        <div class="font-bold text-xs">${hoTen}</div>
-                        <div class="text-[11px] opacity-80 mt-0.5"><i data-lucide="phone" class="w-3 h-3 inline"></i> ${sdt}</div>
-                    </td>
-                    <td class="p-3 text-xs opacity-90">${item.bao_cao_hen || 'Chưa có báo cáo'}</td>
+                    <td class="p-3 font-bold text-xs">${hoTen}</td>
+                    <td class="p-3 italic text-xs opacity-80">${baoCaoText}</td>
                     <td class="p-3">${dmoHtml}</td>
                     <td class="p-3">${fileHtml}</td>
-                    <td class="p-3">${trangThaiBadge}</td>
-                    <td class="p-3 text-center flex items-center justify-center gap-2">
-                        <button onclick="viewCustomerDetail(${item.id})" class="theme-card border p-1.5 rounded-lg text-xs hover:bg-black/5 dark:hover:bg-white/5 transition" title="Xem thông tin hồ sơ khách hàng">
-                            <i data-lucide="eye" class="w-4 h-4 text-blue-600"></i>
-                        </button>
-                        <button onclick="thuHoiHen(${item.id})" class="theme-card border p-1.5 rounded-lg text-xs hover:bg-black/5 dark:hover:bg-white/5 transition" title="Thu hồi hẹn">
-                            <i data-lucide="rotate-ccw" class="w-4 h-4 text-red-600"></i>
-                        </button>
-                    </td>
+                    <td class="p-3">${trangThaiHtml}</td>
+                    <td class="p-3 text-center">${actionHtml}</td>
                 `;
                 tbody.appendChild(tr);
             });
 
             if (typeof lucide !== 'undefined') lucide.createIcons();
-            if (typeof initTableSearch === 'function') initTableSearch('searchInput', null, 'table-body-2', [2]);
+            if (typeof initTableSearch === 'function') initTableSearch('searchInput', null, 'table-body-2', [1]);
+            startCountdownTimers();
         }
 
         // ================= RENDER TAB 3: HẸN ĐƯỢC GỬI =================
@@ -371,45 +567,78 @@
             const tbody = document.getElementById('table-body-3');
             tbody.innerHTML = '';
 
-            const receivedList = callList.filter(item => item.trang_thai_gui === 'Đã gửi'); 
+            // Tab 3 không có bộ lọc người nhận/trạng thái riêng theo yêu cầu ban đầu,
+            // chỉ hiển thị nguyên danh sách đã được lọc theo ngày ở backend
+            const list = tab3List;
 
-            if (!receivedList || receivedList.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="9" class="p-6 text-center opacity-70 text-xs">Không có cuộc hẹn nào được gửi đến bạn.</td></tr>`;
+            if (!list || list.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="8" class="p-6 text-center opacity-70 text-xs">Không có cuộc hẹn nào được gửi đến bạn.</td></tr>`;
                 return;
             }
 
-            receivedList.forEach((item, index) => {
+            list.forEach((item, index) => {
                 const customer = item.customers || {};
                 const hoTen = `${customer.ho || ''} ${customer.ten || ''}`.trim() || '-';
-                
-                const isAccepted = item.trang_thai_tiep_nhan === 'Đã tiếp nhận';
-                const sdtDisplay = isAccepted ? (customer.dien_thoai || item.dien_thoai || '-') : '<span>********</span> <span class="text-[10px] italic opacity-60">(Ẩn)</span>';
+                const diaChi = customer.dia_chi || '-';
 
-                let diaChi = customer.dia_chi || '-';
-                let ghiChu = item.ghi_chu || '-';
-                let nguoiGuiHtml = `<span class="text-xs font-medium">${item.nguoi_gui_ten || 'Lê Ngô Hải'}</span><br><span class="text-[11px] italic opacity-75">(ngohaile)</span><br><span class="text-[10px] opacity-70">lúc ${formatDateTimeVN(item.thoi_gian_gui)}</span>`;
+                const daTiepNhan = item.trang_thai_tiep_nhan === 'Đã tiếp nhận';
+
+                // Số điện thoại: backend đã tự che (VD 375***092) nếu chưa tiếp nhận,
+                // nên frontend chỉ cần hiển thị nguyên giá trị server trả về
+                const sdtDisplay = item.dien_thoai || '-';
+
+                // Ghi chú: ghép thông tin "Khách hẹn lúc..." (nếu loai_hen = 'Khách hẹn')
+                // với nội dung ghi_chu_hen mà người gửi đã nhập
+                let ghiChuHtml = '';
+                if (item.loai_hen === 'Khách hẹn' && item.thoi_gian_khach_hen) {
+                    const kh = new Date(item.thoi_gian_khach_hen);
+                    const hh = String(kh.getHours()).padStart(2, '0');
+                    const mm = String(kh.getMinutes()).padStart(2, '0');
+                    const dd = String(kh.getDate()).padStart(2, '0');
+                    const mo = String(kh.getMonth() + 1).padStart(2, '0');
+                    const yy = kh.getFullYear();
+                    ghiChuHtml += `<div class="font-semibold text-[11px] text-amber-600">Khách hẹn lúc ${hh}:${mm} ngày ${dd}/${mo}/${yy}</div>`;
+                }
+                ghiChuHtml += `<div class="text-xs opacity-90">${item.ghi_chu_hen || '-'}</div>`;
+
+                const nguoiGuiHtml = `<span class="text-xs font-medium">${item.ten_agent || '-'}</span>`;
 
                 let fileHtml = `<span class="opacity-65 text-xs">---</span>`;
-                if (item.file_dinh_kem) {
-                    if (isAccepted) {
-                        fileHtml = `<a href="/uploads/${item.file_dinh_kem}" target="_blank" class="text-red-600 dark:text-red-400 underline truncate max-w-[120px] inline-flex items-center gap-1 text-xs"><i data-lucide="file-text" class="w-3 h-3"></i>${item.file_dinh_kem}</a>`;
-                    } else {
-                        fileHtml = `<span class="text-[11px] italic opacity-60 flex items-center gap-1"><i data-lucide="lock" class="w-3 h-3"></i> Cần tiếp nhận để xem</span>`;
-                    }
+                if (daTiepNhan && item.file_dinh_kem) {
+                    fileHtml = `<a href="/uploads/${item.file_dinh_kem}" target="_blank" class="text-red-600 dark:text-red-400 underline inline-flex items-center gap-1 text-xs"><i data-lucide="file-text" class="w-3 h-3"></i>${item.file_dinh_kem}</a>`;
+                } else if (!daTiepNhan && item.file_dinh_kem !== undefined) {
+                    // Trường hợp có file nhưng backend đã ẩn tên (null) do chưa tiếp nhận
+                    fileHtml = `<span class="text-[11px] italic opacity-60 flex items-center gap-1"><i data-lucide="lock" class="w-3 h-3"></i> Cần tiếp nhận để xem</span>`;
                 }
 
-                let statusHtml = '';
+                let trangThaiHtml = '';
                 let actionHtml = '';
 
-                if (isAccepted) {
-                    statusHtml = `<span class="font-bold text-xs text-emerald-600 dark:text-emerald-400">Đã tiếp nhận</span>`;
-                    actionHtml = `<button onclick="openBaoCaoHenPopup(${item.id})" class="border px-3 py-1.5 rounded-lg text-xs font-medium bg-red-600 text-white hover:bg-red-700 transition w-full">Báo cáo hẹn</button>`;
-                } else {
-                    statusHtml = `<div id="countdown-${item.id}" class="text-[11px] font-mono font-bold text-amber-600">23:59:59</div><span class="text-[11px] opacity-75">Chờ tiếp nhận</span>`;
+                if (daTiepNhan) {
+                    trangThaiHtml = `<span class="font-bold text-xs text-emerald-600 dark:text-emerald-400">Đã tiếp nhận</span>`;
                     actionHtml = `
-                        <div class="flex items-center gap-1.5">
-                            <button onclick="tiepNhanHen(${item.id}, true)" class="border px-2.5 py-1.5 rounded-lg text-xs font-medium bg-emerald-600 text-white hover:bg-emerald-700 transition">Tiếp nhận</button>
-                            <button onclick="tiepNhanHen(${item.id}, false)" class="border px-2.5 py-1.5 rounded-lg text-xs font-medium bg-red-600 text-white hover:bg-red-700 transition">Không tiếp nhận</button>
+                        <div class="flex items-center justify-center gap-1">
+                            <button onclick="openBaoCaoHenPopup(${item.id})" class="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition" title="Báo cáo hẹn">
+                                <i data-lucide="clipboard-edit" class="w-4 h-4"></i>
+                            </button>
+                            <button onclick='showLeadDetailModal(${JSON.stringify(item).replace(/'/g, "&#39;")})' class="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition" title="Xem thông tin khách hàng">
+                                <i data-lucide="eye" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    `;
+                } else {
+                    const deadline = new Date(item.thoi_gian_gui).getTime() + 24 * 60 * 60 * 1000;
+                    trangThaiHtml = `
+                        <div class="countdown-timer text-[11px] font-mono font-bold text-amber-600" data-deadline="${deadline}">--:--:--</div>
+                        <span class="text-[11px] opacity-75">Chờ tiếp nhận</span>
+                    `;
+                    actionHtml = `
+                        <div class="flex flex-col items-center gap-1">
+                            <div class="flex items-center gap-1.5">
+                                <button onclick="tiepNhanHen(${item.id}, true)" class="border px-2.5 py-1.5 rounded-lg text-xs font-medium bg-emerald-600 text-white hover:bg-emerald-700 transition">Tiếp nhận</button>
+                                <button onclick="tiepNhanHen(${item.id}, false)" class="border px-2.5 py-1.5 rounded-lg text-xs font-medium bg-red-600 text-white hover:bg-red-700 transition">Không tiếp nhận</button>
+                            </div>
+                            <button onclick='showLeadDetailModal(${JSON.stringify(item).replace(/'/g, "&#39;")})' class="text-[11px] text-blue-600 underline mt-0.5">Xem thông tin (giới hạn)</button>
                         </div>
                     `;
                 }
@@ -418,46 +647,61 @@
                 tr.className = 'border-b border-gray-100 dark:border-gray-800 hover:bg-black/5 dark:hover:bg-white/5 transition';
                 tr.innerHTML = `
                     <td class="p-3 text-center font-medium text-xs">${index + 1}</td>
-                    <td class="p-3 font-bold text-xs">${hoTen}</td>
-                    <td class="p-3 text-xs">${sdtDisplay}</td>
-                    <td class="p-3 opacity-90 text-xs">${diaChi}</td>
-                    <td class="p-3 italic text-xs opacity-80">${ghiChu}</td>
+                    <td class="p-3">
+                        <div class="font-bold text-xs">${hoTen}</div>
+                        <div class="text-[11px] opacity-75 mt-0.5">${diaChi}</div>
+                    </td>
+                    <td class="p-3 text-xs">
+                        <a href="tel:${sdtDisplay}" class="text-red-600 dark:text-red-400 font-semibold inline-flex items-center gap-1 text-xs">
+                            <i data-lucide="phone" class="w-3 h-3"></i> ${sdtDisplay}
+                        </a>
+                    </td>
+                    <td class="p-3">${ghiChuHtml}</td>
                     <td class="p-3">${nguoiGuiHtml}</td>
                     <td class="p-3">${fileHtml}</td>
-                    <td class="p-3">${statusHtml}</td>
+                    <td class="p-3">${trangThaiHtml}</td>
                     <td class="p-3 text-center">${actionHtml}</td>
                 `;
                 tbody.appendChild(tr);
             });
 
             if (typeof lucide !== 'undefined') lucide.createIcons();
-            if (typeof initTableSearch === 'function') initTableSearch('searchInput', null, 'table-body-3', [2]);
+            if (typeof initTableSearch === 'function') initTableSearch('searchInput', null, 'table-body-3', [1]);
+            startCountdownTimers();
         }
 
+        // ==========================================================================
+        // POPUP: GỬI CUỘC HẸN CHO ĐỒNG NGHIỆP (nút Send ở Tab 1)
+        // ==========================================================================
         function openGuiHenPopup(leadId) {
-            const item = callList.find(l => l.id === leadId);
+            const item = tab1List.find(l => l.id === leadId);
             if (!item) {
                 Swal.fire({ icon: 'error', title: 'Không tìm thấy dữ liệu cuộc hẹn!' });
                 return;
             }
+
             const customer = item.customers || {};
             const hoTen = `${customer.ho || ''} ${customer.ten || ''}`.trim() || '-';
             const sdt = customer.dien_thoai || item.dien_thoai || '-';
-            const datalistOptions = colleaguesList.map(a =>
+
+            // FIX: loại bỏ chính người đang đăng nhập ra khỏi danh sách DMO có thể chọn
+            // (gửi hẹn cho chính mình là vô lý)
+            const currentAgentName = getCurrentAgentName();
+            const selectableColleagues = colleaguesList.filter(a => a.ho_va_ten !== currentAgentName);
+
+            const datalistOptions = selectableColleagues.map(a =>
                 `<option value="${a.ho_va_ten} (${a.ten_dang_nhap})">`
             ).join('');
 
-                Swal.fire({
+            Swal.fire({
                 title: '<div class="text-base font-bold flex items-center gap-2"><i data-lucide="send" class="w-5 h-5"></i> Gửi Cuộc Hẹn Cho Đồng Nghiệp</div>',
                 html: `
                     <div class="text-left text-xs space-y-4">
-                        <!-- DÒNG 1: Thông tin khách hàng (chỉ hiển thị, không cho sửa) -->
                         <div>
                             <label class="block font-semibold mb-1">Khách hàng:</label>
                             <div class="border rounded-lg px-3 py-2 bg-gray-50 font-medium">${hoTen} - ${sdt}</div>
                         </div>
 
-                        <!-- DÒNG 2: Chọn loại cuộc hẹn - DMO tự chủ động hẹn / Khách hẹn -->
                         <div>
                             <label class="block font-semibold mb-1">Loại cuộc hẹn:</label>
                             <select id="swal-loai-hen" class="swal2-input" style="margin:0; width:100%;">
@@ -466,31 +710,24 @@
                             </select>
                         </div>
 
-                        <!-- Ô thời gian khách hẹn: CHỈ hiện khi chọn "Khách hẹn" ở trên -->
-                        <!-- (được bật/tắt bằng JS trong didOpen bên dưới) -->
                         <div id="swal-khach-hen-wrap" style="display:none;">
                             <label class="block font-semibold mb-1">Thời gian khách hẹn:</label>
                             <input type="datetime-local" id="swal-thoi-gian-khach-hen" class="swal2-input" style="margin:0; width:100%;">
                         </div>
 
-                        <!-- DÒNG 3: Ghi chú cuộc hẹn -->
                         <div>
                             <label class="block font-semibold mb-1">Ghi chú cuộc hẹn:</label>
                             <textarea id="swal-ghi-chu" rows="3" class="swal2-textarea" style="margin:0; width:100%;" placeholder="Nhập ghi chú..."></textarea>
                         </div>
 
-                        <!-- DÒNG 4: File đính kèm - không bắt buộc, chỉ nhận ảnh/pdf/excel -->
-                        <!-- (kiểm tra định dạng thật sự an toàn nằm ở backend, đây chỉ là gợi ý UI) -->
                         <div>
                             <label class="block font-semibold mb-1">File tài liệu đính kèm (nếu có):</label>
                             <input type="file" id="swal-file" accept=".jpg,.jpeg,.png,.pdf,.xls,.xlsx" class="swal2-file" style="margin:0; width:100%;">
                         </div>
 
-                        <!-- DÒNG 5: Chọn DMO nhận cuộc hẹn - ô nhập text có gợi ý (datalist) -->
-                        <!-- cho phép gõ để tìm nhanh theo họ tên hoặc tên đăng nhập -->
                         <div>
                             <label class="block font-semibold mb-1">Chọn DMO nhận cuộc hẹn:</label>
-                            <input list="swal-dmo-list" id="swal-dmo" class="swal2-input" style="margin:0; width:100%;" placeholder="Nhập tên hoặc mã đăng nhập để tìm...">
+                            <input list="swal-dmo-list" id="swal-dmo" class="swal2-input" autocomplete="off" style="margin:0; width:100%;" placeholder="Nhập tên hoặc mã đăng nhập để tìm...">
                             <datalist id="swal-dmo-list">${datalistOptions}</datalist>
                         </div>
                     </div>
@@ -501,9 +738,6 @@
                 cancelButtonText: 'Hủy',
                 confirmButtonColor: '#059669',
                 cancelButtonColor: '#6b7280',
-
-                // didOpen chạy ngay khi popup vừa hiện lên DOM -> gắn icon Lucide
-                // và gắn sự kiện show/ẩn ô "Thời gian khách hẹn" theo lựa chọn Dòng 2
                 didOpen: () => {
                     if (typeof lucide !== 'undefined') lucide.createIcons();
                     const selectLoai = document.getElementById('swal-loai-hen');
@@ -512,8 +746,6 @@
                         wrapKhachHen.style.display = selectLoai.value === 'Khách hẹn' ? 'block' : 'none';
                     });
                 },
-
-                // preConfirm chạy khi bấm "Xác nhận Gửi Hẹn" -> validate dữ liệu trước khi đóng popup
                 preConfirm: () => {
                     const loaiHen = document.getElementById('swal-loai-hen').value;
                     const thoiGianKhachHen = document.getElementById('swal-thoi-gian-khach-hen').value;
@@ -521,42 +753,30 @@
                     const fileInput = document.getElementById('swal-file');
                     const dmoInputVal = document.getElementById('swal-dmo').value.trim();
 
-                    // Nếu chọn "Khách hẹn" thì bắt buộc phải có thời gian
                     if (loaiHen === 'Khách hẹn' && !thoiGianKhachHen) {
                         Swal.showValidationMessage('Vui lòng chọn thời gian khách hẹn!');
                         return false;
                     }
 
-                    // Tách chuỗi "Họ Tên (ten_dang_nhap)" để xác định đúng agent được chọn
-                    // -> tránh trường hợp người dùng gõ tự do không khớp ai trong danh sách
                     const match = dmoInputVal.match(/^(.*)\s\(([^)]+)\)$/);
                     if (!match) {
                         Swal.showValidationMessage('Vui lòng chọn đúng DMO từ danh sách gợi ý!');
                         return false;
                     }
                     const tenDangNhap = match[2].trim();
-                    const agent = colleaguesList.find(a => a.ten_dang_nhap === tenDangNhap);
+                    const agent = selectableColleagues.find(a => a.ten_dang_nhap === tenDangNhap);
                     if (!agent) {
                         Swal.showValidationMessage('Không tìm thấy DMO này trong danh sách, vui lòng chọn lại!');
                         return false;
                     }
 
-                    // Trả toàn bộ dữ liệu đã nhập ra ngoài để xử lý ở .then() bên dưới
-                    return {
-                        loaiHen,
-                        thoiGianKhachHen,
-                        ghiChu,
-                        file: fileInput.files[0] || null,
-                        agent
-                    };
+                    return { loaiHen, thoiGianKhachHen, ghiChu, file: fileInput.files[0] || null, agent };
                 }
             }).then(async (result) => {
-                // Nếu bấm "Hủy" thì không làm gì cả
                 if (!result.isConfirmed) return;
 
                 const { loaiHen, thoiGianKhachHen, ghiChu, file, agent } = result.value;
 
-                // Dùng FormData vì cần gửi kèm file (multipart/form-data)
                 const formData = new FormData();
                 formData.append('nguoi_nhan_id', agent.id);
                 formData.append('nguoi_nhan_ten', agent.ho_va_ten);
@@ -568,16 +788,11 @@
                 formData.append('ghi_chu', ghiChu);
                 if (file) formData.append('file', file);
 
-                // Gọi API backend đã viết ở calls.routes.js: POST /api/calls/:id/send
                 try {
-                    const res = await fetch(`/api/calls/${leadId}/send`, {
-                        method: 'POST',
-                        body: formData
-                    });
+                    const res = await fetch(`/api/calls/${leadId}/send`, { method: 'POST', body: formData });
                     const data = await res.json();
                     if (data.success) {
                         Swal.fire({ icon: 'success', title: 'Đã gửi cuộc hẹn!', timer: 1200, showConfirmButton: false });
-                        // Tải lại dữ liệu để bảng cập nhật trạng thái "Đã gửi" ngay lập tức
                         fetchData();
                     } else {
                         throw new Error(data.message);
@@ -588,73 +803,7 @@
             });
         }
 
-        function viewCustomerDetail(leadId) {
-            Swal.fire('Thông tin hồ sơ', 'Xem chi tiết hồ sơ khách hàng của hẹn #' + leadId, 'info');
-        }
-
-        function thuHoiHen(leadId) {
-            Swal.fire({
-                title: 'Xác nhận thu hồi cuộc hẹn?',
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonText: 'Đồng ý thu hồi',
-                cancelButtonText: 'Hủy',
-                confirmButtonColor: '#dc2626'
-            }).then((res) => {
-                if (res.isConfirmed) {
-                    Swal.fire('Thành công', 'Đã thu hồi cuộc hẹn.', 'success');
-                }
-            });
-        }
-
-        function tiepNhanHen(leadId, isAccepted) {
-            const status = isAccepted ? 'Đã tiếp nhận' : 'Không tiếp nhận';
-            const item = callList.find(l => l.id === leadId);
-            if (item) {
-                item.trang_thai_tiep_nhan = status;
-                renderTab3();
-                Swal.fire({
-                    icon: isAccepted ? 'success' : 'info',
-                    title: status,
-                    timer: 1200,
-                    showConfirmButton: false
-                });
-            }
-        }
-
-        function openBaoCaoHenPopup(leadId) {
-            Swal.fire({
-                title: '<div class="text-sm md:text-base font-bold">Báo Cáo Cuộc Hẹn</div>',
-                html: `<textarea id="bao-cao-text" rows="4" class="theme-card border rounded-lg p-2 w-full outline-none bg-transparent text-xs" placeholder="Nhập kết quả/báo cáo cuộc hẹn..."></textarea>`,
-                showCancelButton: true,
-                confirmButtonText: 'Lưu báo cáo',
-                cancelButtonText: 'Hủy',
-                confirmButtonColor: '#dc2626',
-                preConfirm: () => {
-                    return document.getElementById('bao-cao-text').value;
-                }
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    const item = callList.find(l => l.id === leadId);
-                    if (item) {
-                        item.bao_cao_hen = result.value;
-                        Swal.fire('Thành công', 'Đã lưu báo cáo hẹn.', 'success');
-                        renderTab2();
-                    }
-                }
-            });
-        }
-
-        // Sự kiện bộ lọc
-        document.getElementById('btn-tat-ca').addEventListener('click', function() {
-            document.getElementById('searchInput').value = '';
-            document.getElementById('filter-nguoi-nhan').value = '';
-            document.getElementById('filter-trang-thai').value = '';
-            document.getElementById('filter-ngay').value = '';
-            fetchData();
-        });
-
-        //Hàm tải danh sách DMO
+        // Tải danh sách DMO cho popup Gửi hẹn
         async function loadColleagues() {
             try {
                 const res = await fetch('/api/agent/colleagues');
@@ -665,11 +814,127 @@
             }
         }
 
+        // ==========================================================================
+        // THU HỒI HẸN (Tab 2) - gọi API thật, không chỉ sửa dữ liệu tạm trong RAM nữa
+        // ==========================================================================
+        function thuHoiHen(leadId) {
+            Swal.fire({
+                title: 'Xác nhận thu hồi cuộc hẹn?',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Đồng ý thu hồi',
+                cancelButtonText: 'Hủy',
+                confirmButtonColor: '#dc2626'
+            }).then(async (res) => {
+                if (!res.isConfirmed) return;
+                try {
+                    const response = await fetch(`/api/calls/${leadId}/recall`, { method: 'POST' });
+                    const data = await response.json();
+                    if (data.success) {
+                        Swal.fire('Thành công', 'Đã thu hồi cuộc hẹn.', 'success');
+                        fetchData();
+                    } else {
+                        throw new Error(data.message);
+                    }
+                } catch (err) {
+                    Swal.fire('Lỗi', err.message || 'Không thể thu hồi cuộc hẹn!', 'error');
+                }
+            });
+        }
+
+        // ==========================================================================
+        // TIẾP NHẬN / KHÔNG TIẾP NHẬN (Tab 3) - gọi API thật
+        // ==========================================================================
+        function tiepNhanHen(leadId, isAccepted) {
+            const actionText = isAccepted ? 'tiếp nhận' : 'từ chối tiếp nhận';
+            Swal.fire({
+                title: `Xác nhận ${actionText} cuộc hẹn này?`,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'Đồng ý',
+                cancelButtonText: 'Hủy',
+                confirmButtonColor: isAccepted ? '#059669' : '#dc2626'
+            }).then(async (res) => {
+                if (!res.isConfirmed) return;
+                try {
+                    const response = await fetch(`/api/calls/${leadId}/accept`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ accepted: isAccepted })
+                    });
+                    const data = await response.json();
+                    if (data.success) {
+                        Swal.fire({
+                            icon: isAccepted ? 'success' : 'info',
+                            title: isAccepted ? 'Đã tiếp nhận' : 'Đã từ chối',
+                            timer: 1200,
+                            showConfirmButton: false
+                        });
+                        fetchData();
+                    } else {
+                        throw new Error(data.message);
+                    }
+                } catch (err) {
+                    Swal.fire('Lỗi', err.message || 'Không thể xử lý yêu cầu!', 'error');
+                }
+            });
+        }
+
+        // ==========================================================================
+        // BÁO CÁO CUỘC HẸN (Tab 3, sau khi đã tiếp nhận) - gọi API thật
+        // ==========================================================================
+        function openBaoCaoHenPopup(leadId) {
+            Swal.fire({
+                title: '<div class="text-sm md:text-base font-bold">Báo Cáo Cuộc Hẹn</div>',
+                html: `<textarea id="bao-cao-text" rows="4" class="theme-card border rounded-lg p-2 w-full outline-none bg-transparent text-xs" placeholder="Nhập kết quả/báo cáo cuộc hẹn..."></textarea>`,
+                showCancelButton: true,
+                confirmButtonText: 'Lưu báo cáo',
+                cancelButtonText: 'Hủy',
+                confirmButtonColor: '#dc2626',
+                preConfirm: () => document.getElementById('bao-cao-text').value
+            }).then(async (result) => {
+                if (!result.isConfirmed) return;
+                try {
+                    const res = await fetch(`/api/calls/${leadId}/report`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ bao_cao_hen: result.value })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        Swal.fire('Thành công', 'Đã lưu báo cáo hẹn.', 'success');
+                        fetchData();
+                    } else {
+                        throw new Error(data.message);
+                    }
+                } catch (err) {
+                    Swal.fire('Lỗi', err.message || 'Không thể lưu báo cáo!', 'error');
+                }
+            });
+        }
+
+        // Sự kiện nút "Tất cả": reset toàn bộ bộ lọc + tải lại dữ liệu tab hiện tại
+        document.getElementById('btn-tat-ca').addEventListener('click', function() {
+            document.getElementById('searchInput').value = '';
+            document.getElementById('filter-nguoi-nhan').value = '';
+            document.getElementById('filter-trang-thai').value = '';
+            document.getElementById('filter-ngay').value = '';
+            fetchData();
+        });
+
+        // Bộ lọc "người nhận" và "trạng thái" là lọc client-side trên dữ liệu đã tải
+        // -> chỉ cần render lại, không cần gọi API
+        document.getElementById('filter-nguoi-nhan').addEventListener('change', renderCurrentTab);
+        document.getElementById('filter-trang-thai').addEventListener('change', renderCurrentTab);
+
+        // Bộ lọc "ngày" cần gửi lại lên backend (ảnh hưởng query param date)
+        document.getElementById('filter-ngay').addEventListener('change', fetchData);
+
         // Khởi chạy khi tải trang
         document.addEventListener('DOMContentLoaded', () => {
             if (typeof lucide !== 'undefined') lucide.createIcons();
+            loadColleagues();
             fetchData();
-            loadColleagues();   // thêm dòng này
         });
     </script>
 </body>

@@ -1,6 +1,6 @@
 <!-- 
   Tên file: public/agents/sales.html
-  Chức năng: Quản lý doanh số cá nhân, hiển thị thông báo đang phát triển theo chuẩn giao diện hệ thống.
+  Chức năng: Quản lý doanh số cá nhân (FYC, FYP, Hợp đồng), đồng bộ giao diện hệ thống.
   Vị trí: public/agents/sales.html
 -->
 <!DOCTYPE html>
@@ -20,44 +20,189 @@
     <!-- SweetAlert2 cho Popup -->
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     
-    <!-- Các script dùng chung hệ thống chuẩn -->
+    <!-- Nạp theme.js đầu tiên để đồng bộ màu sắc và font chữ toàn hệ thống -->
+    <script src="/js/theme.js"></script>
+    <script src="/js/searchHelper.js"></script>
+    <script src="/js/ai.js"></script>
     <script src="/js/header.js"></script>
     <script src="/js/sidebar.js"></script>
-    <script src="/js/theme.js"></script>
-</head>
-<body class="font-sans antialiased transition-colors duration-200">
 
-    <!-- Khung cấu trúc chuẩn App Native bắt màu theo theme.js -->
+    <style>
+        .theme-action-btn {
+            background-color: #dc2626; /* Light: Đỏ Prudential */
+            color: #ffffff;
+            transition: opacity 0.2s;
+        }
+        .theme-action-btn:hover {
+            opacity: 0.9;
+        }
+        .dark .theme-action-btn, [data-theme="dark"] .theme-action-btn, body.dark .theme-action-btn {
+            background-color: #16a34a; /* Dark: Xanh lá */
+            color: #ffffff;
+        }
+    </style>
+</head>
+<body class="bg-theme-bg text-theme-text min-h-screen flex flex-col transition-colors duration-200">
+
+    <!-- Khung cấu trúc chuẩn App Native -->
     <div class="flex h-screen overflow-hidden">
         <div id="mainContainer" class="flex-1 flex flex-col overflow-y-auto transition-colors duration-200 pt-16">
             <main class="px-4 py-4 max-w-full w-full flex flex-col gap-4">
                 
-                <!-- Tiêu đề trang -->
+                <!-- Header Tiêu đề & Bộ lọc thời gian -->
                 <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                    <h1 class="text-base md:text-lg font-bold flex items-center gap-2">
-                        <i data-lucide="bar-chart-3" class="w-5 h-5 text-red-600 dark:text-red-500"></i>
-                        <span>Doanh Số Cá Nhân</span>
-                    </h1>
+                    <div>
+                        <h1 class="text-lg font-bold flex items-center gap-2">
+                            <i data-lucide="line-chart" class="w-5 h-5 text-red-600 dark:text-green-500"></i>
+                            <span>Doanh Số Cá Nhân</span>
+                        </h1>
+                        <p class="text-xs opacity-75 mt-0.5">Theo dõi dòng tiền FYC, FYP và tiến độ chỉ tiêu kinh doanh</p>
+                    </div>
+
+                    <div class="flex items-center gap-2">
+                        <select id="filterTime" class="theme-card border text-xs rounded-lg px-3 py-2 outline-none">
+                            <option value="thang_nay">Tháng này</option>
+                            <option value="thang_truoc">Tháng trước</option>
+                            <option value="quy_nay">Quý này</option>
+                            <option value="nam_2026" selected>Năm 2026</option>
+                        </select>
+                        <button onclick="exportReport()" class="theme-action-btn text-xs font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 shadow-sm">
+                            <i data-lucide="download" class="w-4 h-4"></i>
+                            <span>Xuất báo cáo</span>
+                        </button>
+                    </div>
                 </div>
 
-                <!-- Giao diện thông báo tính năng đang phát triển -->
-                <div class="theme-card border rounded-xl p-12 text-center shadow-sm flex flex-col items-center justify-center my-6">
-                    <i data-lucide="construction" class="w-12 h-12 mx-auto text-amber-500 mb-3"></i>
-                    <h2 class="font-bold text-base mb-1">CHỨC NĂNG ĐANG ĐƯỢC PHÁT TRIỂN</h2>
-                    <p class="opacity-75 text-xs">Logic Quản lý doanh số cá nhân sẽ được cập nhật trong phiên bản tiếp theo.</p>
+                <!-- Thống kê tổng quan (KPIs) -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <!-- Card FYC -->
+                    <div class="theme-card border rounded-xl p-4 shadow-sm relative overflow-hidden">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <span class="text-xs opacity-75 font-medium">Tổng FYC thực nhận</span>
+                                <h3 id="totalFYC" class="text-xl font-extrabold mt-1 text-red-600 dark:text-green-500">0 VNĐ</h3>
+                            </div>
+                            <div class="p-2 rounded-lg bg-red-50 dark:bg-green-950/30 text-red-600 dark:text-green-500">
+                                <i data-lucide="wallet" class="w-5 h-5"></i>
+                            </div>
+                        </div>
+                        <div class="mt-3 text-[11px] opacity-70 flex items-center gap-1">
+                            <i data-lucide="trending-up" class="w-3.5 h-3.5 text-green-500"></i>
+                            <span>Đạt chỉ tiêu thu nhập tháng</span>
+                        </div>
+                    </div>
+
+                    <!-- Card FYP -->
+                    <div class="theme-card border rounded-xl p-4 shadow-sm relative overflow-hidden">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <span class="text-xs opacity-75 font-medium">Tổng AFYP quy đổi</span>
+                                <h3 id="totalFYP" class="text-xl font-extrabold mt-1">0 VNĐ</h3>
+                            </div>
+                            <div class="p-2 rounded-lg bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400">
+                                <i data-lucide="award" class="w-5 h-5"></i>
+                            </div>
+                        </div>
+                        <div class="mt-3 text-[11px] opacity-70 flex items-center gap-1">
+                            <i data-lucide="target" class="w-3.5 h-3.5 text-amber-500"></i>
+                            <span>Tiến độ MDRT 2026</span>
+                        </div>
+                    </div>
+
+                    <!-- Card Số hợp đồng -->
+                    <div class="theme-card border rounded-xl p-4 shadow-sm relative overflow-hidden">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <span class="text-xs opacity-75 font-medium">Hợp đồng phát hành</span>
+                                <h3 id="totalContracts" class="text-xl font-extrabold mt-1">0 HĐ</h3>
+                            </div>
+                            <div class="p-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400">
+                                <i data-lucide="file-check" class="w-5 h-5"></i>
+                            </div>
+                        </div>
+                        <div class="mt-3 text-[11px] opacity-70 flex items-center gap-1">
+                            <i data-lucide="check-circle-2" class="w-3.5 h-3.5 text-blue-500"></i>
+                            <span>Tỷ lệ duy trì (K2): 100%</span>
+                        </div>
+                    </div>
+
+                    <!-- Card Case Size Trung Bằng -->
+                    <div class="theme-card border rounded-xl p-4 shadow-sm relative overflow-hidden">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <span class="text-xs opacity-75 font-medium">Case Size trung bình</span>
+                                <h3 id="avgCaseSize" class="text-xl font-extrabold mt-1">0 VNĐ</h3>
+                            </div>
+                            <div class="p-2 rounded-lg bg-purple-50 dark:bg-purple-950/30 text-purple-600 dark:text-purple-400">
+                                <i data-lucide="calculator" class="w-5 h-5"></i>
+                            </div>
+                        </div>
+                        <div class="mt-3 text-[11px] opacity-70 flex items-center gap-1">
+                            <i data-lucide="sparkles" class="w-3.5 h-3.5 text-purple-500"></i>
+                            <span>Phí trung bình / khách hàng</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bảng danh sách hợp đồng/doanh số -->
+                <div class="theme-card border rounded-xl shadow-sm overflow-hidden mt-2">
+                    <div class="p-4 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <h2 class="font-bold text-sm flex items-center gap-2">
+                            <i data-lucide="list-ordered" class="w-4 h-4"></i>
+                            <span>Chi Tiết Doanh Số Hợp Đồng</span>
+                        </h2>
+                        <div class="relative w-full sm:w-64">
+                            <input type="text" id="searchContract" placeholder="Tìm theo tên KH, số HĐ..." class="w-full text-xs border rounded-lg pl-8 pr-3 py-1.5 bg-transparent outline-none">
+                            <i data-lucide="search" class="w-3.5 h-3.5 absolute left-2.5 top-2.5 opacity-50"></i>
+                        </div>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs">
+                            <thead class="uppercase opacity-75 border-b bg-black/5 dark:bg-white/5">
+                                <tr>
+                                    <th class="p-3">Số HĐ</th>
+                                    <th class="p-3">Khách hàng</th>
+                                    <th class="p-3">Sản phẩm</th>
+                                    <th class="p-3 text-right">Phí định kỳ (FYP)</th>
+                                    <th class="p-3 text-right">Hoa hồng (FYC)</th>
+                                    <th class="p-3 text-center">Ngày phát hành</th>
+                                    <th class="p-3 text-center">Trạng thái</th>
+                                </tr>
+                            </thead>
+                            <tbody id="salesTableBody" class="divide-y divide-gray-200/10">
+                                <!-- Trạng thái trống dữ liệu -->
+                                <tr>
+                                    <td colspan="7" class="text-center py-8 opacity-60">
+                                        <i data-lucide="folder-open" class="w-8 h-8 mx-auto mb-2 opacity-50"></i>
+                                        <span>Chưa có dữ liệu doanh số được ghi nhận</span>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
 
             </main>
         </div>
     </div>
 
-    <!-- Script khởi tạo icons hệ thống -->
+    <!-- Script khởi tạo icons & Logic hệ thống -->
     <script>
         document.addEventListener("DOMContentLoaded", function() {
             if (typeof lucide !== 'undefined') {
                 lucide.createIcons();
             }
         });
+
+        function exportReport() {
+            Swal.fire({
+                icon: 'info',
+                title: 'Xuất Báo Cáo',
+                text: 'Tính năng xuất file Excel doanh số đang được cập nhật.',
+                confirmButtonColor: '#dc2626'
+            });
+        }
     </script>
 </body>
 </html>
