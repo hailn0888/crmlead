@@ -114,4 +114,64 @@ router.post('/reset-password', async (req, res) => {
     }
 });
 
+// ==========================================================================
+// API: Đổi mật khẩu tự thân (dành cho Agent và Leader), khác với luồng quên
+// mật khẩu qua OTP email ở trên (luồng đó chỉ dành cho Admin theo comment gốc).
+// LƯU Ý BẢO MẬT: hệ thống hiện đang lưu mat_khau dạng văn bản thô (plain text) -
+// xem API reset-password phía trên cũng gán thẳng "mat_khau: mat_khau_moi" không
+// hash. Để nhất quán và không phá vỡ luồng đăng nhập hiện tại, API này cũng so
+// sánh/lưu trực tiếp. Đây là điểm nên nâng cấp lên bcrypt trong một đợt cập nhật
+// riêng có kiểm thử kỹ (vì sẽ ảnh hưởng cả login lẫn 2 API phía trên).
+// ==========================================================================
+router.post('/change-password', async (req, res) => {
+    try {
+        const { ten_dang_nhap, mat_khau_cu, mat_khau_moi } = req.body;
+
+        if (!ten_dang_nhap || !mat_khau_cu || !mat_khau_moi) {
+            return res.status(400).json({ success: false, message: "Thiếu thông tin đầu vào!" });
+        }
+
+        if (String(mat_khau_moi).length < 6) {
+            return res.status(400).json({ success: false, message: "Mật khẩu mới phải có ít nhất 6 ký tự!" });
+        }
+
+        // ten_dang_nhap ở đây có thể là ten_dang_nhap thật hoặc ho_va_ten (vì
+        // frontend hiện chỉ lưu ho_va_ten ở localStorage sau khi đăng nhập)
+        const { data: users, error } = await req.supabase
+            .from('users')
+            .select('*')
+            .or(`ten_dang_nhap.eq.${ten_dang_nhap},ho_va_ten.eq.${ten_dang_nhap}`);
+
+        if (error || !users || users.length === 0) {
+            return res.status(404).json({ success: false, message: "Tài khoản không tồn tại trong CSDL!" });
+        }
+
+        const user = users[0];
+
+        // Chỉ Agent và Leader được dùng chức năng này (Admin dùng luồng OTP email)
+        const role = String(user.phan_quyen || '').trim().toLowerCase();
+        if (role !== 'agent' && role !== 'leader') {
+            return res.status(403).json({ success: false, message: "Chức năng này chỉ áp dụng cho tài khoản Agent hoặc Leader!" });
+        }
+
+        if (String(user.mat_khau) !== String(mat_khau_cu)) {
+            return res.status(400).json({ success: false, message: "Mật khẩu hiện tại không đúng!" });
+        }
+
+        const { error: updateError } = await req.supabase
+            .from('users')
+            .update({ mat_khau: mat_khau_moi })
+            .eq('id', user.id);
+
+        if (updateError) {
+            return res.status(500).json({ success: false, message: "Không thể cập nhật mật khẩu mới!" });
+        }
+
+        res.json({ success: true, message: "Đổi mật khẩu thành công!" });
+    } catch (err) {
+        console.error("Lỗi đổi mật khẩu:", err);
+        res.status(500).json({ success: false, message: "Lỗi server nội bộ!" });
+    }
+});
+
 module.exports = router;

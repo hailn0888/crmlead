@@ -185,8 +185,14 @@
         let countdownIntervalId = null;
 
         // Tên hiển thị (ho_va_ten) của agent đang đăng nhập, lưu ở localStorage lúc login
+        // FIX NGHIÊM TRỌNG: đọc đúng key 'userName' (khớp login.js/header.js), bỏ hẳn
         function getCurrentAgentName() {
-            return localStorage.getItem('agentName') || "Lê Ngô Hải";
+            const name = localStorage.getItem('userName');
+            if (!name) {
+                window.location.href = '/login.html';
+                return '';
+            }
+            return name;
         }
 
         // --- CHUYỂN TAB ---

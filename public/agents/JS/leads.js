@@ -73,7 +73,11 @@ document.addEventListener("DOMContentLoaded", () => {
     const txtGhiChu = document.querySelector('textarea');
     const btnLuuTiepTuc = document.querySelector('button.bg-emerald-600');
 
-    const currentAgentName = localStorage.getItem('userNsame') || localStorage.getItem('ho_va_ten') || 'Lê Ngô Hải';
+    // FIX: dùng đúng key 'userName' mà login.js lưu (khớp với header.js)
+    const currentAgentName = localStorage.getItem('userName');
+    if (!currentAgentName) {
+        window.location.href = '/login.html';
+    }
 
     // --- KHỞI TẠO VÀ TẢI DỮ LIỆU ---
     async function init() {
@@ -293,7 +297,14 @@ async function loadCallHistory() {
     if (!tbody) return;
 
     try {
-        const agentName = localStorage.getItem('user_name') || localStorage.getItem('ho_va_ten') || 'Lê Ngô Hải';
+        // FIX: cùng lỗi key sai như hàm currentAgentName ở trên (dòng 77) nhưng bị bỏ sót
+        // ở đây vì đây là 1 biến RIÊNG (agentName, không phải currentAgentName).
+        // Đổi đúng về key 'userName' (khớp login.js/header.js), bỏ fallback cứng.
+        const agentName = localStorage.getItem('userName');
+        if (!agentName) {
+            window.location.href = '/login.html';
+            return;
+        }
         const selectedDate = filterDateEl ? filterDateEl.value : '';
         
         const res = await fetch(`/api/agent/calls?agent=${encodeURIComponent(agentName)}&date=${selectedDate}`);

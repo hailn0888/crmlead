@@ -70,6 +70,41 @@ async function revertExpiredAppointments(supabase) {
     }
 }
 
+// Hàm phụ: tra ho_va_ten -> user.id (dùng để xác định người NHẬN thông báo)
+async function resolveUserId(supabase, hoVaTen) {
+    if (!hoVaTen) return null;
+    const { data, error } = await supabase
+        .from('users')
+        .select('id')
+        .or(`ho_va_ten.eq.${hoVaTen},ten_dang_nhap.eq.${hoVaTen}`)
+        .single();
+    if (error || !data) return null;
+    return data.id;
+}
+
+// Hàm phụ: tạo 1 thông báo mới cho user_id chỉ định
+async function createNotification(supabase, userId, loaiThongBao, noiDung, callHistoryId) {
+    if (!userId) return;
+    try {
+        await supabase.from('notifications').insert([{
+            user_id: userId,
+            loai_thong_bao: loaiThongBao,
+            noi_dung: noiDung,
+            call_history_id: callHistoryId,
+            da_doc: false
+        }]);
+    } catch (err) {
+        console.error("Lỗi tạo thông báo:", err);
+    }
+}
+
+// Hàm phụ: lấy nhanh họ tên khách hàng theo số điện thoại (dùng để nội dung thông báo rõ ràng hơn)
+async function getCustomerNameByPhone(supabase, phone) {
+    if (!phone) return '';
+    const { data } = await supabase.from('customers').select('ho, ten').eq('dien_thoai', phone).single();
+    if (!data) return '';
+    return `${data.ho || ''} ${data.ten || ''}`.trim();
+}
 // Hàm phụ: tra ten_dang_nhap từ ho_va_ten (vì client chỉ lưu ho_va_ten ở localStorage,
 // trong khi cột nguoi_nhan_username trong DB lưu ten_dang_nhap)
 async function resolveUsername(supabase, agentDisplayName) {
@@ -320,12 +355,24 @@ router.post('/:id/send', uploadAppointmentFile.single('file'), async (req, res) 
             updatePayload.file_dinh_kem = `appointments/${req.file.filename}`;
         }
 
-        const { error } = await supabase
+        const { data: updatedRow, error } = await supabase
             .from('call_history')
             .update(updatePayload)
-            .eq('id', id);
+            .eq('id', id)
+            .select('dien_thoai, ten_agent')
+            .single();
 
         if (error) throw error;
+
+        // Thông báo cho DMO vừa được chọn nhận hẹn
+        const customerName = await getCustomerNameByPhone(supabase, updatedRow.dien_thoai);
+        await createNotification(
+            supabase,
+            Number(nguoi_nhan_id),
+            'hen_moi',
+            `Bạn có 1 cuộc hẹn mới từ ${updatedRow.ten_agent}${customerName ? ' (khách: ' + customerName + ')' : ''}`,
+            Number(id)
+        );
 
         res.json({ success: true, message: 'Đã gửi cuộc hẹn thành công!' });
     } catch (error) {
@@ -349,8 +396,26 @@ router.post('/:id/accept', async (req, res) => {
             ? { trang_thai_tiep_nhan: 'Đã tiếp nhận' }
             : { trang_thai_tiep_nhan: 'Không tiếp nhận', trang_thai_gui: 'Chưa gửi' };
 
-        const { error } = await supabase.from('call_history').update(updatePayload).eq('id', id);
+        const { data: updatedRow, error } = await supabase
+            .from('call_history')
+            .update(updatePayload)
+            .eq('id', id)
+            .select('ten_agent, dien_thoai, nguoi_nhan_ten')
+            .single();
         if (error) throw error;
+
+        // Thông báo cho người GỬI biết kết quả tiếp nhận
+        const senderUserId = await resolveUserId(supabase, updatedRow.ten_agent);
+        const customerName = await getCustomerNameByPhone(supabase, updatedRow.dien_thoai);
+        await createNotification(
+            supabase,
+            senderUserId,
+            accepted ? 'da_tiep_nhan' : 'khong_tiep_nhan',
+            accepted
+                ? `${updatedRow.nguoi_nhan_ten} đã tiếp nhận cuộc hẹn${customerName ? ' với khách ' + customerName : ''}`
+                : `${updatedRow.nguoi_nhan_ten} đã từ chối tiếp nhận cuộc hẹn${customerName ? ' với khách ' + customerName : ''}`,
+            Number(id)
+        );
 
         res.json({ success: true, message: accepted ? 'Đã tiếp nhận cuộc hẹn!' : 'Đã từ chối tiếp nhận!' });
     } catch (error) {
@@ -369,11 +434,24 @@ router.post('/:id/report', async (req, res) => {
         const { id } = req.params;
         const { bao_cao_hen } = req.body;
 
-        const { error } = await supabase
+        const { data: updatedRow, error } = await supabase
             .from('call_history')
             .update({ bao_cao_hen: bao_cao_hen || null })
-            .eq('id', id);
+            .eq('id', id)
+            .select('ten_agent, dien_thoai, nguoi_nhan_ten')
+            .single();
         if (error) throw error;
+
+        // Thông báo cho người GỬI biết đã có báo cáo hẹn mới
+        const senderUserId = await resolveUserId(supabase, updatedRow.ten_agent);
+        const customerName = await getCustomerNameByPhone(supabase, updatedRow.dien_thoai);
+        await createNotification(
+            supabase,
+            senderUserId,
+            'bao_cao_moi',
+            `${updatedRow.nguoi_nhan_ten} đã gửi báo cáo hẹn${customerName ? ' cho khách ' + customerName : ''}`,
+            Number(id)
+        );
 
         res.json({ success: true, message: 'Đã lưu báo cáo hẹn!' });
     } catch (error) {
@@ -410,6 +488,84 @@ router.post('/:id/recall', async (req, res) => {
         res.json({ success: true, message: 'Đã thu hồi cuộc hẹn!' });
     } catch (error) {
         console.error("Lỗi thu hồi cuộc hẹn:", error);
+        res.status(500).json({ success: false, message: 'Lỗi server nội bộ' });
+    }
+});
+
+// ==========================================================================
+// API: Lấy danh sách thông báo của agent đang đăng nhập (chuông thông báo header)
+// ==========================================================================
+router.get('/notifications', async (req, res) => {
+    try {
+        const supabase = req.supabase;
+        const { agent } = req.query;
+        if (!agent) {
+            return res.status(400).json({ success: false, message: 'Thiếu thông tin Agent!' });
+        }
+
+        const userId = await resolveUserId(supabase, agent);
+        if (!userId) return res.json({ success: true, data: [] });
+
+        const { data, error } = await supabase
+            .from('notifications')
+            .select('*')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false })
+            .limit(50);
+        if (error) throw error;
+
+        res.json({ success: true, data: data || [] });
+    } catch (error) {
+        console.error("Lỗi lấy thông báo:", error);
+        res.status(500).json({ success: false, message: 'Lỗi server nội bộ' });
+    }
+});
+
+// ==========================================================================
+// API: Đánh dấu tất cả thông báo là đã đọc
+// ==========================================================================
+router.post('/notifications/mark-all-read', async (req, res) => {
+    try {
+        const supabase = req.supabase;
+        const { agent } = req.body;
+        if (!agent) {
+            return res.status(400).json({ success: false, message: 'Thiếu thông tin Agent!' });
+        }
+
+        const userId = await resolveUserId(supabase, agent);
+        if (!userId) return res.json({ success: true });
+
+        const { error } = await supabase
+            .from('notifications')
+            .update({ da_doc: true })
+            .eq('user_id', userId)
+            .eq('da_doc', false);
+        if (error) throw error;
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error("Lỗi đánh dấu đã đọc:", error);
+        res.status(500).json({ success: false, message: 'Lỗi server nội bộ' });
+    }
+});
+
+// ==========================================================================
+// API: Đánh dấu MỘT thông báo cụ thể là đã đọc (bấm trực tiếp vào thông báo đó)
+// ==========================================================================
+router.post('/notifications/:id/read', async (req, res) => {
+    try {
+        const supabase = req.supabase;
+        const { id } = req.params;
+
+        const { error } = await supabase
+            .from('notifications')
+            .update({ da_doc: true })
+            .eq('id', id);
+        if (error) throw error;
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error("Lỗi đánh dấu thông báo đã đọc:", error);
         res.status(500).json({ success: false, message: 'Lỗi server nội bộ' });
     }
 });
