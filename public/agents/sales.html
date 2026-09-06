@@ -2,288 +2,648 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Quản Lý Doanh Số & Thu Nhập - Prudential 2026</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Doanh Số Cá Nhân - Quản Lý Hợp Đồng</title>
+
     <link rel="icon" type="image/png" href="/uploads/favicon.png">
+    <link rel="apple-touch-icon" href="/uploads/icon.png">
+    
+    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class'
-        }
-    </script>
-    <script src="/js/lucide.min.js"></script>
+    <!-- SweetAlert2 CDN -->
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <script src="/js/header.js"></script>
-    <script src="/js/sidebar.js"></script>
+    
+    <!-- Các JS dùng chung trong /public/js/ -->
+    <script src="/js/lucide.min.js"></script>
     <script src="/js/theme.js"></script>
+    <script src="/js/searchHelper.js"></script>
+    <script src="/js/ai.js"></script>
+
+    <style>
+        .theme-action-btn {
+            background-color: #dc2626;
+            color: #ffffff;
+            transition: opacity 0.2s;
+        }
+        .theme-action-btn:hover {
+            opacity: 0.9;
+        }
+        .dark .theme-action-btn, [data-theme="dark"] .theme-action-btn, body.dark .theme-action-btn {
+            background-color: #16a34a;
+            color: #ffffff;
+        }
+    </style>
 </head>
-<body class="bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-sans antialiased transition-colors duration-200">
+<body class="bg-theme-bg text-theme-text min-h-screen flex flex-col transition-colors duration-200">
 
-    <div class="flex h-screen overflow-hidden">
-        <div id="mainContainer" class="flex-1 flex flex-col overflow-y-auto transition-colors duration-200 pt-16">
-            <main class="px-4 py-6 max-w-7xl mx-auto w-full flex flex-col gap-6">
+    <!-- Header Container -->
+    <div id="header-container"></div>
+
+    <div class="flex flex-1 pt-16">
+        <!-- Sidebar Container -->
+        <div id="sidebar-container"></div>
+
+        <!-- Main Content -->
+        <main class="flex-1 p-4 lg:p-6 ml-0 lg:ml-64 transition-all duration-200">
+            <div class="max-w-7xl mx-auto space-y-5">
                 
-                <!-- Header -->
-                <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
+                <!-- Page Title -->
+                <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 border-b pb-3 border-theme-border">
                     <div>
-                        <h1 class="text-xl font-bold flex items-center gap-2.5 text-slate-900 dark:text-white">
-                            <i data-lucide="calculator" class="w-6 h-6 text-red-600 dark:text-red-500"></i>
-                            <span>Quản Lý Doanh Số & Thu Nhập 2026</span>
+                        <h1 class="text-lg font-bold tracking-tight flex items-center gap-2">
+                            <i data-lucide="briefcase" class="w-5 h-5 text-theme-primary"></i>
+                            Quản Lý Doanh Số & Hợp Đồng Cá Nhân
                         </h1>
-                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Mô phỏng thu nhập, hạng Pru-Elite & Tiến độ MDRT 2027</p>
+                        <p class="text-xs text-theme-muted mt-0.5">
+                            Theo dõi danh sách hợp đồng đã khai báo, kỳ đóng phí và dòng tiền hoa hồng thực nhận.
+                        </p>
                     </div>
-                    <div class="flex items-center gap-2">
-                        <span class="px-3 py-1 bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 rounded-full text-xs font-semibold">Pru1 2026 Engine</span>
+                    <div class="flex items-center gap-2 self-start md:self-auto">
+                        <a href="fyc.html" class="px-3 py-1.5 text-xs font-bold rounded-lg shadow-sm flex items-center gap-1.5 theme-action-btn">
+                            <i data-lucide="plus-circle" class="w-4 h-4"></i> Tính & Lưu HĐ Mới
+                        </a>
                     </div>
                 </div>
 
-                <!-- Input Controls Section -->
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- KPI Cards Overview -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div class="p-4 bg-theme-card rounded-xl border border-theme-border shadow-sm flex items-center justify-between">
+                        <div>
+                            <p class="text-xs text-theme-muted font-medium">Tổng số hợp đồng</p>
+                            <h3 id="kpi-total-contracts" class="text-xl font-bold mt-1 text-theme-text">0</h3>
+                        </div>
+                        <div class="p-3 bg-blue-500/10 text-blue-500 rounded-lg">
+                            <i data-lucide="file-text" class="w-6 h-6"></i>
+                        </div>
+                    </div>
+
+                    <div class="p-4 bg-theme-card rounded-xl border border-theme-border shadow-sm flex items-center justify-between">
+                        <div>
+                            <p class="text-xs text-theme-muted font-medium">Tổng phí thực tế (FYP Thực thu)</p>
+                            <h3 id="kpi-total-fyp" class="text-xl font-bold mt-1 text-theme-primary">0 VNĐ</h3>
+                        </div>
+                        <div class="p-3 bg-emerald-500/10 text-emerald-500 rounded-lg">
+                            <i data-lucide="trending-up" class="w-6 h-6"></i>
+                        </div>
+                    </div>
+
+                    <div class="p-4 bg-theme-card rounded-xl border border-theme-border shadow-sm flex items-center justify-between">
+                        <div>
+                            <p class="text-xs text-theme-muted font-medium">Tổng Hoa Hồng Thực Nhận (FYC)</p>
+                            <h3 id="kpi-total-fyc" class="text-xl font-bold mt-1 text-amber-500">0 VNĐ</h3>
+                        </div>
+                        <div class="p-3 bg-amber-500/10 text-amber-500 rounded-lg">
+                            <i data-lucide="coins" class="w-6 h-6"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Table Card -->
+                <div class="bg-theme-card rounded-xl shadow-sm border border-theme-border p-4 space-y-4">
                     
-                    <!-- Chỉ số kinh doanh quý -->
-                    <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col gap-4">
-                        <h2 class="text-sm font-bold text-red-600 dark:text-red-400 uppercase tracking-wider flex items-center gap-2">
-                            <i data-lucide="sliders" class="w-4 h-4"></i> Chỉ Số Kinh Doanh Quý
-                        </h2>
-                        
-                        <div>
-                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Doanh số FYC Quý (VNĐ)</label>
-                            <input type="number" id="inputFYC" value="120000000" step="5000000" class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-bold text-red-600 dark:text-red-400 focus:outline-none focus:ring-2 focus:ring-red-500">
+                    <!-- Search & Filter Controls -->
+                    <div class="flex flex-col md:flex-row items-center justify-between gap-3">
+                        <div class="flex flex-wrap items-center gap-2 w-full md:w-auto">
+                            <!-- Input Tìm kiếm -->
+                            <div class="relative w-full sm:w-60">
+                                <input type="text" id="search-input" placeholder="Tìm Số HĐ, tên BMBH..." 
+                                    class="w-full pl-8 pr-3 py-1.5 border rounded-lg bg-theme-bg border-theme-border text-xs focus:ring-2 focus:ring-theme-primary focus:outline-none">
+                                <i data-lucide="search" class="w-4 h-4 text-theme-muted absolute left-2.5 top-2"></i>
+                            </div>
+
+                            <!-- Bộ lọc Thời gian (Tháng, Quý, Năm) -->
+                            <select id="filter-year" class="px-2.5 py-1.5 border rounded-lg bg-theme-bg border-theme-border text-xs focus:ring-2 focus:ring-theme-primary focus:outline-none">
+                                <option value="ALL">Tất cả Năm</option>
+                            </select>
+
+                            <select id="filter-period" class="px-2.5 py-1.5 border rounded-lg bg-theme-bg border-theme-border text-xs focus:ring-2 focus:ring-theme-primary focus:outline-none">
+                                <option value="ALL">Tất cả Thời gian</option>
+                                <optgroup label="Theo Quý">
+                                    <option value="Q1">Quý 1 (T1 - T3)</option>
+                                    <option value="Q2">Quý 2 (T4 - T6)</option>
+                                    <option value="Q3">Quý 3 (T7 - T9)</option>
+                                    <option value="Q4">Quý 4 (T10 - T12)</option>
+                                </optgroup>
+                                <optgroup label="Theo Tháng">
+                                    <option value="M1">Tháng 1</option>
+                                    <option value="M2">Tháng 2</option>
+                                    <option value="M3">Tháng 3</option>
+                                    <option value="M4">Tháng 4</option>
+                                    <option value="M5">Tháng 5</option>
+                                    <option value="M6">Tháng 6</option>
+                                    <option value="M7">Tháng 7</option>
+                                    <option value="M8">Tháng 8</option>
+                                    <option value="M9">Tháng 9</option>
+                                    <option value="M10">Tháng 10</option>
+                                    <option value="M11">Tháng 11</option>
+                                    <option value="M12">Tháng 12</option>
+                                </optgroup>
+                            </select>
                         </div>
 
-                        <div class="grid grid-cols-2 gap-3">
-                            <div>
-                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Hoa hồng SYC (Năm 2)</label>
-                                <input type="number" id="inputSYC" value="30000000" step="1000000" class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-red-500">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Hoa hồng RYC (Tái tục)</label>
-                                <input type="number" id="inputRYC" value="20000000" step="1000000" class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-red-500">
-                            </div>
-                        </div>
-
-                        <div>
-                            <div class="flex justify-between text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
-                                <span>Tỷ lệ duy trì hợp đồng (TLDTPTT - K2)</span>
-                                <span id="k2Val" class="font-bold text-red-600 dark:text-red-400">85%</span>
-                            </div>
-                            <input type="range" id="inputK2" min="50" max="100" value="85" class="w-full accent-red-600">
-                            <div class="flex justify-between text-[10px] text-slate-400 dark:text-slate-500 mt-1">
-                                <span><65% (0%)</span>
-                                <span>65% (60%)</span>
-                                <span>80% (100%)</span>
-                                <span>≥90% (110%)</span>
-                            </div>
-                        </div>
+                        <button id="btn-clear-sales" class="text-xs text-red-500 hover:text-red-700 font-medium flex items-center gap-1 self-end md:self-auto">
+                            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Xóa tất cả dữ liệu
+                        </button>
                     </div>
 
-                    <!-- Thi đua & Tích lũy -->
-                    <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col gap-4">
-                        <h2 class="text-sm font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider flex items-center gap-2">
-                            <i data-lucide="award" class="w-4 h-4"></i> Thi Đua & Tích Luỹ Lũy Kế
-                        </h2>
-
-                        <div>
-                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Tổng FYP Lũy kế Tới Hiện Tại</label>
-                            <input type="number" id="inputFYPAcc" value="550000000" step="10000000" class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-bold text-amber-600 dark:text-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-500">
-                        </div>
-
-                        <div class="grid grid-cols-2 gap-3">
-                            <div>
-                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Quý Xét Duyệt</label>
-                                <select id="selectQuarter" class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-800 dark:text-slate-100 focus:outline-none">
-                                    <option value="1">Quý 1 (31/03)</option>
-                                    <option value="2" selected>Quý 2 (30/06)</option>
-                                    <option value="3">Quý 3 (30/09)</option>
-                                    <option value="4">Quý 4 (31/12)</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Số Tháng Active/Quý</label>
-                                <select id="selectActiveMonths" class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-800 dark:text-slate-100 focus:outline-none">
-                                    <option value="1">1 Tháng (FYC≥5tr)</option>
-                                    <option value="2">2 Tháng</option>
-                                    <option value="3" selected>3 Tháng Full Active</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <div>
-                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">FYC 6 Tháng Gần Nhất (Xét Thưởng CSKH)</label>
-                            <input type="number" id="inputFYC6M" value="45000000" class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-800 dark:text-slate-100 focus:outline-none">
-                        </div>
+                    <!-- Sales Table -->
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse text-xs">
+                            <thead>
+                                <tr class="border-b border-theme-border bg-theme-bg text-[11px] text-theme-muted">
+                                    <th class="p-2.5 font-semibold text-center w-10">STT</th>
+                                    <th class="p-2.5 font-semibold">Số HĐ / Ngày phát hành</th>
+                                    <th class="p-2.5 font-semibold">Bên Mua (BMBH) & NĐBH</th>
+                                    <th class="p-2.5 font-semibold">Sản phẩm chính</th>
+                                    <th class="p-2.5 font-semibold text-right">Tổng phí HĐ</th>
+                                    <th class="p-2.5 font-semibold text-right">FYP Kỳ Đóng</th>
+                                    <th class="p-2.5 font-semibold text-right">FYC Thực Nhận</th>
+                                    <th class="p-2.5 font-semibold text-center">Định kỳ / Tỷ lệ</th>
+                                    <th class="p-2.5 font-semibold text-center">Thao tác</th>
+                                </tr>
+                            </thead>
+                            <tbody id="sales-table-body"></tbody>
+                        </table>
                     </div>
 
-                    <!-- Summary Card Red Gradient -->
-                    <div class="bg-gradient-to-br from-red-600 to-rose-700 text-white p-5 rounded-2xl shadow-lg flex flex-col justify-between">
-                        <div>
-                            <span class="text-xs text-red-100 font-semibold uppercase tracking-wider">Ước Tính Tổng Thu Nhập Quý</span>
-                            <div class="text-3xl font-extrabold mt-1" id="totalIncomeDisplay">0 VNĐ</div>
-                            <p class="text-xs text-red-100/90 mt-2">Đã bao gồm Hoa hồng + Thưởng Chuyên nghiệp + Thưởng Pru-Elite + TCSKH.</p>
-                        </div>
-
-                        <div class="pt-4 border-t border-white/20 flex justify-between items-center text-xs">
-                            <div>
-                                <span class="opacity-80 block">Danh hiệu Pru-Elite</span>
-                                <span class="font-bold text-sm text-yellow-300" id="peBadge">Chưa đạt</span>
-                            </div>
-                            <div class="text-right">
-                                <span class="opacity-80 block">Trạng thái MDRT 2027</span>
-                                <span class="font-bold text-sm text-amber-200" id="mdrtStatus">Chưa đạt</span>
-                            </div>
-                        </div>
+                    <div id="no-sales-msg" class="text-center py-8 text-theme-muted italic text-xs hidden">
+                        Không tìm thấy hợp đồng nào có phát sinh doanh số thực thu trong thời gian chọn!
                     </div>
 
                 </div>
 
-                <!-- KPI & Details Breakdown -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    
-                    <!-- Tiến độ MDRT 2027 -->
-                    <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
-                        <div class="flex justify-between items-center mb-4">
-                            <h3 class="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2">
-                                <i data-lucide="target" class="w-4 h-4 text-red-600 dark:text-red-500"></i> Tiến Độ MDRT 2027 (FYP Target: 1.073.645.200 VNĐ)
-                            </h3>
-                            <span class="text-xs font-bold text-red-600 dark:text-red-400" id="mdrtPercent">0%</span>
-                        </div>
-                        <div class="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-3 mb-4 overflow-hidden">
-                            <div id="mdrtProgressBar" class="bg-gradient-to-r from-red-500 to-amber-500 h-3 rounded-full transition-all duration-500" style="width: 0%"></div>
-                        </div>
-                        <div class="grid grid-cols-2 gap-2 text-xs">
-                            <div class="p-2.5 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-100 dark:border-slate-700/50">
-                                <span class="text-slate-500 dark:text-slate-400 block">Thiếu MDRT</span>
-                                <span class="font-bold text-slate-800 dark:text-slate-200" id="mdrtGap">0 VNĐ</span>
-                            </div>
-                            <div class="p-2.5 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-100 dark:border-slate-700/50">
-                                <span class="text-slate-500 dark:text-slate-400 block">Thưởng Tiến Độ Quý</span>
-                                <span class="font-bold text-emerald-600 dark:text-emerald-400" id="mdrtBonusQ">0 VNĐ</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Bảng Chi Tiết Thu Nhập -->
-                    <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
-                        <h3 class="font-bold text-sm text-slate-900 dark:text-white mb-3 flex items-center gap-2">
-                            <i data-lucide="pie-chart" class="w-4 h-4 text-emerald-600 dark:text-emerald-500"></i> Phân Tích Cấu Trúc Thu Nhập Quý
-                        </h3>
-                        <div class="space-y-2 text-xs">
-                            <div class="flex justify-between py-1.5 border-b border-slate-100 dark:border-slate-700/60">
-                                <span class="text-slate-600 dark:text-slate-400">Hoa hồng gốc trong Quý (FYC + SYC):</span>
-                                <span class="font-semibold text-slate-800 dark:text-slate-200" id="valBaseCommission">0 VNĐ</span>
-                            </div>
-                            <div class="flex justify-between py-1.5 border-b border-slate-100 dark:border-slate-700/60">
-                                <span class="text-slate-600 dark:text-slate-400">Thưởng Hoạt động Chuyên nghiệp (Memo 00071):</span>
-                                <span class="font-semibold text-emerald-600 dark:text-emerald-400" id="valProfBonus">0 VNĐ</span>
-                            </div>
-                            <div class="flex justify-between py-1.5 border-b border-slate-100 dark:border-slate-700/60">
-                                <span class="text-slate-600 dark:text-slate-400">Thưởng Khai thác hiệu quả (25% SYC):</span>
-                                <span class="font-semibold text-emerald-600 dark:text-emerald-400" id="valSycBonus">0 VNĐ</span>
-                            </div>
-                            <div class="flex justify-between py-1.5 border-b border-slate-100 dark:border-slate-700/60">
-                                <span class="text-slate-600 dark:text-slate-400">Thưởng Pru-Elite Quý (Memo 01601):</span>
-                                <span class="font-semibold text-purple-600 dark:text-purple-400" id="valPruEliteBonus">0 VNĐ</span>
-                            </div>
-                            <div class="flex justify-between py-1.5">
-                                <span class="text-slate-600 dark:text-slate-400">Thưởng Chăm sóc Khách hàng (TCSKH):</span>
-                                <span class="font-semibold text-blue-600 dark:text-blue-400" id="valCskhBonus">0 VNĐ</span>
-                            </div>
-                        </div>
-                    </div>
-
-                </div>
-
-            </main>
-        </div>
+            </div>
+        </main>
     </div>
 
+    <!-- Layout Scripts -->
+    <script src="/js/header.js"></script>
+    <script src="/js/sidebar.js"></script>
+
+    <!-- App Logic -->
     <script>
-        document.addEventListener("DOMContentLoaded", function() {
-            if (typeof lucide !== 'undefined') lucide.createIcons();
+        document.addEventListener('DOMContentLoaded', () => {
+            const salesTableBody = document.getElementById('sales-table-body');
+            const noSalesMsg = document.getElementById('no-sales-msg');
+            const searchInput = document.getElementById('search-input');
+            const filterYear = document.getElementById('filter-year');
+            const filterPeriod = document.getElementById('filter-period');
+            const btnClearSales = document.getElementById('btn-clear-sales');
 
-            const fmt = num => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(num);
+            let salesData = [];
 
-            function calculate() {
-                const fyc = parseFloat(document.getElementById('inputFYC').value) || 0;
-                const syc = parseFloat(document.getElementById('inputSYC').value) || 0;
-                const ryc = parseFloat(document.getElementById('inputRYC').value) || 0;
-                const fypAcc = parseFloat(document.getElementById('inputFYPAcc').value) || 0;
-                const k2 = parseFloat(document.getElementById('inputK2').value) || 0;
-                const quarter = parseInt(document.getElementById('selectQuarter').value);
-                const activeMonths = parseInt(document.getElementById('selectActiveMonths').value);
-                const fyc6m = parseFloat(document.getElementById('inputFYC6M').value) || 0;
-
-                document.getElementById('k2Val').innerText = k2 + '%';
-
-                // 1. K2 Ratio
-                let k2Ratio = 0;
-                if (k2 >= 90) k2Ratio = 1.1;
-                else if (k2 >= 80) k2Ratio = 1.0;
-                else if (k2 >= 70) k2Ratio = 0.8;
-                else if (k2 >= 65) k2Ratio = 0.6;
-
-                // 2. Bonus Professional Activity
-                let profRate = 0;
-                if (fyc >= 130000000) profRate = 0.7;
-                else if (fyc >= 75000000) profRate = 0.5;
-                else if (fyc >= 40000000) profRate = 0.35;
-                else if (fyc >= 20000000) profRate = 0.20;
-                else if (fyc >= 10000000) profRate = 0.15;
-
-                const profBonus = fyc * profRate * k2Ratio;
-                const sycBonus = syc * 0.25 * k2Ratio;
-
-                // 3. Pru-Elite
-                let peRank = 'Chưa đạt';
-                let peRate = 0;
-                if (k2 >= 65) {
-                    if (fyc >= 180000000 && activeMonths >= 3) { peRank = 'Kim Cương'; peRate = 0.20; }
-                    else if (fyc >= 90000000 && activeMonths >= 3) { peRank = 'Bạch Kim'; peRate = 0.18; }
-                    else if (fyc >= 50000000 && activeMonths >= 2) { peRank = 'Vàng'; peRate = 0.15; }
-                }
-                const pruEliteBonus = fyc * peRate * k2Ratio;
-
-                // 4. CSKH Bonus
-                const cskhBonus = (fyc6m >= 10000000) ? (ryc * 0.10) : 0;
-
-                // 5. MDRT 2027
-                const mdrtTarget = 1073645200;
-                const mdrtTargetsQ = { 1: 250000000, 2: 500000000, 3: 750000000, 4: 1073645200 };
-                const mdrtBonusQBase = { 1: 5000000, 2: 10000000, 3: 15000000, 4: 20000000 };
-
-                let mdrtBonusQ = 0;
-                if (fypAcc >= mdrtTargetsQ[quarter]) {
-                    mdrtBonusQ = mdrtBonusQBase[quarter] * k2Ratio;
-                }
-
-                const mdrtPct = Math.min(100, Math.round((fypAcc / mdrtTarget) * 100));
-                const mdrtGap = Math.max(0, mdrtTarget - fypAcc);
-
-                // 6. Total Income
-                const totalBaseCommission = fyc + syc;
-                const totalIncome = totalBaseCommission + profBonus + sycBonus + pruEliteBonus + cskhBonus + mdrtBonusQ;
-
-                // Update UI
-                document.getElementById('totalIncomeDisplay').innerText = fmt(totalIncome);
-                document.getElementById('valBaseCommission').innerText = fmt(totalBaseCommission);
-                document.getElementById('valProfBonus').innerText = fmt(profBonus);
-                document.getElementById('valSycBonus').innerText = fmt(sycBonus);
-                document.getElementById('valPruEliteBonus').innerText = fmt(pruEliteBonus);
-                document.getElementById('valCskhBonus').innerText = fmt(cskhBonus);
-
-                document.getElementById('peBadge').innerText = peRank;
-                document.getElementById('mdrtStatus').innerText = fypAcc >= mdrtTarget ? 'ĐÃ ĐẠT MDRT' : `Đạt ${mdrtPct}% Target`;
-
-                document.getElementById('mdrtPercent').innerText = mdrtPct + '%';
-                document.getElementById('mdrtProgressBar').style.width = mdrtPct + '%';
-                document.getElementById('mdrtGap').innerText = fmt(mdrtGap);
-                document.getElementById('mdrtBonusQ').innerText = fmt(mdrtBonusQ);
+            function formatDateVN(dateStr) {
+                if (!dateStr) return 'N/A';
+                const parts = dateStr.split('-');
+                if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+                return dateStr;
             }
 
-            const inputs = ['inputFYC', 'inputSYC', 'inputRYC', 'inputFYPAcc', 'inputK2', 'selectQuarter', 'selectActiveMonths', 'inputFYC6M'];
-            inputs.forEach(id => document.getElementById(id).addEventListener('input', calculate));
+            function capitalizeWords(str) {
+                if (!str) return '';
+                return str.toLowerCase().replace(/(?:^|\s)\S/g, (a) => a.toUpperCase());
+            }
 
-            calculate();
+            // Tính số kỳ đóng trong năm
+            function getPeriodDivisor(paymentMode) {
+                if (paymentMode === 'HALF') return 2;
+                if (paymentMode === 'QUARTER') return 4;
+                return 1; // YEAR
+            }
+
+            // 1. Khởi tạo danh sách Năm
+            function initYearFilter(data) {
+                const years = new Set();
+                const currentYear = new Date().getFullYear();
+                years.add(currentYear);
+
+                data.forEach(item => {
+                    if (item.installments) {
+                        item.installments.forEach(inst => {
+                            const dateToUse = inst.paidDate || inst.dueDate || item.issueDate;
+                            if (dateToUse) {
+                                const y = new Date(dateToUse).getFullYear();
+                                if (!isNaN(y)) years.add(y);
+                            }
+                        });
+                    }
+                });
+
+                const sortedYears = Array.from(years).sort((a, b) => b - a);
+                filterYear.innerHTML = `<option value="ALL">Tất cả Năm</option>`;
+                sortedYears.forEach(y => {
+                    filterYear.insertAdjacentHTML('beforeend', `<option value="${y}">Năm ${y}</option>`);
+                });
+            }
+
+            // 2. Tải & Chuẩn hóa dữ liệu
+            function loadSalesData() {
+                salesData = JSON.parse(localStorage.getItem('prudential_personal_sales') || '[]');
+                
+                // Chuẩn hóa cấu trúc Kỳ đóng phí & FYC kỳ
+                salesData.forEach(item => {
+                    const divisor = getPeriodDivisor(item.paymentMode);
+                    const splitRate = (item.splitRate || 100) / 100;
+
+                    // Tổng FYC cả năm (Năm 1) chưa chia
+                    const fullFycY1 = item.fyc ? (item.fyc.fullY1 || item.fyc.y1 || 0) : 0;
+                    
+                    // FYC thực nhận của từng kỳ = (Tổng FYC N1 / Số kỳ) * Tỷ lệ chia
+                    const fycPerPeriod = (fullFycY1 / divisor) * splitRate;
+
+                    if (!item.installments || item.installments.length === 0) {
+                        item.installments = [];
+                        for (let i = 1; i <= divisor; i++) {
+                            item.installments.push({
+                                periodIndex: i,
+                                dueDate: item.issueDate,
+                                paidDate: i === 1 ? item.issueDate : null,
+                                status: i === 1 ? 'paid' : 'unpaid',
+                                fycAmount: fycPerPeriod
+                            });
+                        }
+                    } else {
+                        // Cập nhật lại fycAmount và Kỳ 1 mặc định Đã đóng
+                        item.installments.forEach((inst, idx) => {
+                            inst.fycAmount = fycPerPeriod;
+                            if (idx === 0) {
+                                inst.status = 'paid';
+                                if (!inst.paidDate) inst.paidDate = item.issueDate;
+                            }
+                        });
+                    }
+                });
+
+                initYearFilter(salesData);
+                applyFilters();
+            }
+
+            // 3. Tính toán Doanh số thực thu theo Bộ lọc thời gian chọn
+            function calculateContractRevenue(item, selectedYear, selectedPeriod) {
+                const divisor = getPeriodDivisor(item.paymentMode);
+                const fypPerPeriod = (item.totalAnnualPremium || 0) / divisor;
+
+                let periodFyp = 0;
+                let periodFyc = 0;
+                let paidCount = 0;
+
+                if (!item.installments) return { periodFyp: 0, periodFyc: 0, paidCount: 0 };
+
+                item.installments.forEach(inst => {
+                    if (inst.status === 'paid' && inst.paidDate) {
+                        const d = new Date(inst.paidDate);
+                        const instYear = d.getFullYear().toString();
+                        const instMonth = d.getMonth() + 1; // 1-12
+
+                        // Kiêm tra điều kiện Năm
+                        if (selectedYear !== 'ALL' && instYear !== selectedYear) return;
+
+                        // Kiểm tra điều kiện Quý/Tháng
+                        let matchPeriod = true;
+                        if (selectedPeriod !== 'ALL') {
+                            if (selectedPeriod.startsWith('Q')) {
+                                const q = parseInt(selectedPeriod.replace('Q', ''));
+                                const instQuarter = Math.ceil(instMonth / 3);
+                                matchPeriod = (instQuarter === q);
+                            } else if (selectedPeriod.startsWith('M')) {
+                                const m = parseInt(selectedPeriod.replace('M', ''));
+                                matchPeriod = (instMonth === m);
+                            }
+                        }
+
+                        if (matchPeriod) {
+                            periodFyp += fypPerPeriod;
+                            periodFyc += inst.fycAmount;
+                            paidCount++;
+                        }
+                    }
+                });
+
+                return { periodFyp, periodFyc, paidCount };
+            }
+
+            // 4. Áp dụng Bộ lọc
+            function applyFilters() {
+                const term = searchInput.value.toLowerCase().trim();
+                const selectedYear = filterYear.value;
+                const selectedPeriod = filterPeriod.value;
+
+                let totalContracts = 0;
+                let grandFyp = 0;
+                let grandFyc = 0;
+
+                const displayList = [];
+
+                salesData.forEach((item, originalIndex) => {
+                    // Lọc theo từ khóa
+                    const matchSearch = !term || 
+                        (item.contractNumber && item.contractNumber.toLowerCase().includes(term)) ||
+                        (item.policyHolder && item.policyHolder.toLowerCase().includes(term)) ||
+                        (item.mainProduct && item.mainProduct.toLowerCase().includes(term));
+
+                    if (!matchSearch) return;
+
+                    // Tính toán doanh số thực thu trong mốc thời gian lọc
+                    const rev = calculateContractRevenue(item, selectedYear, selectedPeriod);
+
+                    // Nếu có phát sinh doanh số thực thu (hoặc chọn All)
+                    if (selectedYear === 'ALL' && selectedPeriod === 'ALL') {
+                        displayList.push({ item, originalIndex, rev });
+                        grandFyp += rev.periodFyp;
+                        grandFyc += rev.periodFyc;
+                        totalContracts++;
+                    } else if (rev.paidCount > 0) {
+                        displayList.push({ item, originalIndex, rev });
+                        grandFyp += rev.periodFyp;
+                        grandFyc += rev.periodFyc;
+                        totalContracts++;
+                    }
+                });
+
+                // Cập nhật Thẻ KPI
+                document.getElementById('kpi-total-contracts').innerText = totalContracts;
+                document.getElementById('kpi-total-fyp').innerText = grandFyp.toLocaleString('vi-VN') + ' VNĐ';
+                document.getElementById('kpi-total-fyc').innerText = grandFyc.toLocaleString('vi-VN') + ' VNĐ';
+
+                renderSalesTable(displayList);
+            }
+
+            // 5. Render bảng danh sách hợp đồng
+            function renderSalesTable(displayList) {
+                salesTableBody.innerHTML = '';
+
+                if (!displayList || displayList.length === 0) {
+                    noSalesMsg.classList.remove('hidden');
+                    return;
+                }
+                noSalesMsg.classList.add('hidden');
+
+                displayList.forEach(({ item, originalIndex, rev }, index) => {
+                    const modeText = item.paymentMode === 'YEAR' ? 'Năm' : (item.paymentMode === 'HALF' ? 'Nửa năm' : 'Quý');
+                    const splitText = (item.splitRate || 100) + '%';
+
+                    const rowHtml = `
+                        <tr class="border-b border-theme-border hover:bg-theme-bg/50 transition-colors">
+                            <td class="p-2.5 text-center font-semibold text-theme-muted">${index + 1}</td>
+                            <td class="p-2.5">
+                                <span class="block font-bold text-theme-primary">${item.contractNumber || 'Chưa cập nhật'}</span>
+                                <span class="text-[11px] text-theme-muted">${formatDateVN(item.issueDate)}</span>
+                            </td>
+                            <td class="p-2.5">
+                                <div class="font-semibold text-theme-text">${item.policyHolder || 'Chưa cập nhật'}</div>
+                                <div class="text-[11px] text-theme-muted">NĐBH: ${item.lifeInsured || item.policyHolder || 'Chưa cập nhật'}</div>
+                            </td>
+                            <td class="p-2.5">
+                                <span class="font-medium block">${item.mainProduct}</span>
+                                ${item.riders && item.riders.length > 0 ? `<span class="text-[11px] text-emerald-600">+ ${item.riders.length} sản phẩm bổ trợ</span>` : ''}
+                            </td>
+                            <td class="p-2.5 text-right font-bold text-theme-text">
+                                ${(item.totalAnnualPremium || 0).toLocaleString('vi-VN')} VNĐ
+                            </td>
+                            <td class="p-2.5 text-right font-bold text-blue-600">
+                                ${rev.periodFyp.toLocaleString('vi-VN')} VNĐ
+                            </td>
+                            <td class="p-2.5 text-right font-bold text-emerald-600">
+                                ${rev.periodFyc.toLocaleString('vi-VN')} VNĐ
+                            </td>
+                            <td class="p-2.5 text-center">
+                                <span class="px-2 py-0.5 rounded text-[10px] bg-theme-bg border border-theme-border font-medium">
+                                    ${modeText} | ${splitText}
+                                </span>
+                            </td>
+                            <td class="p-2.5 text-center space-x-1">
+                                <button onclick="viewInstallments(${originalIndex})" class="p-1 text-blue-500 hover:text-blue-700 rounded" title="Quản lý kỳ đóng phí">
+                                    <i data-lucide="calendar" class="w-4 h-4 inline"></i>
+                                </button>
+                                <button onclick="editContract(${originalIndex})" class="p-1 text-amber-500 hover:text-amber-700 rounded" title="Chỉnh sửa thông tin">
+                                    <i data-lucide="edit-3" class="w-4 h-4 inline"></i>
+                                </button>
+                                <button onclick="deleteContract(${originalIndex})" class="p-1 text-red-500 hover:text-red-700 rounded" title="Xóa hợp đồng">
+                                    <i data-lucide="trash-2" class="w-4 h-4 inline"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                    salesTableBody.insertAdjacentHTML('beforeend', rowHtml);
+                });
+
+                setTimeout(() => {
+                    if (window.lucide) lucide.createIcons();
+                }, 50);
+            }
+
+            // Event Listeners cho Bộ lọc
+            searchInput.addEventListener('input', applyFilters);
+            filterYear.addEventListener('change', applyFilters);
+            filterPeriod.addEventListener('change', applyFilters);
+
+            // 6. SỬA HỢP ĐỒNG
+            window.editContract = function(index) {
+                const item = salesData[index];
+
+                Swal.fire({
+                    title: 'Chỉnh sửa thông tin hợp đồng',
+                    html: `
+                        <div class="text-left space-y-3 mt-3 text-xs">
+                            <div>
+                                <label class="block font-medium mb-1">Số hợp đồng (Đúng 8 số) <span class="text-red-500">*</span></label>
+                                <input type="text" id="edit-contract-number" value="${item.contractNumber || ''}" maxlength="8" class="w-full px-2.5 py-1.5 border rounded-lg bg-theme-card border-theme-border text-xs focus:ring-2 focus:ring-theme-primary focus:outline-none">
+                            </div>
+                            <div>
+                                <label class="block font-medium mb-1">Bên mua bảo hiểm (BMBH) <span class="text-red-500">*</span></label>
+                                <input type="text" id="edit-policy-holder" value="${item.policyHolder || ''}" class="w-full px-2.5 py-1.5 border rounded-lg bg-theme-card border-theme-border text-xs focus:ring-2 focus:ring-theme-primary focus:outline-none capitalize">
+                            </div>
+                            <div>
+                                <label class="block font-medium mb-1">Người được bảo hiểm chính (NĐBH)</label>
+                                <input type="text" id="edit-life-insured" value="${item.lifeInsured || ''}" class="w-full px-2.5 py-1.5 border rounded-lg bg-theme-card border-theme-border text-xs focus:ring-2 focus:ring-theme-primary focus:outline-none capitalize">
+                            </div>
+                        </div>
+                    `,
+                    showCancelButton: true,
+                    confirmButtonText: 'Lưu thay đổi',
+                    cancelButtonText: 'Hủy',
+                    confirmButtonColor: '#16a34a',
+                    didOpen: () => {
+                        const numInput = document.getElementById('edit-contract-number');
+                        const holderInput = document.getElementById('edit-policy-holder');
+                        const insuredInput = document.getElementById('edit-life-insured');
+
+                        numInput.addEventListener('input', (e) => {
+                            e.target.value = e.target.value.replace(/\D/g, '').slice(0, 8);
+                        });
+                        holderInput.addEventListener('input', (e) => {
+                            e.target.value = capitalizeWords(e.target.value);
+                        });
+                        insuredInput.addEventListener('input', (e) => {
+                            e.target.value = capitalizeWords(e.target.value);
+                        });
+                    },
+                    preConfirm: () => {
+                        const contractNumber = document.getElementById('edit-contract-number').value.trim();
+                        const policyHolder = document.getElementById('edit-policy-holder').value.trim();
+                        const lifeInsured = document.getElementById('edit-life-insured').value.trim();
+
+                        if (!contractNumber || !/^\d{8}$/.test(contractNumber)) {
+                            Swal.showValidationMessage('Số hợp đồng phải chính xác là 8 ký tự số!');
+                            return false;
+                        }
+                        if (!policyHolder) {
+                            Swal.showValidationMessage('Vui lòng nhập tên Bên mua bảo hiểm!');
+                            return false;
+                        }
+
+                        return { contractNumber, policyHolder, lifeInsured: lifeInsured || policyHolder };
+                    }
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        salesData[index].contractNumber = result.value.contractNumber;
+                        salesData[index].policyHolder = result.value.policyHolder;
+                        salesData[index].lifeInsured = result.value.lifeInsured;
+
+                        localStorage.setItem('prudential_personal_sales', JSON.stringify(salesData));
+                        loadSalesData();
+                        Swal.fire('Thành công', 'Đã cập nhật thông tin hợp đồng!', 'success');
+                    }
+                });
+            };
+
+            // 7. QUẢN LÝ KỲ ĐÓNG PHÍ
+            window.viewInstallments = function(index) {
+                const item = salesData[index];
+                if (!item.installments || item.installments.length === 0) {
+                    Swal.fire('Thông báo', 'Hợp đồng này không có kỳ đóng phí hợp lệ.', 'info');
+                    return;
+                }
+
+                let listHtml = `<div class="space-y-3 text-xs text-left max-h-72 overflow-y-auto mt-2 p-1">`;
+                
+                item.installments.forEach((inst, i) => {
+                    const isPaid = inst.status === 'paid';
+                    const displayDate = isPaid ? formatDateVN(inst.paidDate || inst.dueDate) : formatDateVN(inst.dueDate);
+                    
+                    listHtml += `
+                        <div class="flex items-center justify-between p-3 bg-theme-bg rounded-lg border border-theme-border shadow-sm">
+                            <div>
+                                <div class="font-bold text-sm text-theme-text">Kỳ ${inst.periodIndex} ${i === 0 ? '(Kỳ đầu)' : ''}</div>
+                                <div class="text-theme-muted mt-0.5">Ngày đóng dự kiến: <span class="font-semibold">${formatDateVN(inst.dueDate)}</span></div>
+                                ${isPaid ? `<div class="text-emerald-600 font-semibold mt-0.5">Đã thu ngày: ${displayDate}</div>` : ''}
+                                <div class="text-amber-600 font-medium mt-0.5">FYC Kỳ này: ${inst.fycAmount.toLocaleString('vi-VN')} VNĐ</div>
+                            </div>
+                            <div>
+                                ${isPaid ? `
+                                    <span class="px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-600 font-bold border border-emerald-500/20 inline-flex items-center gap-1">
+                                        ✓ Đã đóng
+                                    </span>
+                                ` : `
+                                    <button onclick="confirmPayment(${index}, ${i})" class="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-bold shadow transition-all flex items-center gap-1">
+                                        Xác nhận đóng phí
+                                    </button>
+                                `}
+                            </div>
+                        </div>
+                    `;
+                });
+                listHtml += `</div>`;
+
+                Swal.fire({
+                    title: `Quản lý kỳ đóng phí - HĐ ${item.contractNumber}`,
+                    html: listHtml,
+                    showConfirmButton: false,
+                    showCloseButton: true,
+                    width: '520px'
+                });
+            };
+
+            // Xác nhận nộp phí Kỳ tiếp theo
+            window.confirmPayment = function(contractIndex, installmentIndex) {
+                const item = salesData[contractIndex];
+                const inst = item.installments[installmentIndex];
+
+                Swal.fire({
+                    title: `Xác nhận đóng phí Kỳ ${inst.periodIndex}`,
+                    html: `
+                        <div class="text-left space-y-3 mt-3 text-xs">
+                            <p class="text-theme-muted">Vui lòng chọn ngày thực tế khách đóng phí cho Kỳ ${inst.periodIndex}:</p>
+                            <div>
+                                <label class="block font-medium mb-1">Ngày đóng phí <span class="text-red-500">*</span></label>
+                                <input type="date" id="swal-paid-date" value="${new Date().toISOString().split('T')[0]}" class="w-full px-2.5 py-1.5 border rounded-lg bg-theme-card border-theme-border text-xs focus:ring-2 focus:ring-theme-primary focus:outline-none">
+                            </div>
+                        </div>
+                    `,
+                    showCancelButton: true,
+                    confirmButtonText: 'Xác nhận Đã đóng',
+                    cancelButtonText: 'Hủy',
+                    confirmButtonColor: '#16a34a',
+                    preConfirm: () => {
+                        const paidDate = document.getElementById('swal-paid-date').value;
+                        if (!paidDate) {
+                            Swal.showValidationMessage('Vui lòng chọn ngày đóng phí!');
+                            return false;
+                        }
+                        return paidDate;
+                    }
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        // Cập nhật ngày thực đóng và trạng thái
+                        salesData[contractIndex].installments[installmentIndex].status = 'paid';
+                        salesData[contractIndex].installments[installmentIndex].paidDate = result.value;
+
+                        localStorage.setItem('prudential_personal_sales', JSON.stringify(salesData));
+                        
+                        // Tải lại bộ lọc & dữ liệu bảng ngay lập tức
+                        loadSalesData();
+
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Thành công!',
+                            text: `Kỳ ${inst.periodIndex} đã ghi nhận Đã đóng ngày ${formatDateVN(result.value)}. Doanh số & FYC đã được cộng vào Tháng/Quý tương ứng!`,
+                            timer: 2000,
+                            showConfirmButton: false
+                        });
+                    }
+                });
+            };
+
+            // 8. Xóa hợp đồng
+            window.deleteContract = function(index) {
+                Swal.fire({
+                    title: 'Xác nhận xóa?',
+                    text: 'Dữ liệu hợp đồng này sẽ bị xóa vĩnh viễn khỏi danh sách!',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#dc2626',
+                    cancelButtonText: 'Hủy',
+                    confirmButtonText: 'Xóa ngay'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        salesData.splice(index, 1);
+                        localStorage.setItem('prudential_personal_sales', JSON.stringify(salesData));
+                        loadSalesData();
+                        Swal.fire('Đã xóa!', 'Hợp đồng đã được loại bỏ.', 'success');
+                    }
+                });
+            };
+
+            // 9. Xóa tất cả
+            btnClearSales.addEventListener('click', () => {
+                Swal.fire({
+                    title: 'Cảnh báo xóa sạch!',
+                    text: 'Bạn có chắc chắn muốn xóa tất cả danh sách hợp đồng cá nhân?',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#dc2626',
+                    cancelButtonText: 'Hủy',
+                    confirmButtonText: 'Xóa tất cả'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        localStorage.removeItem('prudential_personal_sales');
+                        loadSalesData();
+                        Swal.fire('Đã dọn dẹp!', 'Toàn bộ danh sách đã được xóa.', 'success');
+                    }
+                });
+            });
+
+            loadSalesData();
         });
     </script>
 </body>
