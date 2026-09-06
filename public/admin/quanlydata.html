@@ -910,6 +910,7 @@
     let currentActiveFileId = null;
     let currentFileRawData = []; 
     let tab3AllFilesCache = [];
+    let currentFileStatus = null; // FIX: lưu trạng thái khoá của file đang xem để gate nút Xuất Excel/Google Sheet
 
     /**
      * [CHỨC NĂNG TAB 3]: Tải danh sách file "Đã phân bổ" và danh sách Agent cho Khung 1
@@ -922,16 +923,21 @@
         tbody.innerHTML = `<tr><td colspan="8" class="text-center py-8 opacity-60">Đang tải danh sách dữ liệu...</td></tr>`;
 
         try {
-            const [resFiles, resAgents] = await Promise.all([
+            // FIX: gọi thêm API /data-files/stats để lấy số liệu Chưa Gọi/Đã Gọi/Đã Hẹn
+            // THẬT SỰ, thay vì hardcode cứng 0 như code cũ.
+            const [resFiles, resAgents, resStats] = await Promise.all([
                 fetch('/api/admin/data-files'),
-                fetch('/api/admin/agents')
+                fetch('/api/admin/agents'),
+                fetch('/api/admin/data-files/stats')
             ]);
 
             const filesResult = await resFiles.json();
             const agentsResult = await resAgents.json();
+            const statsResult = await resStats.json();
 
             let allFiles = Array.isArray(filesResult) ? filesResult : (filesResult.data || filesResult.files || []);
             window.systemAgents = Array.isArray(agentsResult) ? agentsResult : (agentsResult.data || agentsResult.agents || []);
+            window.tab3StatsMap = (statsResult && statsResult.success) ? statsResult.data : {};
 
             // Đổ dữ liệu vào dropdown lọc Agent ở Khung 1
             if (agentFilterSelect) {
@@ -944,7 +950,7 @@
             }
 
             // Lọc ra các file có trạng thái "Đã phân bổ" hoặc có gán agent_id
-            tab3AllFilesCache = allFiles.filter(f => f.status === 'Đã phân bổ' || f.agent_id);
+            tab3AllFilesCache = allFiles.filter(f => f.status === 'Đã phân bổ' || f.status === 'Đã khóa' || f.agent_id);
 
             renderTab3FileList(tab3AllFilesCache);
         } catch (error) {
@@ -978,9 +984,12 @@
                 assignedAgentName = file.nguoi_phu_trach;
             }
 
-            const chuaGoi = totalLeads; 
-            const daGoi = 0;
-            const daHen = 0;
+            // FIX: lấy số liệu THẬT từ /api/admin/data-files/stats (đã tải sẵn ở loadTab3Files())
+            // thay vì hardcode "chuaGoi = totalLeads, daGoi = 0, daHen = 0" như code cũ.
+            const stats = (window.tab3StatsMap && window.tab3StatsMap[fileId]) || { chuaGoi: totalLeads, daGoi: 0, daHen: 0 };
+            const chuaGoi = stats.chuaGoi;
+            const daGoi = stats.daGoi;
+            const daHen = stats.daHen;
 
             return `
                 <tr class="hover:bg-[var(--hover-bg,rgba(0,0,0,0.03))] transition">
@@ -1020,11 +1029,13 @@
             const result = await res.json();
 
             currentFileRawData = (result.success && result.leads) ? result.leads : [];
+            currentFileStatus = result.file_status || null;
 
             document.getElementById('tab3DetailSearch').value = '';
             document.getElementById('tab3FilterSelect').value = 'all';
 
             renderTab3DetailTable(currentFileRawData);
+            updateExportButtonsState();
             container.scrollIntoView({ behavior: 'smooth' });
             if (typeof lucide !== 'undefined') lucide.createIcons();
         } catch (err) {
@@ -1034,7 +1045,34 @@
     }
 
     /**
-     * [CHỨC NĂNG TAB 3]: Render bảng dữ liệu chi tiết ở Khung 2 (Cột Kết quả cuộc gọi đặt đầu tiên)
+     * [CHỨC NĂNG TAB 3]: Bật/tắt nút Xuất Excel & Google Sheet dựa theo trạng thái khoá của file.
+     * Yêu cầu: chỉ được xuất file SAU KHI Admin đã khoá file ở Tab 2, tránh xung đột
+     * quyền lợi nhân viên (agent vẫn đang gọi tiếp mà admin đã lấy data giao người khác).
+     */
+    function updateExportButtonsState() {
+        const btnExcel = document.querySelector('button[onclick="exportTab3Excel()"]');
+        const btnSheet = document.querySelector('button[onclick="exportTab3GoogleSheet()"]');
+        const isLocked = currentFileStatus === 'Đã khóa';
+
+        [btnExcel, btnSheet].forEach(btn => {
+            if (!btn) return;
+            if (isLocked) {
+                btn.disabled = false;
+                btn.classList.remove('opacity-40', 'cursor-not-allowed');
+                btn.title = '';
+            } else {
+                btn.disabled = true;
+                btn.classList.add('opacity-40', 'cursor-not-allowed');
+                btn.title = 'Chỉ có thể xuất file SAU KHI Admin đã khoá file này ở Tab 2 (Phân Bổ Lead)';
+            }
+        });
+    }
+
+    /**
+     * [CHỨC NĂNG TAB 3]: Render bảng dữ liệu chi tiết ở Khung 2
+     * FIX theo yêu cầu: chỉ hiện đúng 6 cột đơn giản (STT tự đếm - KHÔNG lấy so_thu_tu,
+     * Họ và Tên, CCCD/CMND, Số ĐT, Địa chỉ, Kết quả cuộc gọi). Dữ liệu đầy đủ theo Template
+     * vẫn được giữ nguyên trong currentFileRawData để dùng khi Xuất Excel/Google Sheet.
      */
     function renderTab3DetailTable(dataList) {
         const headerRow = document.getElementById('tab3DetailHeaderRow');
@@ -1042,36 +1080,36 @@
 
         if (!headerRow || !bodyEl) return;
 
+        headerRow.innerHTML = `
+            <th class="p-3.5 text-center w-12">STT</th>
+            <th class="p-3.5">Họ và Tên</th>
+            <th class="p-3.5">CCCD/CMND</th>
+            <th class="p-3.5">Số ĐT</th>
+            <th class="p-3.5">Địa chỉ</th>
+            <th class="p-3.5 text-center">Kết quả cuộc gọi</th>
+        `;
+
         if (dataList.length === 0) {
-            headerRow.innerHTML = `<th class="p-3.5">Thông báo</th>`;
-            bodyEl.innerHTML = `<tr><td class="p-3.5 text-center opacity-60">Không có bản ghi dữ liệu nào.</td></tr>`;
+            bodyEl.innerHTML = `<tr><td colspan="6" class="p-3.5 text-center opacity-60">Không có bản ghi dữ liệu nào.</td></tr>`;
             return;
         }
 
-        const sample = dataList[0];
-        // Loại bỏ các khóa hệ thống, đồng thời tách ket_qua_cuoc_goi ra để đưa lên đầu tiên
-        const keys = Object.keys(sample).filter(k => k !== 'id' && k !== 'file_id' && k !== 'ket_qua_cuoc_goi');
-
-        let headerHtml = `<th class="p-3.5 text-center w-12">STT</th>`;
-        headerHtml += `<th class="p-3.5 text-center font-bold text-emerald-500">KẾT QUẢ CUỘC GỌI</th>`;
-        keys.forEach(key => {
-            headerHtml += `<th class="p-3.5">${key.replace(/_/g, ' ').toUpperCase()}</th>`;
-        });
-        headerRow.innerHTML = headerHtml;
-
         let bodyHtml = '';
         dataList.forEach((item, index) => {
-            bodyHtml += `<tr class="hover:bg-[var(--hover-bg,rgba(0,0,0,0.03))] transition">`;
-            bodyHtml += `<td class="p-3.5 text-center font-mono opacity-60">${index + 1}</td>`;
-            
+            const hoTen = `${item.ho || ''} ${item.ten || ''}`.trim() || '-';
             const callResult = item.ket_qua_cuoc_goi || 'Chưa gọi';
             const badgeClass = item.ket_qua_cuoc_goi ? 'bg-emerald-500/10 text-emerald-500' : 'bg-gray-500/10 opacity-60';
-            bodyHtml += `<td class="p-3.5 text-center"><span class="px-2 py-1 rounded-full text-[10px] font-semibold ${badgeClass}">${callResult}</span></td>`;
 
-            keys.forEach(key => {
-                bodyHtml += `<td class="p-3.5">${item[key] !== null && item[key] !== undefined ? item[key] : ''}</td>`;
-            });
-            bodyHtml += `</tr>`;
+            bodyHtml += `
+                <tr class="hover:bg-[var(--hover-bg,rgba(0,0,0,0.03))] transition">
+                    <td class="p-3.5 text-center font-mono opacity-60">${index + 1}</td>
+                    <td class="p-3.5 font-medium">${hoTen}</td>
+                    <td class="p-3.5">${item.cccd || '-'}</td>
+                    <td class="p-3.5">${item.dien_thoai || '-'}</td>
+                    <td class="p-3.5">${item.dia_chi || '-'}</td>
+                    <td class="p-3.5 text-center"><span class="px-2 py-1 rounded-full text-[10px] font-semibold ${badgeClass}">${callResult}</span></td>
+                </tr>
+            `;
         });
 
         bodyEl.innerHTML = bodyHtml;
@@ -1120,7 +1158,10 @@
         } else if (filterVal === 'hen_gap_thanh_cong') {
             filtered = filtered.filter(item => item.ket_qua_cuoc_goi === 'Hẹn gặp thành công');
         } else if (filterVal === 'chua_hen_duoc') {
-            filtered = filtered.filter(item => item.ket_qua_cuoc_goi && item.ket_qua_cuoc_goi !== 'Hẹn gặp thành công');
+            // FIX: "Chưa hẹn được" = TẤT CẢ trừ "Hẹn gặp thành công" - bao gồm CẢ lead
+            // chưa gọi (null). Code cũ bắt buộc phải có ket_qua_cuoc_goi (truthy) mới
+            // được tính, nên vô tình loại mất toàn bộ lead null ra khỏi kết quả lọc này.
+            filtered = filtered.filter(item => item.ket_qua_cuoc_goi !== 'Hẹn gặp thành công');
         }
 
         // Lọc theo từ khóa tìm kiếm nhanh
@@ -1172,15 +1213,57 @@
     });
 
     /**
+     * [CHỨC NĂNG TAB 3]: Map 1 dòng dữ liệu đầy đủ (contracts+customers+ket_qua_cuoc_goi)
+     * sang đúng thứ tự + tên cột của Template_data.xlsx, để file xuất ra có thể dùng
+     * lại ngay làm file upload lên hệ thống (chỉ cần xoá cột "Kết quả cuộc gọi" là khớp).
+     * LƯU Ý: cột "Kết quả cuộc gọi" cố tình để trống ("") khi null, KHÔNG ghi chữ
+     * "Chưa gọi" (chữ đó chỉ dùng để hiển thị trên giao diện Khung 2), vì ghi chữ vào
+     * sẽ làm sai lệch nếu admin tái sử dụng file này để upload lại.
+     */
+    function mapToTemplateRow(item) {
+        return {
+            'Số thứ tự': item.so_thu_tu ?? '',
+            'VP/Bank': item.vp_bank ?? '',
+            'MSDL': item.msdl ?? '',
+            'CV': item.cv ?? '',
+            'Số Hợp đồng': item.so_hop_dong ?? '',
+            'Ngày tham gia': item.ngay_tham_gia ?? '',
+            'Tình trạng HS': item.tinh_trang_hs ?? '',
+            'Mệnh giá': item.menh_gia ?? '',
+            'Ngày tham gia đầy đủ': item.ngay_tham_gia_day_du ?? '',
+            'Năm đáo hạn': item.nam_dao_han ?? '',
+            'CCCD': item.cccd ?? '',
+            'Họ': item.ho ?? '',
+            'Tên': item.ten ?? '',
+            'Giới tính': item.gioi_tinh ?? '',
+            'Ngày sinh': item.ngay_sinh ?? '',
+            'Tuổi': item.tuoi ?? '',
+            'Điện thoại': item.dien_thoai ?? '',
+            'Địa chỉ cụ thể': item.dia_chi ?? '',
+            'IP': item.ip ?? '',
+            'Kết quả cuộc gọi': item.ket_qua_cuoc_goi ?? ''
+        };
+    }
+
+    /**
      * [CHỨC NĂNG TAB 3]: Xuất tệp Excel từ dữ liệu đang lọc ở Khung 2
+     * FIX: chặn xuất file khi file CHƯA được khoá (tránh xung đột: agent vẫn đang gọi
+     * file này mà admin đã lấy data giao cho người khác).
      */
     function exportTab3Excel() {
+        if (currentFileStatus !== 'Đã khóa') {
+            Swal.fire({ title: 'Chưa thể xuất file!', text: 'Vui lòng khoá file này ở Tab 2 (Phân Bổ Lead) trước khi xuất, để tránh xung đột quyền lợi với Agent đang phụ trách.', icon: 'warning', confirmButtonText: 'Đã hiểu' });
+            return;
+        }
+
         const filteredData = getFilteredTab3Data();
         if (filteredData.length === 0) {
             Swal.fire({ title: 'Trống!', text: 'Không có dữ liệu phù hợp với bộ lọc để xuất file Excel.', icon: 'warning', confirmButtonText: 'Đóng' });
             return;
         }
-        const worksheet = XLSX.utils.json_to_sheet(filteredData);
+
+        const templateRows = filteredData.map(mapToTemplateRow);
+        const worksheet = XLSX.utils.json_to_sheet(templateRows);
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, "ChiTietLead");
         XLSX.writeFile(workbook, `Danh_Sach_Lead_Loc_${Date.now()}.xlsx`);
@@ -1188,8 +1271,14 @@
 
     /**
      * [CHỨC NĂNG TAB 3]: Mở nhanh Google Sheets để xử lý dữ liệu (Xuất dữ liệu đang lọc)
+     * FIX: chặn xuất khi file CHƯA khoá, giống hệt điều kiện của exportTab3Excel().
      */
     function exportTab3GoogleSheet() {
+        if (currentFileStatus !== 'Đã khóa') {
+            Swal.fire({ title: 'Chưa thể xuất file!', text: 'Vui lòng khoá file này ở Tab 2 (Phân Bổ Lead) trước khi xuất, để tránh xung đột quyền lợi với Agent đang phụ trách.', icon: 'warning', confirmButtonText: 'Đã hiểu' });
+            return;
+        }
+
         const filteredData = getFilteredTab3Data();
         if (filteredData.length === 0) {
             Swal.fire({ title: 'Trống!', text: 'Không có dữ liệu phù hợp với bộ lọc để đẩy lên Google Sheet.', icon: 'warning', confirmButtonText: 'Đóng' });

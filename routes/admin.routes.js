@@ -212,6 +212,69 @@ router.get('/data-files', async (req, res) => {
 });
 
 /**
+ * GET /data-files/stats - Tính toán số liệu Chưa Gọi / Đã Gọi / Đã Hẹn THẬT SỰ cho từng file,
+ * dựa trên kết quả cuộc gọi MỚI NHẤT của từng số điện thoại trong bảng call_history.
+ * FIX: trước đây quanlydata.html hardcode cứng "Chưa Gọi = tổng số, Đã Gọi = 0, Đã Hẹn = 0"
+ * (dòng renderTab3FileList) - route này cung cấp dữ liệu thật để thay thế.
+ */
+router.get('/data-files/stats', async (req, res) => {
+    try {
+        // 1. Lấy toàn bộ contracts (chỉ cần file_id + dien_thoai để gom nhóm/đếm)
+        const { data: contracts, error: cErr } = await req.supabase
+            .from('contracts')
+            .select('file_id, dien_thoai');
+        if (cErr) throw cErr;
+
+        const phoneList = [...new Set((contracts || []).map(c => c.dien_thoai).filter(Boolean))];
+
+        // 2. Lấy lịch sử cuộc gọi của các số này, sắp mới nhất lên đầu để lấy kết quả GẦN NHẤT
+        const callMap = new Map(); // dien_thoai (trim) -> ket_qua_cuoc_goi mới nhất
+        if (phoneList.length > 0) {
+            const { data: calls, error: callErr } = await req.supabase
+                .from('call_history')
+                .select('dien_thoai, ket_qua_cuoc_goi, thoi_gian_goi')
+                .in('dien_thoai', phoneList)
+                .order('thoi_gian_goi', { ascending: false });
+            if (callErr) throw callErr;
+
+            (calls || []).forEach(c => {
+                const phone = String(c.dien_thoai || '').trim();
+                // Chỉ set 1 lần cho mỗi số (vì đã order mới nhất trước, dòng đầu tiên gặp là mới nhất)
+                if (phone && !callMap.has(phone)) {
+                    callMap.set(phone, c.ket_qua_cuoc_goi);
+                }
+            });
+        }
+
+        // 3. Gom nhóm theo file_id, đếm 3 trạng thái
+        // Quy ước (khớp logic calculateCallStatistics() trong chuadahen.js):
+        // - "Đã Gọi" tính TẤT CẢ các lead đã có kết quả cuộc gọi (bao gồm cả lead đã hẹn thành công)
+        // - "Đã Hẹn" là tập CON của "Đã Gọi", chỉ tính khi kết quả = "Hẹn gặp thành công"
+        const statsMap = {};
+        (contracts || []).forEach(c => {
+            const fileId = c.file_id;
+            if (!fileId) return;
+            if (!statsMap[fileId]) statsMap[fileId] = { chuaGoi: 0, daGoi: 0, daHen: 0 };
+
+            const phone = String(c.dien_thoai || '').trim();
+            const ketQua = callMap.get(phone);
+
+            if (!ketQua) {
+                statsMap[fileId].chuaGoi++;
+            } else {
+                statsMap[fileId].daGoi++;
+                if (ketQua === 'Hẹn gặp thành công') statsMap[fileId].daHen++;
+            }
+        });
+
+        res.json({ success: true, data: statsMap });
+    } catch (error) {
+        console.error("Lỗi tính thống kê data-files:", error.message);
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+/**
  * POST /upload-data - Tải lên file Excel và tự động gán file_id cho từng dòng contracts
  */
 router.post('/upload-data', upload.array('files'), async (req, res) => {
@@ -356,14 +419,80 @@ router.put('/rename-file/:id', async (req, res) => {
 
 router.get('/file-leads/:fileId', async (req, res) => {
     try {
-        const { data, error } = await req.supabase
+        const fileId = req.params.fileId;
+
+        // 0. Lấy trạng thái hiện tại của file (để frontend biết đã khoá hay chưa,
+        // dùng để chặn nút Xuất Excel/Google Sheet cho tới khi khoá)
+        const { data: fileInfo, error: fileInfoErr } = await req.supabase
+            .from('data_files')
+            .select('status')
+            .eq('id', fileId)
+            .single();
+        if (fileInfoErr) throw fileInfoErr;
+
+        // 1. Lấy toàn bộ contracts thuộc file này
+        const { data: contracts, error } = await req.supabase
             .from('contracts')
             .select('*')
-            .eq('file_id', req.params.fileId); // Đã lọc chuẩn theo fileId
+            .eq('file_id', fileId);
 
         if (error) throw error;
 
-        res.json({ success: true, leads: data || [] });
+        const phoneList = [...new Set((contracts || []).map(c => c.dien_thoai).filter(Boolean))];
+
+        // 2. Join sang customers theo dien_thoai (lấy ho, ten, cccd, gioi_tinh, ngay_sinh, tuoi, dia_chi)
+        // FIX: trước đây route này chỉ trả về contracts thô, không có thông tin khách hàng
+        // nên bảng "Lọc dữ liệu chi tiết" không hiện được Họ Tên/CCCD/Địa chỉ đúng yêu cầu.
+        const customersMap = new Map();
+        if (phoneList.length > 0) {
+            const { data: customersData, error: cusErr } = await req.supabase
+                .from('customers')
+                .select('dien_thoai, cccd, ho, ten, gioi_tinh, ngay_sinh, tuoi, dia_chi')
+                .in('dien_thoai', phoneList);
+            if (cusErr) throw cusErr;
+            (customersData || []).forEach(cus => customersMap.set(String(cus.dien_thoai).trim(), cus));
+        }
+
+        // 3. Join sang call_history: lấy KẾT QUẢ CUỘC GỌI MỚI NHẤT theo từng số điện thoại
+        // FIX: đây chính là dữ liệu còn thiếu khiến bộ đếm Chưa Gọi/Đã Gọi/Đã Hẹn và bộ lọc
+        // trạng thái ở Khung 2 không hoạt động được trước đây.
+        const callMap = new Map();
+        if (phoneList.length > 0) {
+            const { data: calls, error: callErr } = await req.supabase
+                .from('call_history')
+                .select('dien_thoai, ket_qua_cuoc_goi, thoi_gian_goi')
+                .in('dien_thoai', phoneList)
+                .order('thoi_gian_goi', { ascending: false });
+            if (callErr) throw callErr;
+            (calls || []).forEach(c => {
+                const phone = String(c.dien_thoai || '').trim();
+                if (phone && !callMap.has(phone)) {
+                    callMap.set(phone, c.ket_qua_cuoc_goi);
+                }
+            });
+        }
+
+        // 4. Ghép đủ dữ liệu: contracts + customers + ket_qua_cuoc_goi mới nhất.
+        // Trả về ĐẦY ĐỦ field (khớp Template_data.xlsx) để:
+        // - Frontend Khung 2 chỉ hiển thị 6 cột đơn giản (STT tự đếm, Họ Tên, CCCD, SĐT, Địa chỉ, Kết quả)
+        // - Nhưng khi Xuất Excel/Google Sheet vẫn xuất đủ toàn bộ cột theo đúng Template
+        const leads = (contracts || []).map(c => {
+            const phone = String(c.dien_thoai || '').trim();
+            const cus = customersMap.get(phone) || {};
+            return {
+                ...c,
+                ket_qua_cuoc_goi: callMap.get(phone) || null,
+                cccd: cus.cccd || '',
+                ho: cus.ho || '',
+                ten: cus.ten || '',
+                gioi_tinh: cus.gioi_tinh || '',
+                ngay_sinh: cus.ngay_sinh || '',
+                tuoi: cus.tuoi || '',
+                dia_chi: cus.dia_chi || ''
+            };
+        });
+
+        res.json({ success: true, leads, file_status: fileInfo ? fileInfo.status : null });
     } catch (error) {
         console.error("API file-leads error:", error.message);
         res.status(500).json({ success: false, message: error.message });

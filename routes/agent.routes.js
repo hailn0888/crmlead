@@ -54,17 +54,22 @@ router.get('/files', async (req, res) => {
         const fileIds = [...new Set(contracts.map(c => c.file_id).filter(Boolean))];
 
         // Bước 2: Lấy thông tin data_files dựa vào danh sách file_id độc lập
+        // FIX: bổ sung lấy thêm cột "status" để loại bỏ file đã bị Admin khoá
+        // ("Đã khóa") ra khỏi dropdown "Nguồn" - agent không nên tiếp tục thấy/chọn
+        // file đã khoá để gọi tiếp, dù lịch sử cuộc gọi cũ vẫn được giữ nguyên.
         let fileMap = {};
         if (fileIds.length > 0) {
             const { data: filesData, error: fileErr } = await supabase
                 .from('data_files')
-                .select('id, file_name')
+                .select('id, file_name, status')
                 .in('id', fileIds);
 
             if (fileErr) throw fileErr;
             if (filesData) {
                 filesData.forEach(f => {
-                    fileMap[f.id] = f.file_name;
+                    if (f.status !== 'Đã khóa') {
+                        fileMap[f.id] = f.file_name;
+                    }
                 });
             }
         }
@@ -90,6 +95,21 @@ router.get('/files', async (req, res) => {
     } catch (error) {
         console.error("Lỗi lấy danh sách file:", error);
         res.status(500).json({ success: false, message: 'Lỗi server nội bộ' });
+    }
+});
+
+// API: Lấy danh sách đồng nghiệp (Agent) để chọn gửi hẹn (dùng cho popup Gửi Cuộc Hẹn)
+router.get('/colleagues', async (req, res) => {
+    try {
+        const { data, error } = await supabase
+            .from('users')
+            .select('id, ho_va_ten, ten_dang_nhap')
+            .ilike('phan_quyen', 'agent');
+
+        if (error) throw error;
+        res.json({ success: true, data: data || [] });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
     }
 });
 
@@ -133,6 +153,25 @@ router.get('/leads', async (req, res) => {
             }
         }
 
+        // 2.5. FIX: Loại bỏ các lead thuộc file_id đã bị Admin khoá ("Đã khóa").
+        // Yêu cầu: khi khoá file, agent không được thấy tiếp lead của file đó trong
+        // Leads nữa, NHƯNG lịch sử/nhật ký cuộc gọi (bảng call_history) không bị
+        // đụng tới - việc này tự động đảm bảo vì call_history không có cột file_id,
+        // chỉ có bảng contracts/lead_assignments mới bị lọc ở đây.
+        const fileIdsInvolved = [...new Set(
+            Array.from(contractsMap.values()).map(c => c.file_id).filter(Boolean)
+        )];
+        let lockedFileIds = new Set();
+        if (fileIdsInvolved.length > 0) {
+            const { data: filesData } = await supabase
+                .from('data_files')
+                .select('id, status')
+                .in('id', fileIdsInvolved);
+            (filesData || []).forEach(f => {
+                if (f.status === 'Đã khóa') lockedFileIds.add(f.id);
+            });
+        }
+
         // 3. Lấy dữ liệu từ bảng customers
         let customersMap = new Map();
         if (dienThoais.length > 0) {
@@ -146,20 +185,22 @@ router.get('/leads', async (req, res) => {
             }
         }
 
-        // 4. Ghép nối dữ liệu trả về cho frontend
-        const formattedData = assignments.map(item => {
-            const contractKey = item.so_hop_dong ? String(item.so_hop_dong).trim() : '';
-            const phoneKey = item.dien_thoai ? String(item.dien_thoai).trim() : '';
+        // 4. Ghép nối dữ liệu trả về cho frontend (bỏ qua các lead thuộc file đã khoá)
+        const formattedData = assignments
+            .map(item => {
+                const contractKey = item.so_hop_dong ? String(item.so_hop_dong).trim() : '';
+                const phoneKey = item.dien_thoai ? String(item.dien_thoai).trim() : '';
 
-            const contract = contractsMap.get(contractKey) || {};
-            const customer = customersMap.get(phoneKey || String(contract.dien_thoai || '').trim()) || {};
-            
-            return {
-                ...item,
-                contracts: contract,
-                customers: customer
-            };
-        });
+                const contract = contractsMap.get(contractKey) || {};
+                const customer = customersMap.get(phoneKey || String(contract.dien_thoai || '').trim()) || {};
+
+                return {
+                    ...item,
+                    contracts: contract,
+                    customers: customer
+                };
+            })
+            .filter(item => !item.contracts.file_id || !lockedFileIds.has(item.contracts.file_id));
 
         res.json({ success: true, data: formattedData });
     } catch (error) {
@@ -256,18 +297,4 @@ router.get('/calls', async (req, res) => {
     }
 });
 
-// API: Lấy danh sách đồng nghiệp (Agent) để chọn gửi hẹn
-router.get('/colleagues', async (req, res) => {
-    try {
-        const { data, error } = await supabase
-            .from('users')
-            .select('id, ho_va_ten, ten_dang_nhap')
-            .ilike('phan_quyen', 'agent');
-
-        if (error) throw error;
-        res.json({ success: true, data: data || [] });
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
-    }
-});
 module.exports = router;
