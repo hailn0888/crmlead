@@ -736,24 +736,26 @@
                         return;
                     }
 
+                    // Tạo nội dung tóm tắt hợp đồng
                     let summaryHtml = `
-                        <div class="text-left space-y-2 mt-2 max-h-48 overflow-y-auto p-3 bg-theme-bg rounded-lg border border-theme-border text-xs">
-                            <div class="font-bold text-theme-primary">▪ Sản phẩm chính: ${lastCalculatedData.mainProduct}</div>
-                            <div class="text-theme-muted pl-3">Phí: ${lastCalculatedData.mainPremium.toLocaleString('vi-VN')} VNĐ (${lastCalculatedData.mainTerm} năm)</div>
+                        <div class="text-left space-y-2 mt-2 max-h-48 overflow-y-auto p-3 bg-theme-bg rounded-lg border border-theme-border">
+                            <div class="font-bold text-theme-primary">Sản phẩm chính: ${lastCalculatedData.mainProduct}</div>
+                            <div class="text-theme-muted pl-3">Phí: ${lastCalculatedData.mainPremium.toLocaleString('vi-VN')} VNĐ</div>
                     `;
 
                     if (lastCalculatedData.riders && lastCalculatedData.riders.length > 0) {
                         lastCalculatedData.riders.forEach(r => {
                             summaryHtml += `
-                                <div class="font-medium text-theme-text mt-1">▪ Bổ trợ: ${r.name}</div>
+                                <div class="font-medium text-theme-text mt-1">• Bổ trợ: ${r.name}</div>
                                 <div class="text-theme-muted pl-3">Phí: ${r.premium.toLocaleString('vi-VN')} VNĐ (${r.term} năm)</div>
                             `;
                         });
                     } else {
-                        summaryHtml += `<div class="italic text-theme-muted mt-1">▪ Không có sản phẩm bổ trợ đi kèm.</div>`;
+                        summaryHtml += `<div class="italic text-theme-muted mt-1">Không có sản phẩm bổ trợ đi kèm.</div>`;
                     }
                     summaryHtml += `</div>`;
 
+                    // Hiển thị Popup xác nhận thông tin phát hành
                     Swal.fire({
                         title: 'Xác nhận lưu doanh số hợp đồng',
                         html: `
@@ -761,19 +763,19 @@
                             <div class="text-left space-y-3 mt-4 text-xs">
                                 <div>
                                     <label class="block font-medium mb-1">Ngày phát hành hợp đồng</label>
-                                    <input type="date" id="swal-issue-date" value="${new Date().toISOString().split('T')[0]}" class="w-full px-2.5 py-1.5 border rounded-lg bg-theme-card border-theme-border text-xs">
+                                    <input type="date" id="swal-issue-date" value="${new Date().toISOString().split('T')[0]}" class="w-full px-2.5 py-1.5 border rounded-lg bg-theme-card border-theme-border">
                                 </div>
                                 <div>
                                     <label class="block font-medium mb-1">Phương thức đóng phí</label>
-                                    <select id="swal-payment-mode" class="w-full px-2.5 py-1.5 border rounded-lg bg-theme-card border-theme-border text-xs">
-                                        <option value="YEAR">Định kỳ năm (100% phí hàng năm)</option>
+                                    <select id="swal-payment-mode" class="w-full px-2.5 py-1.5 border rounded-lg bg-theme-card border-theme-border">
+                                        <option value="YEAR">Định kỳ năm (100% phí/năm)</option>
                                         <option value="HALF">Định kỳ nửa năm (50% x 2 kỳ)</option>
                                         <option value="QUARTER">Định kỳ quý (25% x 4 kỳ)</option>
                                     </select>
                                 </div>
                                 <div>
                                     <label class="block font-medium mb-1">Tỷ lệ hưởng hoa hồng (%)</label>
-                                    <select id="swal-split-rate" class="w-full px-2.5 py-1.5 border rounded-lg bg-theme-card border-theme-border text-xs">
+                                    <select id="swal-split-rate" class="w-full px-2.5 py-1.5 border rounded-lg bg-theme-card border-theme-border">
                                         <option value="100">100% (Đại lý trực tiếp)</option>
                                         <option value="50">50% (Đại lý hỗ trợ / chia sẻ)</option>
                                     </select>
@@ -793,69 +795,45 @@
                                 Swal.showValidationMessage('Vui lòng chọn ngày phát hành hợp đồng!');
                                 return false;
                             }
-
                             return { issueDate, paymentMode, splitRate };
                         }
                     }).then((result) => {
                         if (result.isConfirmed) {
                             const { issueDate, paymentMode, splitRate } = result.value;
 
-                            let installments = [];
-                            let baseDate = new Date(issueDate);
-
-                            let numPeriods = 1;
-                            let fycMultiplier = 1;
-
-                            if (paymentMode === 'HALF') {
-                                numPeriods = 2;
-                                fycMultiplier = 0.5;
-                            } else if (paymentMode === 'QUARTER') {
-                                numPeriods = 4;
-                                fycMultiplier = 0.25;
-                            }
-
-                            for (let i = 0; i < numPeriods; i++) {
-                                let dueDateObj = new Date(baseDate);
-                                if (paymentMode === 'HALF') {
-                                    dueDateObj.setMonth(dueDateObj.getMonth() + (i * 6));
-                                } else if (paymentMode === 'QUARTER') {
-                                    dueDateObj.setMonth(dueDateObj.getMonth() + (i * 3));
-                                }
-
-                                installments.push({
-                                    periodIndex: i + 1,
-                                    dueDate: dueDateObj.toISOString().split('T')[0],
-                                    status: 'pending',
-                                    paidDate: null,
-                                    fycAmount: lastCalculatedData.fyc.y1 * splitRate * fycMultiplier
+                            // Tính toán FYC thực tế sau khi nhân tỷ lệ chia
+                            const adjustedFyc = {};
+                            if (lastCalculatedData.fyc) {
+                                Object.keys(lastCalculatedData.fyc).forEach(key => {
+                                    adjustedFyc[key] = (lastCalculatedData.fyc[key] || 0) * splitRate;
                                 });
                             }
 
-                            let adjustedFyc = {};
-                            Object.keys(lastCalculatedData.fyc).forEach(key => {
-                                adjustedFyc[key] = lastCalculatedData.fyc[key] * splitRate;
-                            });
-
-                            let personalSalesHistory = JSON.parse(localStorage.getItem('prudential_personal_sales') || '[]');
-                            
+                            // Cấu trúc bản ghi doanh số
                             const record = {
                                 id: 'SALE-' + Date.now(),
                                 timestamp: new Date().toISOString(),
                                 issueDate: issueDate,
                                 paymentMode: paymentMode,
                                 splitRate: splitRate * 100,
-                                installments: installments,
-                                ...lastCalculatedData,
-                                fyc: adjustedFyc
+                                mainProduct: lastCalculatedData.mainProduct,
+                                mainPremium: lastCalculatedData.mainPremium,
+                                topupPremium: lastCalculatedData.topupPremium || 0,
+                                fyc: adjustedFyc,
+                                // FYP tính chuẩn MDRT: Phí chính + Phí bổ trợ + 6% Top-up
+                                fypMdrt: lastCalculatedData.mainPremium + (lastCalculatedData.riderPremium || 0) + ((lastCalculatedData.topupPremium || 0) * 0.06)
                             };
 
+                            // Lưu vào LocalStorage (hoặc gọi API gửi vào Database tại đây)
+                            let personalSalesHistory = JSON.parse(localStorage.getItem('prudential_personal_sales') || '[]');
                             personalSalesHistory.push(record);
-                            localStorage.setItem('prudential_personal_sales', JSON.stringify(personalSalesHistory));
+                            localStorage.getItem('prudential_personal_sales', JSON.stringify(personalSalesHistory));
 
+                            // Thông báo & Chuyển hướng
                             Swal.fire({
                                 icon: 'success',
                                 title: 'Đã lưu thành công!',
-                                text: `Hợp đồng đã được ghi nhận và phân bổ kỳ đóng phí. Đang chuyển sang trang doanh số...`,
+                                text: 'Hợp đồng đã được ghi nhận vào Doanh số cá nhân.',
                                 confirmButtonColor: '#16a34a',
                                 timer: 1500,
                                 showConfirmButton: false
@@ -866,18 +844,167 @@
                     });
                 });
             }
+            
+            // Xử lý sự kiện bấm nút Lưu làm doanh số
+            const btnSavePersonal = document.getElementById('btn-save-personal');
+            if (btnSavePersonal) {
+                btnSavePersonal.addEventListener('click', () => {
+                    if (!lastCalculatedData) {
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Chưa có dữ liệu',
+                            text: 'Vui lòng tính toán dòng tiền FYC trước khi bấm lưu doanh số!',
+                            confirmButtonColor: '#dc2626'
+                        });
+                        return;
+                    }
 
-            btnReset.addEventListener('click', () => {
-                mainProductInput.value = '';
-                mainProductPremiumInput.value = '';
-                document.getElementById('main-product-term').value = '';
-                additionalCriteriaBox.classList.add('hidden');
-                ridersContainer.innerHTML = '';
-                noRiderMsg.style.display = 'block';
-                document.getElementById('result-card').classList.add('hidden');
-                lastCalculatedData = null;
-            });
-        });
+                    // Tạo nội dung tóm tắt hợp đồng
+                    let summaryHtml = `
+                        <div class="text-left space-y-2 mt-2 max-h-40 overflow-y-auto p-3 bg-theme-bg rounded-lg border border-theme-border text-xs">
+                            <div class="font-bold text-theme-primary">Sản phẩm chính: ${lastCalculatedData.mainProduct}</div>
+                            <div class="text-theme-muted pl-3">Phí: ${lastCalculatedData.mainPremium ? lastCalculatedData.mainPremium.toLocaleString('vi-VN') : 0} VNĐ</div>
+                    `;
+
+                    if (lastCalculatedData.riders && lastCalculatedData.riders.length > 0) {
+                        lastCalculatedData.riders.forEach(r => {
+                            summaryHtml += `
+                                <div class="font-medium text-theme-text mt-1">• Bổ trợ: ${r.name}</div>
+                                <div class="text-theme-muted pl-3">Phí: ${r.premium ? r.premium.toLocaleString('vi-VN') : 0} VNĐ (${r.term} năm)</div>
+                            `;
+                        });
+                    } else {
+                        summaryHtml += `<div class="italic text-theme-muted mt-1">Không có sản phẩm bổ trợ đi kèm.</div>`;
+                    }
+                    summaryHtml += `</div>`;
+
+                    // Hiển thị Popup xác nhận thông tin hợp đồng
+                    Swal.fire({
+                        title: 'Xác nhận lưu doanh số hợp đồng',
+                        width: '600px',
+                        html: `
+                            ${summaryHtml}
+                            <div class="text-left space-y-3 mt-4 text-xs">
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="block font-medium mb-1">Số Hợp Đồng <span class="text-red-500">*</span></label>
+                                        <input type="text" id="swal-contract-num" placeholder="VD: 74839201" class="w-full px-2.5 py-1.5 border rounded-lg bg-theme-card border-theme-border">
+                                    </div>
+                                    <div>
+                                        <label class="block font-medium mb-1">Ngày phát hành <span class="text-red-500">*</span></label>
+                                        <input type="date" id="swal-issue-date" value="${new Date().toISOString().split('T')[0]}" class="w-full px-2.5 py-1.5 border rounded-lg bg-theme-card border-theme-border">
+                                    </div>
+                                </div>
+
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="block font-medium mb-1">Bên Mua Bảo Hiểm (BMBH) <span class="text-red-500">*</span></label>
+                                        <input type="text" id="swal-owner-name" placeholder="Họ và tên BMBH" class="w-full px-2.5 py-1.5 border rounded-lg bg-theme-card border-theme-border">
+                                    </div>
+                                    <div>
+                                        <label class="block font-medium mb-1">Người Được Bảo Hiểm Chính (NĐBH) <span class="text-red-500">*</span></label>
+                                        <input type="text" id="swal-insured-name" placeholder="Họ và tên NĐBH chính" class="w-full px-2.5 py-1.5 border rounded-lg bg-theme-card border-theme-border">
+                                    </div>
+                                </div>
+
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="block font-medium mb-1">Phương thức đóng phí</label>
+                                        <select id="swal-payment-mode" class="w-full px-2.5 py-1.5 border rounded-lg bg-theme-card border-theme-border">
+                                            <option value="YEAR">Định kỳ năm (100% phí/năm)</option>
+                                            <option value="HALF">Định kỳ nửa năm (50% x 2 kỳ)</option>
+                                            <option value="QUARTER">Định kỳ quý (25% x 4 kỳ)</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block font-medium mb-1">Tỷ lệ hưởng hoa hồng (%)</label>
+                                        <select id="swal-split-rate" class="w-full px-2.5 py-1.5 border rounded-lg bg-theme-card border-theme-border">
+                                            <option value="100">100% (Đại lý trực tiếp)</option>
+                                            <option value="50">50% (Đại lý hỗ trợ / chia sẻ)</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        `,
+                        confirmButtonText: 'Lưu & Sang trang Doanh số',
+                        showCancelButton: true,
+                        cancelButtonText: 'Hủy',
+                        confirmButtonColor: '#16a34a',
+                        preConfirm: () => {
+                            const contractNum = document.getElementById('swal-contract-num').value.trim();
+                            const issueDate = document.getElementById('swal-issue-date').value;
+                            const ownerName = document.getElementById('swal-owner-name').value.trim();
+                            const insuredName = document.getElementById('swal-insured-name').value.trim();
+                            const paymentMode = document.getElementById('swal-payment-mode').value;
+                            const splitRate = parseFloat(document.getElementById('swal-split-rate').value) / 100;
+
+                            if (!contractNum) {
+                                Swal.showValidationMessage('Vui lòng nhập Số Hợp Đồng!');
+                                return false;
+                            }
+                            if (!issueDate) {
+                                Swal.showValidationMessage('Vui lòng chọn Ngày Phát Hành!');
+                                return false;
+                            }
+                            if (!ownerName) {
+                                Swal.showValidationMessage('Vui lòng nhập tên Bên Mua Bảo Hiểm!');
+                                return false;
+                            }
+                            if (!insuredName) {
+                                Swal.showValidationMessage('Vui lòng nhập tên Người Được Bảo Hiểm Chính!');
+                                return false;
+                            }
+
+                            return { contractNum, issueDate, ownerName, insuredName, paymentMode, splitRate };
+                        }
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            const { contractNum, issueDate, ownerName, insuredName, paymentMode, splitRate } = result.value;
+
+                            // Tính toán FYC thực tế theo tỷ lệ hưởng
+                            const adjustedFyc = {};
+                            if (lastCalculatedData.fyc) {
+                                Object.keys(lastCalculatedData.fyc).forEach(key => {
+                                    adjustedFyc[key] = (lastCalculatedData.fyc[key] || 0) * splitRate;
+                                });
+                            }
+
+                            // Cấu trúc bản ghi hoàn chỉnh lưu vào hệ thống
+                            const record = {
+                                id: 'SALE-' + Date.now(),
+                                contractNum: contractNum,
+                                issueDate: issueDate,
+                                ownerName: ownerName,
+                                insuredName: insuredName,
+                                paymentMode: paymentMode,
+                                splitRate: splitRate * 100,
+                                mainProduct: lastCalculatedData.mainProduct,
+                                mainPremium: lastCalculatedData.mainPremium || 0,
+                                topupPremium: lastCalculatedData.topupPremium || 0,
+                                fyc: adjustedFyc,
+                                fypMdrt: (lastCalculatedData.mainPremium || 0) + (lastCalculatedData.riderPremium || 0) + ((lastCalculatedData.topupPremium || 0) * 0.06),
+                                timestamp: new Date().toISOString()
+                            };
+
+                            // Lưu vào LocalStorage (hoặc gửi API DB)
+                            let personalSalesHistory = JSON.parse(localStorage.getItem('prudential_personal_sales') || '[]');
+                            personalSalesHistory.push(record);
+                            localStorage.setItem('prudential_personal_sales', JSON.stringify(personalSalesHistory));
+
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Đã lưu thành công!',
+                                text: `Hợp đồng ${contractNum} của khách hàng ${ownerName} đã ghi nhận.`,
+                                confirmButtonColor: '#16a34a',
+                                timer: 1500,
+                                showConfirmButton: false
+                            }).then(() => {
+                                window.location.href = 'sales.html';
+                            });
+                        }
+                    });
+                });
+            }
     </script>
 </body>
 </html>
