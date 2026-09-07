@@ -387,12 +387,12 @@ router.post('/upload-data', upload.array('files'), async (req, res) => {
                     if (cusErr) throw cusErr;
                 }
 
-                // Bước 4: Insert bảng contracts kèm file_id
+                // Bước 4: Insert/Update bảng contracts kèm file_id
                 if (contractRows.length > 0) {
                     const { error: insertErr } = await req.supabase
                         .from('contracts')
-                        .insert(contractRows);
-                    
+                        .upsert(contractRows, { onConflict: 'so_hop_dong' });
+
                     if (insertErr) throw insertErr;
                 }
             }
