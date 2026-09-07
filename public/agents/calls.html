@@ -286,25 +286,37 @@
             }
         }
 
-        function formatDateTimeVN(isoString) {
-            if (!isoString) return '-';
-            // Backend đôi khi trả timestamp thiếu hậu tố 'Z' (UTC marker), khiến trình duyệt
-            // hiểu nhầm là giờ local thay vì UTC. Chuẩn hoá: nếu chuỗi chưa có 'Z' hoặc
-            // offset (+hh:mm/-hh:mm) ở cuối, tự thêm 'Z' để ép hiểu đúng là giờ UTC.
+        // Hàm dùng chung: chuẩn hoá 1 chuỗi timestamp về đúng giờ Việt Nam (UTC+7).
+        // Backend đôi khi trả timestamp thiếu hậu tố 'Z' (UTC marker), khiến trình duyệt
+        // hiểu nhầm là giờ local thay vì UTC -> tự thêm 'Z' để ép hiểu đúng là giờ UTC.
+        function getVNDateParts(isoString) {
+            if (!isoString) return null;
             let normalized = isoString;
             if (!/[zZ]|[+\-]\d{2}:\d{2}$/.test(normalized)) {
                 normalized += 'Z';
             }
             const date = new Date(normalized);
-            if (isNaN(date.getTime())) return isoString;
+            if (isNaN(date.getTime())) return null;
 
             const vnDate = new Date(date.getTime() + 7 * 60 * 60 * 1000);
-            const hours = String(vnDate.getUTCHours()).padStart(2, '0');
-            const minutes = String(vnDate.getUTCMinutes()).padStart(2, '0');
-            const day = String(vnDate.getUTCDate()).padStart(2, '0');
-            const month = String(vnDate.getUTCMonth() + 1).padStart(2, '0');
-            const year = vnDate.getUTCFullYear();
-            return `${hours}:${minutes} ngày ${day}/${month}/${year}`;
+            const hour24 = vnDate.getUTCHours();
+            let hour12 = hour24 % 12;
+            if (hour12 === 0) hour12 = 12;
+            return {
+                hh24: String(hour24).padStart(2, '0'),
+                hh12: String(hour12).padStart(2, '0'),
+                mm: String(vnDate.getUTCMinutes()).padStart(2, '0'),
+                dd: String(vnDate.getUTCDate()).padStart(2, '0'),
+                mo: String(vnDate.getUTCMonth() + 1).padStart(2, '0'),
+                yy: vnDate.getUTCFullYear(),
+                buoi: hour24 < 12 ? 'SÁNG' : 'CHIỀU'
+            };
+        }
+
+        function formatDateTimeVN(isoString) {
+            const p = getVNDateParts(isoString);
+            if (!p) return isoString || '-';
+            return `${p.hh24}:${p.mm} ngày ${p.dd}/${p.mo}/${p.yy}`;
         }
 
         function renderCurrentTab() {
@@ -608,14 +620,10 @@
                 // với nội dung ghi_chu_hen mà người gửi đã nhập
                 let ghiChuHtml = '';
                 if (item.loai_hen === 'Khách hẹn' && item.thoi_gian_khach_hen) {
-                    const khRaw = new Date(item.thoi_gian_khach_hen);
-                    const kh = new Date(khRaw.getTime() + 7 * 60 * 60 * 1000);
-                    const hh = String(kh.getUTCHours()).padStart(2, '0');
-                    const mm = String(kh.getUTCMinutes()).padStart(2, '0');
-                    const dd = String(kh.getUTCDate()).padStart(2, '0');
-                    const mo = String(kh.getUTCMonth() + 1).padStart(2, '0');
-                    const yy = kh.getUTCFullYear();
-                    ghiChuHtml += `<div class="font-semibold text-[11px] text-amber-600">Khách hẹn lúc ${hh}:${mm} ngày ${dd}/${mo}/${yy}</div>`;
+                    const p = getVNDateParts(item.thoi_gian_khach_hen);
+                    if (p) {
+                        ghiChuHtml += `<div class="font-semibold text-[11px] text-amber-600">Khách hẹn lúc ${p.hh12}:${p.mm} ${p.buoi} ngày ${p.dd}/${p.mo}/${p.yy}</div>`;
+                    }
                 }
                 ghiChuHtml += `<div class="text-xs opacity-90">${item.ghi_chu_hen || '-'}</div>`;
 
