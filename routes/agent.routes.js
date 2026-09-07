@@ -297,4 +297,237 @@ router.get('/calls', async (req, res) => {
     }
 });
 
+// =====================================================================
+// 4. API DOANH SỐ CÁ NHÂN (FYC / Hợp đồng) - dùng cho fyc.html & sales.html
+// Trước đây 2 trang này gọi thẳng Supabase từ trình duyệt và lưu tạm vào
+// localStorage -> mất dữ liệu khi đổi máy/xoá cache/đăng nhập lại.
+// Từ nay mọi thao tác đọc/ghi đều đi qua route này (giống hệt pattern
+// /files, /leads ở trên) để Database là nơi lưu trữ DUY NHẤT.
+// =====================================================================
+
+// Hàm phụ: sinh lịch các kỳ đóng phí (Năm/Nửa năm/Quý) kèm số FYC mỗi kỳ.
+// Kỳ 1 mặc định coi như đã đóng ngay tại ngày phát hành hợp đồng.
+function buildInstallmentSchedule(dinhKy, ngayPhatHanh, hoaHongFyc) {
+    const divisor = dinhKy === 'Nửa năm' ? 2 : (dinhKy === 'Quý' ? 4 : 1);
+    const fycPerPeriod = (Number(hoaHongFyc) || 0) / divisor;
+    const schedule = [];
+    for (let i = 1; i <= divisor; i++) {
+        schedule.push({
+            ky_thu_may: i,
+            ngay_den_han: ngayPhatHanh || null,
+            ngay_da_dong: i === 1 ? ngayPhatHanh : null,
+            trang_thai: i === 1 ? 'paid' : 'unpaid',
+            so_tien_fyc: fycPerPeriod
+        });
+    }
+    return schedule;
+}
+
+// GET: Lấy toàn bộ danh sách doanh số (hợp đồng + lịch đóng phí) của 1 agent
+router.get('/sales', async (req, res) => {
+    try {
+        const agentName = req.query.agent;
+        if (!agentName) {
+            return res.status(400).json({ success: false, message: 'Thiếu thông tin Agent!' });
+        }
+
+        const agentId = await getAgentId(agentName);
+        if (!agentId) {
+            return res.json({ success: true, data: [] });
+        }
+
+        // Chỉ lấy đúng hợp đồng của agent này (lọc theo agent_id, không lọc
+        // theo tên chuỗi ten_dang_nhap để tránh trùng tên và chắc chắn agent
+        // khác không xem được doanh số của nhau)
+        const { data: contracts, error: contractError } = await supabase
+            .from('danh_sach_hop_dong')
+            .select('*')
+            .eq('agent_id', agentId)
+            .order('created_at', { ascending: false });
+
+        if (contractError) throw contractError;
+        if (!contracts || contracts.length === 0) {
+            return res.json({ success: true, data: [] });
+        }
+
+        const soHopDongs = contracts.map(c => c.so_hop_dong);
+        const { data: installments, error: instError } = await supabase
+            .from('ky_dong_phi')
+            .select('*')
+            .in('so_hop_dong', soHopDongs)
+            .order('ky_thu_may', { ascending: true });
+
+        if (instError) throw instError;
+
+        const instMap = {};
+        (installments || []).forEach(inst => {
+            if (!instMap[inst.so_hop_dong]) instMap[inst.so_hop_dong] = [];
+            instMap[inst.so_hop_dong].push({
+                periodIndex: inst.ky_thu_may,
+                dueDate: inst.ngay_den_han,
+                paidDate: inst.ngay_da_dong,
+                status: inst.trang_thai,
+                fycAmount: Number(inst.so_tien_fyc) || 0
+            });
+        });
+
+        // Trả dữ liệu đúng format mà giao diện sales.html đang dùng để hạn chế
+        // sửa đổi phần hiển thị/tính toán ở frontend
+        const formatted = contracts.map(c => {
+            let riders = [];
+            if (c.ghi_chu) {
+                try {
+                    const parsed = typeof c.ghi_chu === 'string' ? JSON.parse(c.ghi_chu) : c.ghi_chu;
+                    riders = parsed.riders || [];
+                } catch (e) { /* ghi_chu không phải JSON hợp lệ thì bỏ qua */ }
+            }
+            return {
+                contractNumber: c.so_hop_dong,
+                issueDate: c.ngay_phat_hanh,
+                policyHolder: c.ben_mua_bao_hiem,
+                lifeInsured: c.nguoi_duoc_bao_hiem || c.ben_mua_bao_hiem,
+                mainProduct: c.ten_san_pham_chinh || c.ma_san_pham_chinh,
+                totalAnnualPremium: Number(c.tong_phi_thuc_thu) || 0,
+                paymentMode: c.dinh_ky_dong_phi === 'Nửa năm' ? 'HALF' : (c.dinh_ky_dong_phi === 'Quý' ? 'QUARTER' : 'YEAR'),
+                splitRate: Number(c.ty_le_hoa_hong) || 100,
+                fyc: { fullY1: Number(c.hoa_hong_fyc) || 0, y1: Number(c.hoa_hong_fyc) || 0 },
+                riders,
+                installments: instMap[c.so_hop_dong] || []
+            };
+        });
+
+        res.json({ success: true, data: formatted });
+    } catch (error) {
+        console.error("Lỗi lấy danh sách doanh số:", error);
+        res.status(500).json({ success: false, message: 'Lỗi server nội bộ' });
+    }
+});
+
+// POST: Lưu (thêm mới hoặc cập nhật) 1 hợp đồng doanh số từ công cụ tính FYC
+router.post('/sales', async (req, res) => {
+    try {
+        const { agent, ...payload } = req.body;
+        if (!agent || !payload.so_hop_dong) {
+            return res.status(400).json({ success: false, message: 'Thiếu Agent hoặc Số hợp đồng!' });
+        }
+
+        const agentId = await getAgentId(agent);
+        if (!agentId) {
+            return res.status(404).json({ success: false, message: 'Không tìm thấy Agent, vui lòng đăng nhập lại!' });
+        }
+
+        const record = { ...payload, agent_id: agentId, updated_at: new Date() };
+
+        // Upsert theo so_hop_dong -> bắt buộc cột so_hop_dong phải có ràng buộc
+        // UNIQUE trong database (xem file migration.sql), nếu không "onConflict"
+        // sẽ báo lỗi 42P10 "no unique or exclusion constraint"
+        const { error: upsertError } = await supabase
+            .from('danh_sach_hop_dong')
+            .upsert(record, { onConflict: 'so_hop_dong' });
+
+        if (upsertError) throw upsertError;
+
+        // Sinh lại lịch đóng phí cho hợp đồng này: xoá lịch cũ (nếu là sửa hợp
+        // đồng đã có) rồi tạo lại theo định kỳ đóng phí mới nhất
+        await supabase.from('ky_dong_phi').delete().eq('so_hop_dong', payload.so_hop_dong);
+
+        const schedule = buildInstallmentSchedule(payload.dinh_ky_dong_phi, payload.ngay_phat_hanh, payload.hoa_hong_fyc)
+            .map(item => ({ ...item, so_hop_dong: payload.so_hop_dong }));
+
+        const { error: instError } = await supabase.from('ky_dong_phi').insert(schedule);
+        if (instError) throw instError;
+
+        res.json({ success: true, message: 'Đã lưu doanh số vào Database thành công!' });
+    } catch (error) {
+        console.error("Lỗi lưu doanh số:", error);
+        res.status(500).json({ success: false, message: error.message || 'Không thể lưu doanh số' });
+    }
+});
+
+// PUT: Xác nhận đã đóng phí cho 1 kỳ cụ thể của 1 hợp đồng
+router.put('/sales/installment', async (req, res) => {
+    try {
+        const { so_hop_dong, ky_thu_may, ngay_da_dong } = req.body;
+        if (!so_hop_dong || !ky_thu_may || !ngay_da_dong) {
+            return res.status(400).json({ success: false, message: 'Thiếu dữ liệu xác nhận đóng phí!' });
+        }
+
+        const { error } = await supabase
+            .from('ky_dong_phi')
+            .update({ trang_thai: 'paid', ngay_da_dong })
+            .eq('so_hop_dong', so_hop_dong)
+            .eq('ky_thu_may', ky_thu_may);
+
+        if (error) throw error;
+        res.json({ success: true, message: 'Đã xác nhận đóng phí!' });
+    } catch (error) {
+        console.error("Lỗi xác nhận đóng phí:", error);
+        res.status(500).json({ success: false, message: 'Không thể xác nhận đóng phí' });
+    }
+});
+
+// PATCH: Sửa thông tin cơ bản của 1 hợp đồng (Số HĐ / BMBH / NĐBH)
+router.patch('/sales/:so_hop_dong', async (req, res) => {
+    try {
+        const { so_hop_dong } = req.params;
+        // Chỉ cho phép sửa các trường này qua nút "Chỉnh sửa thông tin" ở giao diện
+        const allowedFields = ['so_hop_dong', 'ben_mua_bao_hiem', 'nguoi_duoc_bao_hiem'];
+        const updates = {};
+        allowedFields.forEach(field => {
+            if (req.body[field] !== undefined) updates[field] = req.body[field];
+        });
+
+        if (Object.keys(updates).length === 0) {
+            return res.status(400).json({ success: false, message: 'Không có dữ liệu để cập nhật!' });
+        }
+        updates.updated_at = new Date();
+
+        const { error } = await supabase
+            .from('danh_sach_hop_dong')
+            .update(updates)
+            .eq('so_hop_dong', so_hop_dong);
+
+        // Nếu đổi số hợp đồng: bảng ky_dong_phi có FK ON UPDATE CASCADE (xem
+        // migration_doanh_so.sql) nên các kỳ đóng phí sẽ tự động cập nhật theo
+        if (error) throw error;
+        res.json({ success: true, message: 'Đã cập nhật hợp đồng!' });
+    } catch (error) {
+        console.error("Lỗi cập nhật hợp đồng:", error);
+        res.status(500).json({ success: false, message: error.message || 'Không thể cập nhật hợp đồng' });
+    }
+});
+
+// DELETE: Xoá 1 hợp đồng doanh số (lịch đóng phí bị xoá kèm theo nhờ ON DELETE CASCADE)
+router.delete('/sales/:so_hop_dong', async (req, res) => {
+    try {
+        const { so_hop_dong } = req.params;
+        const { error } = await supabase.from('danh_sach_hop_dong').delete().eq('so_hop_dong', so_hop_dong);
+        if (error) throw error;
+        res.json({ success: true, message: 'Đã xoá hợp đồng!' });
+    } catch (error) {
+        console.error("Lỗi xoá hợp đồng:", error);
+        res.status(500).json({ success: false, message: 'Không thể xoá hợp đồng' });
+    }
+});
+
+// DELETE: Xoá toàn bộ doanh số của 1 agent (nút "Xóa tất cả dữ liệu")
+router.delete('/sales', async (req, res) => {
+    try {
+        const agentName = req.query.agent;
+        if (!agentName) {
+            return res.status(400).json({ success: false, message: 'Thiếu thông tin Agent!' });
+        }
+        const agentId = await getAgentId(agentName);
+        if (!agentId) {
+            return res.json({ success: true, message: 'Không có dữ liệu để xoá.' });
+        }
+        const { error } = await supabase.from('danh_sach_hop_dong').delete().eq('agent_id', agentId);
+        if (error) throw error;
+        res.json({ success: true, message: 'Đã xoá toàn bộ doanh số!' });
+    } catch (error) {
+        console.error("Lỗi xoá toàn bộ doanh số:", error);
+        res.status(500).json({ success: false, message: 'Không thể xoá dữ liệu' });
+    }
+});
+
 module.exports = router;

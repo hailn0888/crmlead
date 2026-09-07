@@ -25,6 +25,16 @@ document.getElementById('loginForm').addEventListener('submit', async function (
             localStorage.setItem('userRole', role);
             localStorage.setItem('userName', result.user.ho_va_ten);
 
+            // FIX: các trang fyc.html / sales.html cần đọc "user_info" (object)
+            // và "ten_dang_nhap" (chuỗi) để biết agent nào đang đăng nhập.
+            // LƯU Ý: API /api/auth/login hiện KHÔNG trả field ten_dang_nhap
+            // trong result.user (chỉ có ho_va_ten, phan_quyen) nên không thể
+            // lấy result.user.ten_dang_nhap - phải dùng lại biến ten_dang_nhap
+            // (chính là tài khoản người dùng vừa gõ và đã được server xác thực
+            // hợp lệ) để đảm bảo luôn đúng giá trị thật.
+            localStorage.setItem('user_info', JSON.stringify({ ...result.user, ten_dang_nhap }));
+            localStorage.setItem('ten_dang_nhap', ten_dang_nhap);
+
             if (role === 'admin') {
                 window.location.href = '/admin/dashboard_admin.html';
             } else if (role === 'leader') {

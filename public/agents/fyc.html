@@ -11,18 +11,22 @@
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="/js/lucide.min.js"></script>
     <!-- SweetAlert2 CDN -->
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     
-    <!-- Nạp theme.js đầu tiên để đồng bộ màu sắc và font chữ toàn hệ thống -->
+    <!-- Nạp theme.js đầu tiên để đồng bộ màu sắc -->
     <script src="/js/theme.js"></script>
     <script src="/js/searchHelper.js"></script>
     <script src="/js/ai.js"></script>
 
+    <!-- Supabase CDN & Config -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="/js/supabaseClient.js"></script>
+
     <style>
         .theme-action-btn {
-            background-color: #dc2626; /* Light: Đỏ */
+            background-color: #dc2626;
             color: #ffffff;
             transition: opacity 0.2s;
         }
@@ -30,22 +34,20 @@
             opacity: 0.9;
         }
         .dark .theme-action-btn, [data-theme="dark"] .theme-action-btn, body.dark .theme-action-btn {
-            background-color: #16a34a; /* Dark: Xanh lá */
+            background-color: #16a34a;
             color: #ffffff;
         }
     </style>
 </head>
-<body class="bg-theme-bg text-theme-text min-h-screen flex flex-col transition-colors duration-200">
+<body class="bg-theme-bg text-theme-text font-sans antialiased transition-colors duration-200">
 
     <!-- Header Container -->
     <div id="header-container"></div>
 
-    <div class="flex flex-1 pt-16">
-        <!-- Sidebar Container -->
-        <div id="sidebar-container"></div>
-
-        <!-- Main Content -->
-        <main class="flex-1 p-4 lg:p-6 ml-0 lg:ml-64 transition-all duration-200">
+    <!-- Khung cấu trúc chuẩn App Native -->
+    <div class="flex h-screen overflow-hidden">
+        <div id="mainContainer" class="flex-1 flex flex-col overflow-y-auto transition-colors duration-200 pt-16">
+            <main class="p-4 lg:p-6 min-w-0 space-y-4">
             <div class="max-w-6xl mx-auto space-y-4">
                 
                 <!-- Page Title -->
@@ -121,7 +123,7 @@
 
                     <hr class="border-theme-border">
 
-                    <!-- Phần 2: Sản phẩm bán cùng (Sản phẩm bổ trợ) -->
+                    <!-- Phần 2: Sản phẩm bán cùng -->
                     <div>
                         <div class="flex items-center justify-between mb-3">
                             <h2 class="text-sm font-semibold flex items-center gap-1.5 text-theme-primary">
@@ -230,111 +232,120 @@
     </datalist>
 
     <script src="/js/header.js"></script>
-    <script src="/js/sidebar.js"></script>
+<script src="/js/sidebar.js"></script>
 
-    <!-- Logic tính toán FYC (Giữ nguyên 100%) -->
-    <script>
-        let lastCalculatedData = null;
+<script>
+    let lastCalculatedData = null;
 
-        document.addEventListener('DOMContentLoaded', () => {
-            if (window.lucide) lucide.createIcons();
+    document.addEventListener('DOMContentLoaded', () => {
+        if (window.lucide) lucide.createIcons();
 
-            const btnAddRider = document.getElementById('btn-add-rider');
-            const ridersContainer = document.getElementById('riders-container');
-            const noRiderMsg = document.getElementById('no-rider-msg');
-            const btnCalculate = document.getElementById('btn-calculate');
-            const btnReset = document.getElementById('btn-reset');
-            const mainProductInput = document.getElementById('main-product-input');
-            const additionalCriteriaBox = document.getElementById('additional-criteria-box');
-            const mainProductPremiumInput = document.getElementById('main-product-premium');
+        const btnAddRider = document.getElementById('btn-add-rider');
+        const ridersContainer = document.getElementById('riders-container');
+        const noRiderMsg = document.getElementById('no-rider-msg');
+        const btnCalculate = document.getElementById('btn-calculate');
+        const btnReset = document.getElementById('btn-reset');
+        const mainProductInput = document.getElementById('main-product-input');
+        const additionalCriteriaBox = document.getElementById('additional-criteria-box');
+        const mainProductPremiumInput = document.getElementById('main-product-premium');
 
-            function formatCurrencyInput(inputElement) {
-                let value = inputElement.value.replace(/\D/g, '');
-                if (value) {
-                    value = parseInt(value, 10).toLocaleString('vi-VN');
+        function formatCurrencyInput(inputElement) {
+            let value = inputElement.value.replace(/\D/g, '');
+            if (value) {
+                value = parseInt(value, 10).toLocaleString('vi-VN');
+            }
+            inputElement.value = value;
+        }
+
+        function parseCurrencyValue(formattedString) {
+            if (!formattedString) return 0;
+            return parseInt(formattedString.replace(/\./g, ''), 10) || 0;
+        }
+
+        mainProductPremiumInput.addEventListener('input', (e) => {
+            formatCurrencyInput(e.target);
+        });
+
+        btnReset.addEventListener('click', () => {
+            mainProductInput.value = '';
+            mainProductPremiumInput.value = '';
+            document.getElementById('main-product-term').value = '';
+            ridersContainer.innerHTML = '';
+            noRiderMsg.style.display = 'block';
+            document.getElementById('result-card').classList.add('hidden');
+            lastCalculatedData = null;
+        });
+
+        function handleMainProductChange() {
+            const val = mainProductInput.value;
+            if (val.includes("PRU - Bảo Vệ Tối Đa 2.0 (VLM1)")) {
+                additionalCriteriaBox.classList.remove('hidden');
+            } else {
+                additionalCriteriaBox.classList.add('hidden');
+            }
+        }
+
+        mainProductInput.addEventListener('input', handleMainProductChange);
+        mainProductInput.addEventListener('change', handleMainProductChange);
+
+        function getSpbtCount() {
+            const rows = ridersContainer.querySelectorAll('.rider-row');
+            let count = 0;
+            rows.forEach(row => {
+                const rName = row.querySelector('.rider-name').value.trim();
+                const rPrem = parseCurrencyValue(row.querySelector('.rider-premium').value);
+                if (rName !== '' && rPrem > 0) {
+                    count++;
                 }
-                inputElement.value = value;
-            }
+            });
+            return count;
+        }
 
-            function parseCurrencyValue(formattedString) {
-                if (!formattedString) return 0;
-                return parseInt(formattedString.replace(/\./g, ''), 10) || 0;
-            }
-
-            mainProductPremiumInput.addEventListener('input', (e) => {
+        btnAddRider.addEventListener('click', () => {
+            noRiderMsg.style.display = 'none';
+            const rowId = 'rider-row-' + Date.now();
+            const html = `
+                <div id="${rowId}" class="rider-row grid grid-cols-1 md:grid-cols-12 gap-2.5 items-end p-3 bg-theme-bg rounded-xl border border-theme-border relative">
+                    <div class="md:col-span-5">
+                        <label class="block text-[11px] font-medium mb-1">Sản phẩm bán cùng <span class="text-theme-primary">+</span></label>
+                        <input type="text" list="rider-products-list" placeholder="+ Chọn hoặc gõ tên sản phẩm bổ trợ" 
+                            class="rider-name w-full px-2.5 py-1.5 border rounded-lg bg-transparent border-theme-border text-xs focus:ring-2 focus:ring-theme-primary focus:outline-none">
+                    </div>
+                    <div class="md:col-span-3">
+                        <label class="block text-[11px] font-medium mb-1">Phí bảo hiểm (VNĐ) *</label>
+                        <input type="text" placeholder="Nhập phí (VD: 40.000.000)" 
+                            class="rider-premium w-full px-2.5 py-1.5 border rounded-lg bg-transparent border-theme-border text-xs focus:ring-2 focus:ring-theme-primary focus:outline-none">
+                    </div>
+                    <div class="md:col-span-3">
+                        <label class="block text-[11px] font-medium mb-1">Thời hạn đóng phí (năm) *</label>
+                        <input type="number" placeholder="Bắt buộc nhập số" min="1" max="40" 
+                            class="rider-term w-full px-2.5 py-1.5 border rounded-lg bg-transparent border-theme-border text-xs focus:ring-2 focus:ring-theme-primary focus:outline-none" required>
+                    </div>
+                    <div class="md:col-span-1 flex justify-end">
+                        <button type="button" onclick="document.getElementById('${rowId}').remove(); checkRiderEmpty();" class="p-1.5 bg-theme-card text-theme-primary hover:opacity-80 rounded-lg border border-theme-border transition-colors">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+            ridersContainer.insertAdjacentHTML('beforeend', html);
+            
+            const newlyAddedRow = document.getElementById(rowId);
+            const premInput = newlyAddedRow.querySelector('.rider-premium');
+            premInput.addEventListener('input', (e) => {
                 formatCurrencyInput(e.target);
             });
 
-            function handleMainProductChange() {
-                const val = mainProductInput.value;
-                if (val.includes("PRU - Bảo Vệ Tối Đa 2.0 (VLM1)")) {
-                    additionalCriteriaBox.classList.remove('hidden');
-                } else {
-                    additionalCriteriaBox.classList.add('hidden');
-                }
+            if (window.lucide) lucide.createIcons();
+        });
+
+        window.checkRiderEmpty = function() {
+            if (ridersContainer.children.length === 0) {
+                noRiderMsg.style.display = 'block';
             }
+        }
 
-            mainProductInput.addEventListener('input', handleMainProductChange);
-            mainProductInput.addEventListener('change', handleMainProductChange);
-
-            function getSpbtCount() {
-                const rows = ridersContainer.querySelectorAll('.rider-row');
-                let count = 0;
-                rows.forEach(row => {
-                    const rName = row.querySelector('.rider-name').value.trim();
-                    const rPrem = parseCurrencyValue(row.querySelector('.rider-premium').value);
-                    if (rName !== '' && rPrem > 0) {
-                        count++;
-                    }
-                });
-                return count;
-            }
-
-            btnAddRider.addEventListener('click', () => {
-                noRiderMsg.style.display = 'none';
-                const rowId = 'rider-row-' + Date.now();
-                const html = `
-                    <div id="${rowId}" class="rider-row grid grid-cols-1 md:grid-cols-12 gap-2.5 items-end p-3 bg-theme-bg rounded-xl border border-theme-border relative">
-                        <div class="md:col-span-5">
-                            <label class="block text-[11px] font-medium mb-1">Sản phẩm bán cùng <span class="text-theme-primary">+</span></label>
-                            <input type="text" list="rider-products-list" placeholder="+ Chọn hoặc gõ tên sản phẩm bổ trợ" 
-                                class="rider-name w-full px-2.5 py-1.5 border rounded-lg bg-transparent border-theme-border text-xs focus:ring-2 focus:ring-theme-primary focus:outline-none">
-                        </div>
-                        <div class="md:col-span-3">
-                            <label class="block text-[11px] font-medium mb-1">Phí bảo hiểm (VNĐ) *</label>
-                            <input type="text" placeholder="Nhập phí (VD: 40.000.000)" 
-                                class="rider-premium w-full px-2.5 py-1.5 border rounded-lg bg-transparent border-theme-border text-xs focus:ring-2 focus:ring-theme-primary focus:outline-none">
-                        </div>
-                        <div class="md:col-span-3">
-                            <label class="block text-[11px] font-medium mb-1">Thời hạn đóng phí (năm) *</label>
-                            <input type="number" placeholder="Bắt buộc nhập số" min="1" max="40" 
-                                class="rider-term w-full px-2.5 py-1.5 border rounded-lg bg-transparent border-theme-border text-xs focus:ring-2 focus:ring-theme-primary focus:outline-none" required>
-                        </div>
-                        <div class="md:col-span-1 flex justify-end">
-                            <button type="button" onclick="document.getElementById('${rowId}').remove(); checkRiderEmpty();" class="p-1.5 bg-theme-card text-theme-primary hover:opacity-80 rounded-lg border border-theme-border transition-colors">
-                                <i data-lucide="trash-2" class="w-4 h-4"></i>
-                            </button>
-                        </div>
-                    </div>
-                `;
-                ridersContainer.insertAdjacentHTML('beforeend', html);
-                
-                const newlyAddedRow = document.getElementById(rowId);
-                const premInput = newlyAddedRow.querySelector('.rider-premium');
-                premInput.addEventListener('input', (e) => {
-                    formatCurrencyInput(e.target);
-                });
-
-                if (window.lucide) lucide.createIcons();
-            });
-
-            window.checkRiderEmpty = function() {
-                if (ridersContainer.children.length === 0) {
-                    noRiderMsg.style.display = 'block';
-                }
-            }
-
-            function calculateMainRateByYear(product, term, year, spbtCount, planType) {
+        function calculateMainRateByYear(product, term, year, spbtCount, planType) {
             let rate = 0;
 
             if (product.includes("PRU - Đầu Tư Vững Tiến (ULR9)")) {
@@ -354,7 +365,7 @@
                         if (spbtCount <= 1) rate = 24.00;
                         else if (spbtCount <= 3) rate = 26.00;
                         else rate = 28.00;
-                    } else { // Nâng Cao
+                    } else {
                         if (spbtCount <= 1) rate = 26.00;
                         else if (spbtCount <= 3) rate = 28.00;
                         else rate = 30.00;
@@ -380,7 +391,6 @@
                 else rate = 0.00;
 
             } else if (product.includes("PRU - Tương Lai Tươi Sáng (EUS5)")) {
-                // Áp dụng biểu phí mới (Hiệu lực từ 10/04/2026)
                 if (year === 1) {
                     if (term >= 16) rate = 26.00;
                     else if (term === 15) rate = 26.00;
@@ -471,7 +481,6 @@
                 }
 
             } else {
-                // Mặc định cho các sản phẩm khác
                 if (year === 1) rate = 25.00;
                 else if (year === 2) rate = 15.00;
                 else if (year === 3) rate = 10.00;
@@ -483,451 +492,423 @@
             return rate;
         }
 
-            // ==========================================
-            // MA TRẬN DỮ LIỆU CÁC BẢNG BIỂU PHÍ (LOOKUP TABLES)
-            // ==========================================
+        const COMMISSION_TLR9 = {
+            30: [30, 15, 10], 29: [30, 15, 10], 28: [30, 15, 10], 27: [30, 15, 10], 26: [30, 15, 10],
+            25: [30, 15, 10], 24: [30, 15, 10], 23: [30, 15, 10], 22: [30, 15, 10], 21: [30, 15, 10],
+            20: [30, 15, 10], 19: [29, 15, 10], 18: [28, 15, 10], 17: [27, 15, 10], 16: [26, 15, 10],
+            15: [25, 15, 10], 14: [24, 14, 10], 13: [23, 13, 10], 12: [22, 12, 10], 11: [21, 11, 10],
+            10: [20, 10, 10], 9:  [18, 9, 9],   8:  [16, 8, 8],   7:  [14, 7, 7],   6:  [12, 6, 6],   5:  [10, 5, 5]
+        };
 
-            // TLR9 - Bảo hiểm nhân thọ có kỳ hạn
-            const COMMISSION_TLR9 = {
-                30: [30, 15, 10], 29: [30, 15, 10], 28: [30, 15, 10], 27: [30, 15, 10], 26: [30, 15, 10],
-                25: [30, 15, 10], 24: [30, 15, 10], 23: [30, 15, 10], 22: [30, 15, 10], 21: [30, 15, 10],
-                20: [30, 15, 10], 19: [29, 15, 10], 18: [28, 15, 10], 17: [27, 15, 10], 16: [26, 15, 10],
-                15: [25, 15, 10], 14: [24, 14, 10], 13: [23, 13, 10], 12: [22, 12, 10], 11: [21, 11, 10],
-                10: [20, 10, 10], 9:  [18, 9, 9],   8:  [16, 8, 8],   7:  [14, 7, 7],   6:  [12, 6, 6],   5:  [10, 5, 5]
-            };
+        const COMMISSION_CI_SERIES = {
+            30: [20, 20, 15, 10], 29: [20, 20, 15, 10], 28: [20, 20, 15, 10], 27: [20, 20, 15, 10], 26: [20, 20, 15, 10],
+            25: [20, 20, 15, 10], 24: [20, 20, 15, 10], 23: [20, 20, 15, 10], 22: [20, 20, 15, 10], 21: [20, 20, 15, 10],
+            20: [20, 20, 15, 10], 19: [19, 19, 15, 10], 18: [18, 18, 14, 10], 17: [17, 17, 13, 10], 16: [16, 16, 12, 10],
+            15: [15, 15, 11, 10], 14: [14, 14, 10, 9],  13: [13, 13, 9, 8],   12: [12, 12, 8, 7],   11: [11, 11, 7, 6],
+            10: [10, 10, 6, 5],   9:  [10, 9, 5, 0],    8:  [10, 8, 4, 0],    7:  [10, 7, 3, 0],    6:  [10, 6, 2, 0],    5:  [10, 5, 1, 0]
+        };
 
-            // CIW9 & CIR9 - Hỗ trợ đóng phí BLNT & BH Bệnh lý nghiêm trọng
-            const COMMISSION_CI_SERIES = {
-                30: [20, 20, 15, 10], 29: [20, 20, 15, 10], 28: [20, 20, 15, 10], 27: [20, 20, 15, 10], 26: [20, 20, 15, 10],
-                25: [20, 20, 15, 10], 24: [20, 20, 15, 10], 23: [20, 20, 15, 10], 22: [20, 20, 15, 10], 21: [20, 20, 15, 10],
-                20: [20, 20, 15, 10], 19: [19, 19, 15, 10], 18: [18, 18, 14, 10], 17: [17, 17, 13, 10], 16: [16, 16, 12, 10],
-                15: [15, 15, 11, 10], 14: [14, 14, 10, 9],  13: [13, 13, 9, 8],   12: [12, 12, 8, 7],   11: [11, 11, 7, 6],
-                10: [10, 10, 6, 5],   9:  [10, 9, 5, 0],    8:  [10, 8, 4, 0],    7:  [10, 7, 3, 0],    6:  [10, 6, 2, 0],    5:  [10, 5, 1, 0]
-            };
+        const COMMISSION_CIR3_OPW7 = {
+            20: [20, 20, 15, 7.5], 19: [20, 19, 14, 7.3], 18: [20, 18, 13, 7.0], 17: [20, 17, 12, 6.8],
+            16: [20, 16, 11, 6.5], 15: [20, 15, 10, 6.3], 14: [20, 14, 9, 6.0],   13: [20, 13, 8, 5.8],
+            12: [20, 12, 7, 5.5],  11: [20, 11, 6, 5.3],  10: [20, 10, 5, 5.0],   9:  [20, 9, 4, 0],
+            8:  [19, 8, 0, 0],     7:  [16, 7, 0, 0],     6:  [13, 6, 0, 0],     5:  [12, 5, 0, 0]
+        };
 
-            // CIR3 & OPW7 - BH Bệnh hiểm nghèo & Từ bỏ thu phí bệnh hiểm nghèo
-            const COMMISSION_CIR3_OPW7 = {
-                20: [20, 20, 15, 7.5], 19: [20, 19, 14, 7.3], 18: [20, 18, 13, 7.0], 17: [20, 17, 12, 6.8],
-                16: [20, 16, 11, 6.5], 15: [20, 15, 10, 6.3], 14: [20, 14, 9, 6.0],   13: [20, 13, 8, 5.8],
-                12: [20, 12, 7, 5.5],  11: [20, 11, 6, 5.3],  10: [20, 10, 5, 5.0],   9:  [20, 9, 4, 0],
-                8:  [19, 8, 0, 0],     7:  [16, 7, 0, 0],     6:  [13, 6, 0, 0],     5:  [12, 5, 0, 0]
-            };
+        const COMMISSION_KID3 = {
+            18: [20, 20, 16, 10], 17: [20, 20, 15, 5], 16: [20, 20, 14, 5], 15: [20, 20, 13, 5],
+            14: [20, 20, 6, 5],   13: [20, 20, 5, 5],  12: [20, 19, 5, 5],  11: [20, 13, 5, 5],
+            10: [20, 10, 5, 5],   9:  [20, 7, 4, 0],   8:  [19, 4, 4, 0],   7:  [17, 3, 3, 0],
+            6:  [13, 3, 3, 0],    5:  [11, 2, 2, 0]
+        };
 
-            // KID3 - BH Sức khoẻ dành cho trẻ em
-            const COMMISSION_KID3 = {
-                18: [20, 20, 16, 10], 17: [20, 20, 15, 5], 16: [20, 20, 14, 5], 15: [20, 20, 13, 5],
-                14: [20, 20, 6, 5],   13: [20, 20, 5, 5],  12: [20, 19, 5, 5],  11: [20, 13, 5, 5],
-                10: [20, 10, 5, 5],   9:  [20, 7, 4, 0],   8:  [19, 4, 4, 0],   7:  [17, 3, 3, 0],
-                6:  [13, 3, 3, 0],    5:  [11, 2, 2, 0]
-            };
+        function calculateRiderRateByYear(productName, term, year) {
+            const p = (productName || "").toUpperCase();
+            const t = parseInt(term, 10) || 0;
+            const y = parseInt(year, 10) || 0;
 
-            function calculateRiderRateByYear(productName, term, year) {
-                const p = (productName || "").toUpperCase();
-                const t = parseInt(term, 10) || 0;
-                const y = parseInt(year, 10) || 0;
-
-                // 1. PRU - Hành trang vui khoẻ (10% cố định từ Năm 1 - 5)
-                if (p.includes("HÀNH TRANG VUI KHOẺ") || p.includes("HTVK")) {
-                    return y <= 5 ? 10.0 : 0.0;
-                }
-
-                // 2. TLR9 - BH Nhân thọ có kỳ hạn
-                if (p.includes("TLR9") || p.includes("KỲ HẠN")) {
-                    if (y >= 4) return 0.0;
-                    const rates = COMMISSION_TLR9[t];
-                    return rates ? (rates[y - 1] || 0.0) : 0.0;
-                }
-
-                // 3. CIW9 & CIR9 - Hỗ trợ đóng phí BLNT & Bệnh lý nghiêm trọng
-                if (p.includes("CIW9") || p.includes("CIR9") || p.includes("BỆNH LÝ NGHIÊM TRỌNG")) {
-                    if (y >= 5) return 0.0;
-                    const rates = COMMISSION_CI_SERIES[t];
-                    return rates ? (rates[y - 1] || 0.0) : 0.0;
-                }
-
-                // 4. CIR3 & OPW7 - Bệnh hiểm nghèo & Từ bỏ thu phí BHN
-                if (p.includes("CIR3") || p.includes("OPW7") || p.includes("HIỂM NGHÈO")) {
-                    if (y >= 5) return 0.0;
-                    const lookupTerm = t >= 20 ? 20 : t; // Các mốc 20+ đều dùng tỷ lệ của 20
-                    const rates = COMMISSION_CIR3_OPW7[lookupTerm];
-                    return rates ? (rates[y - 1] || 0.0) : 0.0;
-                }
-
-                // 5. KID3 - BH Sức khoẻ dành cho trẻ em
-                if (p.includes("KID3") || p.includes("TRẺ EM")) {
-                    if (y >= 5) return 0.0;
-                    const lookupTerm = t >= 18 ? 18 : t; // Các mốc 18+ đều dùng tỷ lệ của 18
-                    const rates = COMMISSION_KID3[lookupTerm];
-                    return rates ? (rates[y - 1] || 0.0) : 0.0;
-                }
-
-                // 6. ADD9 - BH Tai nạn
-                if (p.includes("ADD9") || p.includes("TAI NẠN")) {
-                    if (y === 1) return 20.0;
-                    if (y === 2) return 15.0;
-                    if (y === 3 || y === 4) return 10.0;
-                    return 0.0;
-                }
-
-                // 7. HSR9 - Bảo hiểm Hỗ trợ viện phí mở rộng
-                if (p.includes("HSR9") || p.includes("VIỆN PHÍ MỞ RỘNG")) {
-                    if (y === 1) return 20.0;
-                    if (y === 2) return 12.5;
-                    if (y === 3) return 10.0;
-                    if (y === 4) return 5.0;
-                    if (y === 5) return 2.5;
-                    return 0.0;
-                }
-
+            if (p.includes("HÀNH TRANG VUI KHOẺ") || p.includes("HTVK")) {
+                return y <= 5 ? 10.0 : 0.0;
+            }
+            if (p.includes("TLR9") || p.includes("KỲ HẠN")) {
+                if (y >= 4) return 0.0;
+                const rates = COMMISSION_TLR9[t];
+                return rates ? (rates[y - 1] || 0.0) : 0.0;
+            }
+            if (p.includes("CIW9") || p.includes("CIR9") || p.includes("BỆNH LÝ NGHIÊM TRỌNG")) {
+                if (y >= 5) return 0.0;
+                const rates = COMMISSION_CI_SERIES[t];
+                return rates ? (rates[y - 1] || 0.0) : 0.0;
+            }
+            if (p.includes("CIR3") || p.includes("OPW7") || p.includes("HIỂM NGHÈO")) {
+                if (y >= 5) return 0.0;
+                const lookupTerm = t >= 20 ? 20 : t;
+                const rates = COMMISSION_CIR3_OPW7[lookupTerm];
+                return rates ? (rates[y - 1] || 0.0) : 0.0;
+            }
+            if (p.includes("KID3") || p.includes("TRẺ EM")) {
+                if (y >= 5) return 0.0;
+                const lookupTerm = t >= 18 ? 18 : t;
+                const rates = COMMISSION_KID3[lookupTerm];
+                return rates ? (rates[y - 1] || 0.0) : 0.0;
+            }
+            if (p.includes("ADD9") || p.includes("TAI NẠN")) {
+                if (y === 1) return 20.0;
+                if (y === 2) return 15.0;
+                if (y === 3 || y === 4) return 10.0;
                 return 0.0;
             }
+            if (p.includes("HSR9") || p.includes("VIỆN PHÍ MỞ RỘNG")) {
+                if (y === 1) return 20.0;
+                if (y === 2) return 12.5;
+                if (y === 3) return 10.0;
+                if (y === 4) return 5.0;
+                if (y === 5) return 2.5;
+                return 0.0;
+            }
+            return 0.0;
+        }
 
-            btnCalculate.addEventListener('click', () => {
-                const mainProduct = document.getElementById('main-product-input').value.trim();
-                const mainPremium = parseCurrencyValue(mainProductPremiumInput.value);
-                const mainTerm = parseInt(document.getElementById('main-product-term').value) || 0;
-                const spbtCount = getSpbtCount();
-                const planTypeSelect = document.getElementById('plan-type');
-                const planType = planTypeSelect ? planTypeSelect.value : 'CoBan';
+        btnCalculate.addEventListener('click', () => {
+            const mainProduct = document.getElementById('main-product-input').value.trim();
+            const mainPremium = parseCurrencyValue(mainProductPremiumInput.value);
+            const mainTerm = parseInt(document.getElementById('main-product-term').value) || 0;
+            const spbtCount = getSpbtCount();
+            const planTypeSelect = document.getElementById('plan-type');
+            const planType = planTypeSelect ? planTypeSelect.value : 'CoBan';
 
-                if (!mainProduct || mainPremium <= 0 || mainTerm <= 0) {
-                    Swal.fire({
-                        icon: 'warning',
-                        title: 'Thiếu thông tin',
-                        text: 'Vui lòng điền đầy đủ tên sản phẩm chính, phí bảo hiểm và thời hạn đóng phí hợp lệ!',
-                        confirmButtonColor: '#dc2626'
-                    });
-                    return;
-                }
-
-                let totalAnnualPremium = mainPremium;
-
-                const mainFycY1 = mainPremium * (calculateMainRateByYear(mainProduct, mainTerm, 1, spbtCount, planType) / 100);
-                const mainFycY2 = mainPremium * (calculateMainRateByYear(mainProduct, mainTerm, 2, spbtCount, planType) / 100);
-                const mainFycY3 = mainPremium * (calculateMainRateByYear(mainProduct, mainTerm, 3, spbtCount, planType) / 100);
-                const mainFycY4 = mainPremium * (calculateMainRateByYear(mainProduct, mainTerm, 4, spbtCount, planType) / 100);
-                const mainFycY5 = mainPremium * (calculateMainRateByYear(mainProduct, mainTerm, 5, spbtCount, planType) / 100);
-                const mainFycY6 = mainPremium * (calculateMainRateByYear(mainProduct, mainTerm, 6, spbtCount, planType) / 100);
-
-                let totalY1 = mainFycY1;
-                let totalY2 = mainFycY2;
-                let totalY3 = mainFycY3;
-                let totalY4 = mainFycY4;
-                let totalY5 = mainFycY5;
-                let totalY6 = mainFycY6;
-
-                let ridersListArray = [];
-                let tableRowsHtml = `
-                    <tr class="border-b border-theme-border bg-theme-bg">
-                        <td class="p-2.5">
-                            <span class="block font-bold text-theme-primary">${mainProduct}</span>
-                            <span class="text-[11px] text-theme-muted">Sản phẩm chính (${mainTerm} năm)</span>
-                        </td>
-                        <td class="p-2.5 font-semibold text-theme-primary">${mainPremium.toLocaleString('vi-VN')} VNĐ</td>
-                        <td class="p-2.5 text-center">${mainFycY1.toLocaleString('vi-VN')}</td>
-                        <td class="p-2.5 text-center">${mainFycY2.toLocaleString('vi-VN')}</td>
-                        <td class="p-2.5 text-center">${mainFycY3.toLocaleString('vi-VN')}</td>
-                        <td class="p-2.5 text-center">${mainFycY4.toLocaleString('vi-VN')}</td>
-                        <td class="p-2.5 text-center">${mainFycY5.toLocaleString('vi-VN')}</td>
-                        <td class="p-2.5 text-right font-bold">${mainFycY6.toLocaleString('vi-VN')}</td>
-                    </tr>
-                `;
-
-                const riderRowElements = ridersContainer.querySelectorAll('.rider-row');
-                let hasError = false;
-
-                riderRowElements.forEach(row => {
-                    const rName = row.querySelector('.rider-name').value.trim();
-                    const rPrem = parseCurrencyValue(row.querySelector('.rider-premium').value);
-                    const rTerm = row.querySelector('.rider-term').value.trim();
-
-                    if (!rTerm) {
-                        hasError = true;
-                        return;
-                    }
-
-                    if (rName && rPrem > 0) {
-                        totalAnnualPremium += rPrem;
-                        const rTermNum = parseInt(rTerm) || 1;
-                        const rY1 = rPrem * (calculateRiderRateByYear(rName, rTermNum, 1) / 100);
-                        const rY2 = rPrem * (calculateRiderRateByYear(rName, rTermNum, 2) / 100);
-                        const rY3 = rPrem * (calculateRiderRateByYear(rName, rTermNum, 3) / 100);
-                        const rY4 = rPrem * (calculateRiderRateByYear(rName, rTermNum, 4) / 100);
-                        const rY5 = rPrem * (calculateRiderRateByYear(rName, rTermNum, 5) / 100);
-                        const rY6 = rPrem * (calculateRiderRateByYear(rName, rTermNum, 6) / 100);
-
-                        totalY1 += rY1;
-                        totalY2 += rY2;
-                        totalY3 += rY3;
-                        totalY4 += rY4;
-                        totalY5 += rY5;
-                        totalY6 += rY6;
-
-                        ridersListArray.push({
-                            name: rName,
-                            premium: rPrem,
-                            term: rTermNum,
-                            fyc: { y1: rY1, y2: rY2, y3: rY3, y4: rY4, y5: rY5, y6: rY6 }
-                        });
-
-                        tableRowsHtml += `
-                            <tr class="border-b border-theme-border">
-                                <td class="p-2.5">
-                                    <span class="block font-medium">+ ${rName}</span>
-                                    <span class="text-[11px] text-theme-muted">Sản phẩm bổ trợ (${rTermNum} năm)</span>
-                                </td>
-                                <td class="p-2.5 font-medium">${rPrem.toLocaleString('vi-VN')} VNĐ</td>
-                                <td class="p-2.5 text-center">${rY1.toLocaleString('vi-VN')}</td>
-                                <td class="p-2.5 text-center">${rY2.toLocaleString('vi-VN')}</td>
-                                <td class="p-2.5 text-center">${rY3.toLocaleString('vi-VN')}</td>
-                                <td class="p-2.5 text-center">${rY4.toLocaleString('vi-VN')}</td>
-                                <td class="p-2.5 text-center">${rY5.toLocaleString('vi-VN')}</td>
-                                <td class="p-2.5 text-right font-bold">${rY6.toLocaleString('vi-VN')}</td>
-                            </tr>
-                        `;
-                    }
+            if (!mainProduct || mainPremium <= 0 || mainTerm <= 0) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Thiếu thông tin',
+                    text: 'Vui lòng điền đầy đủ tên sản phẩm chính, phí bảo hiểm và thời hạn đóng phí hợp lệ!',
+                    confirmButtonColor: '#dc2626'
                 });
+                return;
+            }
 
-                if (hasError) {
-                    Swal.fire({
-                        icon: 'warning',
-                        title: 'Chưa đủ thông tin phụ phẩm',
-                        text: 'Vui lòng không để trống thời hạn đóng phí ở các sản phẩm bán cùng!',
-                        confirmButtonColor: '#dc2626'
-                    });
+            let totalAnnualPremium = mainPremium;
+
+            const mainFycY1 = mainPremium * (calculateMainRateByYear(mainProduct, mainTerm, 1, spbtCount, planType) / 100);
+            const mainFycY2 = mainPremium * (calculateMainRateByYear(mainProduct, mainTerm, 2, spbtCount, planType) / 100);
+            const mainFycY3 = mainPremium * (calculateMainRateByYear(mainProduct, mainTerm, 3, spbtCount, planType) / 100);
+            const mainFycY4 = mainPremium * (calculateMainRateByYear(mainProduct, mainTerm, 4, spbtCount, planType) / 100);
+            const mainFycY5 = mainPremium * (calculateMainRateByYear(mainProduct, mainTerm, 5, spbtCount, planType) / 100);
+            const mainFycY6 = mainPremium * (calculateMainRateByYear(mainProduct, mainTerm, 6, spbtCount, planType) / 100);
+
+            let totalY1 = mainFycY1;
+            let totalY2 = mainFycY2;
+            let totalY3 = mainFycY3;
+            let totalY4 = mainFycY4;
+            let totalY5 = mainFycY5;
+            let totalY6 = mainFycY6;
+
+            let ridersListArray = [];
+            let tableRowsHtml = `
+                <tr class="border-b border-theme-border bg-theme-bg">
+                    <td class="p-2.5">
+                        <span class="block font-bold text-theme-primary">${mainProduct}</span>
+                        <span class="text-[11px] text-theme-muted">Sản phẩm chính (${mainTerm} năm)</span>
+                    </td>
+                    <td class="p-2.5 font-semibold text-theme-primary">${Math.round(mainPremium).toLocaleString('vi-VN')} VNĐ</td>
+                    <td class="p-2.5 text-center">${Math.round(mainFycY1).toLocaleString('vi-VN')}</td>
+                    <td class="p-2.5 text-center">${Math.round(mainFycY2).toLocaleString('vi-VN')}</td>
+                    <td class="p-2.5 text-center">${Math.round(mainFycY3).toLocaleString('vi-VN')}</td>
+                    <td class="p-2.5 text-center">${Math.round(mainFycY4).toLocaleString('vi-VN')}</td>
+                    <td class="p-2.5 text-center">${Math.round(mainFycY5).toLocaleString('vi-VN')}</td>
+                    <td class="p-2.5 text-right font-bold">${Math.round(mainFycY6).toLocaleString('vi-VN')}</td>
+                </tr>
+            `;
+
+            const riderRowElements = ridersContainer.querySelectorAll('.rider-row');
+            let hasError = false;
+
+            riderRowElements.forEach(row => {
+                const rName = row.querySelector('.rider-name').value.trim();
+                const rPrem = parseCurrencyValue(row.querySelector('.rider-premium').value);
+                const rTerm = row.querySelector('.rider-term').value.trim();
+
+                if (!rTerm && rName) {
+                    hasError = true;
                     return;
                 }
 
-                lastCalculatedData = {
-                    mainProduct: mainProduct,
-                    mainPremium: mainPremium,
-                    mainTerm: mainTerm,
-                    totalAnnualPremium: totalAnnualPremium,
-                    fyc: { y1: totalY1, y2: totalY2, y3: totalY3, y4: totalY4, y5: totalY5, y6: totalY6 },
-                    riders: ridersListArray
-                };
+                if (rName && rPrem > 0) {
+                    totalAnnualPremium += rPrem;
+                    const rTermNum = parseInt(rTerm) || 1;
+                    const rY1 = rPrem * (calculateRiderRateByYear(rName, rTermNum, 1) / 100);
+                    const rY2 = rPrem * (calculateRiderRateByYear(rName, rTermNum, 2) / 100);
+                    const rY3 = rPrem * (calculateRiderRateByYear(rName, rTermNum, 3) / 100);
+                    const rY4 = rPrem * (calculateRiderRateByYear(rName, rTermNum, 4) / 100);
+                    const rY5 = rPrem * (calculateRiderRateByYear(rName, rTermNum, 5) / 100);
+                    const rY6 = rPrem * (calculateRiderRateByYear(rName, rTermNum, 6) / 100);
 
-                document.getElementById('total-annual-premium').innerText = totalAnnualPremium.toLocaleString('vi-VN') + ' VNĐ';
-                document.getElementById('sum-y1').innerText = totalY1.toLocaleString('vi-VN') + ' VNĐ';
-                document.getElementById('sum-y2').innerText = totalY2.toLocaleString('vi-VN') + ' VNĐ';
-                document.getElementById('sum-y3').innerText = totalY3.toLocaleString('vi-VN') + ' VNĐ';
-                document.getElementById('sum-y4').innerText = totalY4.toLocaleString('vi-VN') + ' VNĐ';
-                document.getElementById('sum-y5').innerText = totalY5.toLocaleString('vi-VN') + ' VNĐ';
-                document.getElementById('sum-y6').innerText = totalY6.toLocaleString('vi-VN') + ' VNĐ';
+                    totalY1 += rY1;
+                    totalY2 += rY2;
+                    totalY3 += rY3;
+                    totalY4 += rY4;
+                    totalY5 += rY5;
+                    totalY6 += rY6;
 
-                document.getElementById('result-table-body').innerHTML = tableRowsHtml;
+                    ridersListArray.push({
+                        name: rName,
+                        premium: rPrem,
+                        term: rTermNum,
+                        fyc: { y1: rY1, y2: rY2, y3: rY3, y4: rY4, y5: rY5, y6: rY6 }
+                    });
 
-                const resultCard = document.getElementById('result-card');
-                resultCard.classList.remove('hidden');
-                resultCard.scrollIntoView({ behavior: 'smooth' });
+                    tableRowsHtml += `
+                        <tr class="border-b border-theme-border">
+                            <td class="p-2.5">
+                                <span class="block font-medium">+ ${rName}</span>
+                                <span class="text-[11px] text-theme-muted">Sản phẩm bổ trợ (${rTermNum} năm)</span>
+                            </td>
+                            <td class="p-2.5 font-medium">${Math.round(rPrem).toLocaleString('vi-VN')} VNĐ</td>
+                            <td class="p-2.5 text-center">${Math.round(rY1).toLocaleString('vi-VN')}</td>
+                            <td class="p-2.5 text-center">${Math.round(rY2).toLocaleString('vi-VN')}</td>
+                            <td class="p-2.5 text-center">${Math.round(rY3).toLocaleString('vi-VN')}</td>
+                            <td class="p-2.5 text-center">${Math.round(rY4).toLocaleString('vi-VN')}</td>
+                            <td class="p-2.5 text-center">${Math.round(rY5).toLocaleString('vi-VN')}</td>
+                            <td class="p-2.5 text-right font-bold">${Math.round(rY6).toLocaleString('vi-VN')}</td>
+                        </tr>
+                    `;
+                }
             });
 
-            // Xử lý sự kiện bấm nút Lưu làm doanh số
-            const btnSavePersonal = document.getElementById('btn-save-personal');
-            if (btnSavePersonal) {
-                btnSavePersonal.addEventListener('click', () => {
-                    if (!lastCalculatedData) {
-                        Swal.fire({
-                            icon: 'warning',
-                            title: 'Chưa có dữ liệu',
-                            text: 'Vui lòng tính toán dòng tiền FYC trước khi bấm lưu doanh số!',
-                            confirmButtonColor: '#dc2626'
-                        });
-                        return;
-                    }
+            if (hasError) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Chưa đủ thông tin phụ phẩm',
+                    text: 'Vui lòng không để trống thời hạn đóng phí ở các sản phẩm bán cùng!',
+                    confirmButtonColor: '#dc2626'
+                });
+                return;
+            }
 
-                    let summaryHtml = `
-                        <div class="text-left space-y-2 mt-2 max-h-48 overflow-y-auto p-3 bg-theme-bg rounded-lg border border-theme-border text-xs">
-                            <div class="font-bold text-theme-primary">▪ Sản phẩm chính: ${lastCalculatedData.mainProduct}</div>
-                            <div class="text-theme-muted pl-3">Phí: ${lastCalculatedData.mainPremium.toLocaleString('vi-VN')} VNĐ (${lastCalculatedData.mainTerm} năm)</div>
-                    `;
+            lastCalculatedData = {
+                mainProduct: mainProduct,
+                mainPremium: mainPremium,
+                mainTerm: mainTerm,
+                totalAnnualPremium: totalAnnualPremium,
+                fyc: { y1: totalY1, y2: totalY2, y3: totalY3, y4: totalY4, y5: totalY5, y6: totalY6 },
+                riders: ridersListArray
+            };
 
-                    if (lastCalculatedData.riders && lastCalculatedData.riders.length > 0) {
-                        lastCalculatedData.riders.forEach(r => {
-                            summaryHtml += `
-                                <div class="font-medium text-theme-text mt-1">▪ Bổ trợ: ${r.name}</div>
-                                <div class="text-theme-muted pl-3">Phí: ${r.premium.toLocaleString('vi-VN')} VNĐ (${r.term} năm)</div>
-                            `;
-                        });
-                    } else {
-                        summaryHtml += `<div class="italic text-theme-muted mt-1">▪ Không có sản phẩm bổ trợ đi kèm.</div>`;
+            document.getElementById('total-annual-premium').innerText = Math.round(totalAnnualPremium).toLocaleString('vi-VN') + ' VNĐ';
+            document.getElementById('sum-y1').innerText = Math.round(totalY1).toLocaleString('vi-VN') + ' VNĐ';
+            document.getElementById('sum-y2').innerText = Math.round(totalY2).toLocaleString('vi-VN') + ' VNĐ';
+            document.getElementById('sum-y3').innerText = Math.round(totalY3).toLocaleString('vi-VN') + ' VNĐ';
+            document.getElementById('sum-y4').innerText = Math.round(totalY4).toLocaleString('vi-VN') + ' VNĐ';
+            document.getElementById('sum-y5').innerText = Math.round(totalY5).toLocaleString('vi-VN') + ' VNĐ';
+            document.getElementById('sum-y6').innerText = Math.round(totalY6).toLocaleString('vi-VN') + ' VNĐ';
+
+            document.getElementById('result-table-body').innerHTML = tableRowsHtml;
+
+            const resultCard = document.getElementById('result-card');
+            resultCard.classList.remove('hidden');
+            resultCard.scrollIntoView({ behavior: 'smooth' });
+        });
+
+        const btnSavePersonal = document.getElementById('btn-save-personal');
+        if (btnSavePersonal) {
+            btnSavePersonal.addEventListener('click', async () => {
+                if (!lastCalculatedData) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Chưa có dữ liệu',
+                        text: 'Vui lòng tính toán dòng tiền FYC trước khi bấm lưu doanh số!',
+                        confirmButtonColor: '#dc2626'
+                    });
+                    return;
+                }
+
+                const tongPhiFYP = lastCalculatedData.totalAnnualPremium || lastCalculatedData.mainPremium || 0;
+                const fycNam1 = lastCalculatedData.fyc ? lastCalculatedData.fyc.y1 : 0;
+                const todayStr = new Date().toISOString().split('T')[0];
+
+                const { value: formValues } = await Swal.fire({
+                    title: '<span class="text-base font-bold text-theme-text">Xác nhận lưu doanh số hợp đồng</span>',
+                    html: `
+                        <div class="text-left text-xs space-y-3 p-1 max-h-[70vh] overflow-y-auto text-theme-text">
+                            <div class="p-3 bg-theme-border/20 border border-theme-border rounded-xl space-y-1">
+                                <p class="font-bold text-emerald-600 dark:text-emerald-400">• Sản phẩm chính: ${lastCalculatedData.mainProduct}</p>
+                                <p class="opacity-90 pl-3">Phí: <b>${Math.round(tongPhiFYP).toLocaleString('vi-VN')} VNĐ</b></p>
+                                <p class="opacity-60 pl-3 italic">• ${(lastCalculatedData.riders && lastCalculatedData.riders.length > 0) ? 'Có ' + lastCalculatedData.riders.length + ' sản phẩm bổ trợ' : 'Không có sản phẩm bổ trợ'}</p>
+                            </div>
+
+                            <div>
+                                <label class="block font-medium mb-1 opacity-90">Số hợp đồng <span class="text-red-500">*</span></label>
+                                <input id="swal-so-hd" maxlength="8" class="w-full p-2.5 border border-theme-border rounded-xl text-xs outline-none bg-transparent focus:border-emerald-500 transition text-theme-text" placeholder="Nhập đúng 8 chữ số (VD: 75482931)" oninput="this.value = this.value.replace(/[^0-9]/g, '')">
+                            </div>
+
+                            <div>
+                                <label class="block font-medium mb-1 opacity-90">Bên mua bảo hiểm (BMBH) <span class="text-red-500">*</span></label>
+                                <input id="swal-bmbh" class="w-full p-2.5 border border-theme-border rounded-xl text-xs outline-none bg-transparent focus:border-emerald-500 transition capitalize text-theme-text" placeholder="Nhập Tên Bên Mua Bảo Hiểm">
+                            </div>
+
+                            <div>
+                                <label class="block font-medium mb-1 opacity-90">Người được bảo hiểm chính (NĐBH)</label>
+                                <input id="swal-ndbh" class="w-full p-2.5 border border-theme-border rounded-xl text-xs outline-none bg-transparent focus:border-emerald-500 transition capitalize text-theme-text" placeholder="Nhập Tên NĐBH Chính (để trống nếu là BMBH)">
+                            </div>
+
+                            <div>
+                                <label class="block font-medium mb-1 opacity-90">Ngày phát hành hợp đồng <span class="text-red-500">*</span></label>
+                                <input id="swal-ngay-cap" type="date" value="${todayStr}" class="w-full p-2.5 border border-theme-border rounded-xl text-xs outline-none bg-transparent focus:border-emerald-500 transition text-theme-text">
+                            </div>
+
+                            <div>
+                                <label class="block font-medium mb-1 opacity-90">Phương thức đóng phí</label>
+                                <select id="swal-dinh-ky" class="w-full p-2.5 border border-theme-border rounded-xl text-xs outline-none bg-theme-bg text-theme-text focus:border-emerald-500 transition">
+                                    <option value="Năm">Định kỳ năm (100% FYP)</option>
+                                    <option value="Nửa năm">Định kỳ nửa năm (50% FYP)</option>
+                                    <option value="Quý">Định kỳ quý (25% FYP)</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="block font-medium mb-1 opacity-90">Tỷ lệ hưởng hoa hồng (% FYC)</label>
+                                <select id="swal-ty-le-hh" class="w-full p-2.5 border border-theme-border rounded-xl text-xs outline-none bg-theme-bg text-theme-text focus:border-emerald-500 transition">
+                                    <option value="100">100% (Đại lý trực tiếp)</option>
+                                    <option value="50">50% (Chia doanh số 50-50)</option>
+                                </select>
+                            </div>
+                        </div>
+                    `,
+                    focusConfirm: false,
+                    showCancelButton: true,
+                    confirmButtonText: 'Lưu & Sang trang Doanh số',
+                    cancelButtonText: 'Hủy',
+                    confirmButtonColor: '#059669',
+                    cancelButtonColor: '#6b7280',
+                    preConfirm: () => {
+                        const soHd = document.getElementById('swal-so-hd').value.trim();
+                        const bmbh = document.getElementById('swal-bmbh').value.trim();
+                        const ndbh = document.getElementById('swal-ndbh').value.trim() || bmbh;
+                        const ngayCap = document.getElementById('swal-ngay-cap').value;
+                        const dinhKy = document.getElementById('swal-dinh-ky').value;
+                        const tyLeHuong = Number(document.getElementById('swal-ty-le-hh').value) || 100;
+
+                        if (!soHd || soHd.length !== 8) {
+                            Swal.showValidationMessage('Số hợp đồng bắt buộc phải đúng 8 chữ số!');
+                            return false;
+                        }
+
+                        if (!bmbh) {
+                            Swal.showValidationMessage('Vui lòng nhập Tên Bên Mua Bảo Hiểm!');
+                            return false;
+                        }
+
+                        return { soHd, bmbh, ndbh, ngayCap, dinhKy, tyLeHuong };
                     }
-                    summaryHtml += `</div>`;
+                });
+
+                if (!formValues) return;
+
+                // 1. Kiểm tra session đăng nhập
+                const currentUser = JSON.parse(localStorage.getItem('user_info')) || {};
+                const tenDangNhap = currentUser.ten_dang_nhap || localStorage.getItem('ten_dang_nhap');
+
+                if (!tenDangNhap) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Hết phiên đăng nhập!',
+                        text: 'Không tìm thấy mã đại lý. Vui lòng đăng nhập lại hệ thống.',
+                        confirmButtonText: 'Đăng nhập lại'
+                    }).then(() => {
+                        window.location.href = '/login.html';
+                    });
+                    return;
+                }
+
+                // 2. Tính toán hoa hồng thực nhận
+                const fycThucNhan = (fycNam1 * formValues.tyLeHuong) / 100;
+
+                // Ép kiểu msdl sang số nguyên (int4) tránh lỗi kiểu dữ liệu khi lưu DB
+                const parsedMsdl = parseInt(currentUser.msdl || currentUser.ten_dang_nhap, 10);
+
+                // 3. Chuẩn bị payload gửi lên Database.
+                // LƯU Ý: không còn ghi vào localStorage nữa - Database (qua API
+                // backend /api/agent/sales) là nơi lưu trữ DUY NHẤT, để tránh
+                // tình trạng mất doanh số khi đăng xuất/đổi máy như trước đây.
+                const payload = {
+                    agent: tenDangNhap, // Backend sẽ tự tra agent_id từ tên này, đảm bảo agent khác không ghi được vào hợp đồng của agent này
+                    ten_dang_nhap: tenDangNhap,
+                    msdl: isNaN(parsedMsdl) ? null : parsedMsdl,
+                    so_hop_dong: formValues.soHd,
+                    ngay_phat_hanh: formValues.ngayCap,
+                    ben_mua_bao_hiem: formValues.bmbh,
+                    nguoi_duoc_bao_hiem: formValues.ndbh,
+                    ma_san_pham_chinh: lastCalculatedData.mainProduct,
+                    ten_san_pham_chinh: lastCalculatedData.mainProduct,
+                    dinh_ky_dong_phi: formValues.dinhKy,
+                    tong_phi_thuc_thu: tongPhiFYP,
+                    phi_quy_nam_fyp: tongPhiFYP,
+                    ty_le_hoa_hong: formValues.tyLeHuong,
+                    hoa_hong_fyc: fycThucNhan,
+                    trang_thai: 'Hiệu lực',
+                    ghi_chu: JSON.stringify({
+                        riders: lastCalculatedData.riders || [],
+                        fycDetails: lastCalculatedData.fyc || {}
+                    })
+                };
+
+                Swal.fire({ title: 'Đang lưu doanh số...', didOpen: () => Swal.showLoading() });
+
+                // 4. Gửi dữ liệu lên backend để backend ghi vào Database
+                // (thay cho việc gọi thẳng Supabase client từ trình duyệt trước đây)
+                try {
+                    const response = await fetch('/api/agent/sales', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    const result = await response.json();
+
+                    if (!response.ok || !result.success) {
+                        throw new Error(result.message || 'Không thể lưu doanh số');
+                    }
 
                     Swal.fire({
-                        title: 'Xác nhận lưu doanh số hợp đồng',
-                        html: `
-                            ${summaryHtml}
-                            <div class="text-left space-y-3 mt-4 text-xs">
-                                <div>
-                                    <label class="block font-medium mb-1">Số hợp đồng <span class="text-red-500">*</span></label>
-                                    <input type="text" id="swal-contract-number" maxlength="8" placeholder="Nhập đủ 8 chữ số (VD: 75482931)" class="w-full px-2.5 py-1.5 border rounded-lg bg-theme-card border-theme-border text-xs focus:ring-2 focus:ring-theme-primary focus:outline-none">
-                                </div>
-                                <div>
-                                    <label class="block font-medium mb-1">Bên mua bảo hiểm (BMBH) <span class="text-red-500">*</span></label>
-                                    <input type="text" id="swal-policy-holder" placeholder="Nhập tên Bên mua bảo hiểm" class="w-full px-2.5 py-1.5 border rounded-lg bg-theme-card border-theme-border text-xs focus:ring-2 focus:ring-theme-primary focus:outline-none capitalize">
-                                </div>
-                                <div>
-                                    <label class="block font-medium mb-1">Người được bảo hiểm chính (NĐBH)</label>
-                                    <input type="text" id="swal-life-insured" placeholder="Nhập tên NĐBH chính" class="w-full px-2.5 py-1.5 border rounded-lg bg-theme-card border-theme-border text-xs focus:ring-2 focus:ring-theme-primary focus:outline-none capitalize">
-                                </div>
-                                <div>
-                                    <label class="block font-medium mb-1">Ngày phát hành hợp đồng <span class="text-red-500">*</span></label>
-                                    <input type="date" id="swal-issue-date" value="${new Date().toISOString().split('T')[0]}" class="w-full px-2.5 py-1.5 border rounded-lg bg-theme-card border-theme-border text-xs">
-                                </div>
-                                <div>
-                                    <label class="block font-medium mb-1">Phương thức đóng phí</label>
-                                    <select id="swal-payment-mode" class="w-full px-2.5 py-1.5 border rounded-lg bg-theme-card border-theme-border text-xs">
-                                        <option value="YEAR">Định kỳ năm (100% phí hàng năm)</option>
-                                        <option value="HALF">Định kỳ nửa năm (50% x 2 kỳ)</option>
-                                        <option value="QUARTER">Định kỳ quý (25% x 4 kỳ)</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="block font-medium mb-1">Tỷ lệ hưởng hoa hồng (%)</label>
-                                    <select id="swal-split-rate" class="w-full px-2.5 py-1.5 border rounded-lg bg-theme-card border-theme-border text-xs">
-                                        <option value="100">100% (Đại lý trực tiếp)</option>
-                                        <option value="50">50% (Đại lý hỗ trợ / chia sẻ)</option>
-                                    </select>
-                                </div>
-                            </div>
-                        `,
-                        confirmButtonText: 'Lưu & Sang trang Doanh số',
-                        showCancelButton: true,
-                        cancelButtonText: 'Hủy',
-                        confirmButtonColor: '#16a34a',
-                        didOpen: () => {
-                            const contractInput = document.getElementById('swal-contract-number');
-                            const holderInput = document.getElementById('swal-policy-holder');
-                            const insuredInput = document.getElementById('swal-life-insured');
-
-                            // Hàm viết hoa chữ cái đầu cho danh từ riêng
-                            const capitalizeWords = (str) => {
-                                return str.toLowerCase().replace(/(?:^|\s)\S/g, (a) => a.toUpperCase());
-                            };
-
-                            // Chỉ cho phép nhập số & tối đa 8 ký tự cho Số HĐ
-                            contractInput.addEventListener('input', (e) => {
-                                e.target.value = e.target.value.replace(/\D/g, '').slice(0, 8);
-                            });
-
-                            // Tự động Capitalize khi nhập tên
-                            holderInput.addEventListener('input', (e) => {
-                                e.target.value = capitalizeWords(e.target.value);
-                            });
-                            insuredInput.addEventListener('input', (e) => {
-                                e.target.value = capitalizeWords(e.target.value);
-                            });
-                        },
-                        preConfirm: () => {
-                            const contractNumber = document.getElementById('swal-contract-number').value.trim();
-                            const policyHolder = document.getElementById('swal-policy-holder').value.trim();
-                            const lifeInsured = document.getElementById('swal-life-insured').value.trim();
-                            const issueDate = document.getElementById('swal-issue-date').value;
-                            const paymentMode = document.getElementById('swal-payment-mode').value;
-                            const splitRate = parseFloat(document.getElementById('swal-split-rate').value) / 100;
-
-                            // Validation bắt buộc
-                            if (!contractNumber) {
-                                Swal.showValidationMessage('Vui lòng nhập Số hợp đồng!');
-                                return false;
-                            }
-                            if (!/^\d{8}$/.test(contractNumber)) {
-                                Swal.showValidationMessage('Số hợp đồng phải chính xác là 8 ký tự số!');
-                                return false;
-                            }
-                            if (!policyHolder) {
-                                Swal.showValidationMessage('Vui lòng nhập tên Bên mua bảo hiểm (BMBH)!');
-                                return false;
-                            }
-                            if (!issueDate) {
-                                Swal.showValidationMessage('Vui lòng chọn ngày phát hành hợp đồng!');
-                                return false;
-                            }
-
-                            return { 
-                                contractNumber, 
-                                policyHolder, 
-                                lifeInsured: lifeInsured || policyHolder, // Nếu bỏ trống NĐBH thì lấy mặc định bằng BMBH
-                                issueDate, 
-                                paymentMode, 
-                                splitRate 
-                            };
-                        }
-                    }).then((result) => {
-                        if (result.isConfirmed) {
-                            const { contractNumber, policyHolder, lifeInsured, issueDate, paymentMode, splitRate } = result.value;
-
-                            let installments = [];
-                            let baseDate = new Date(issueDate);
-
-                            let numPeriods = 1;
-                            let fycMultiplier = 1;
-
-                            if (paymentMode === 'HALF') {
-                                numPeriods = 2;
-                                fycMultiplier = 0.5;
-                            } else if (paymentMode === 'QUARTER') {
-                                numPeriods = 4;
-                                fycMultiplier = 0.25;
-                            }
-
-                            for (let i = 0; i < numPeriods; i++) {
-                                let dueDateObj = new Date(baseDate);
-                                if (paymentMode === 'HALF') {
-                                    dueDateObj.setMonth(dueDateObj.getMonth() + (i * 6));
-                                } else if (paymentMode === 'QUARTER') {
-                                    dueDateObj.setMonth(dueDateObj.getMonth() + (i * 3));
-                                }
-
-                                installments.push({
-                                    periodIndex: i + 1,
-                                    dueDate: dueDateObj.toISOString().split('T')[0],
-                                    status: 'pending',
-                                    paidDate: null,
-                                    fycAmount: lastCalculatedData.fyc.y1 * splitRate * fycMultiplier
-                                });
-                            }
-
-                            let adjustedFyc = {};
-                            Object.keys(lastCalculatedData.fyc).forEach(key => {
-                                adjustedFyc[key] = lastCalculatedData.fyc[key] * splitRate;
-                            });
-
-                            let personalSalesHistory = JSON.parse(localStorage.getItem('prudential_personal_sales') || '[]');
-                            
-                            const record = {
-                                id: 'SALE-' + Date.now(),
-                                timestamp: new Date().toISOString(),
-                                contractNumber: contractNumber,
-                                policyHolder: policyHolder,
-                                lifeInsured: lifeInsured,
-                                issueDate: issueDate,
-                                paymentMode: paymentMode,
-                                splitRate: splitRate * 100,
-                                installments: installments,
-                                ...lastCalculatedData,
-                                fyc: adjustedFyc
-                            };
-
-                            personalSalesHistory.push(record);
-                            localStorage.setItem('prudential_personal_sales', JSON.stringify(personalSalesHistory));
-
-                            Swal.fire({
-                                icon: 'success',
-                                title: 'Đã lưu thành công!',
-                                text: `Hợp đồng ${contractNumber} đã được ghi nhận. Đang chuyển sang trang doanh số...`,
-                                confirmButtonColor: '#16a34a',
-                                timer: 1500,
-                                showConfirmButton: false
-                            }).then(() => {
-                                window.location.href = 'sales.html';
-                            });
-                        }
+                        icon: 'success',
+                        title: 'Đã lưu vào Database!',
+                        text: `Hợp đồng ${formValues.soHd} đã được lưu thành công.`,
+                        timer: 1500,
+                        showConfirmButton: false
+                    }).then(() => {
+                        window.location.href = 'sales.html';
                     });
-                });
-            }
-        });
-    </script>
+
+                } catch (err) {
+                    console.error('Lỗi chi tiết khi lưu doanh số:', err);
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Không lưu được doanh số!',
+                        text: err.message || JSON.stringify(err),
+                        confirmButtonText: 'Đã hiểu'
+                    });
+                }
+            });
+        }
+    });
+
+    function adjustMainMargin() {
+        const sidebarContainer = document.getElementById('sidebar-container');
+        if (!sidebarContainer) return;
+
+        const isCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
+
+        if (window.innerWidth >= 1024) {
+            sidebarContainer.style.width = isCollapsed ? '4rem' : '16rem';
+            sidebarContainer.style.minWidth = isCollapsed ? '4rem' : '16rem';
+        } else {
+            sidebarContainer.style.width = '0px';
+            sidebarContainer.style.minWidth = '0px';
+        }
+    }
+
+    window.addEventListener('resize', adjustMainMargin);
+    document.addEventListener('DOMContentLoaded', adjustMainMargin);
+    document.addEventListener('sidebarToggle', adjustMainMargin);
+</script>
 </body>
 </html>

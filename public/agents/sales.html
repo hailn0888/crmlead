@@ -19,6 +19,10 @@
     <script src="/js/searchHelper.js"></script>
     <script src="/js/ai.js"></script>
 
+    <!-- Supabase CDN & Config -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="/js/supabaseClient.js"></script>
+
     <style>
         .theme-action-btn {
             background-color: #dc2626;
@@ -34,17 +38,15 @@
         }
     </style>
 </head>
-<body class="bg-theme-bg text-theme-text min-h-screen flex flex-col transition-colors duration-200">
+<body class="bg-theme-bg text-theme-text font-sans antialiased transition-colors duration-200">
 
     <!-- Header Container -->
     <div id="header-container"></div>
 
-    <div class="flex flex-1 pt-16">
-        <!-- Sidebar Container -->
-        <div id="sidebar-container"></div>
-
-        <!-- Main Content -->
-        <main class="flex-1 p-4 lg:p-6 ml-0 lg:ml-64 transition-all duration-200">
+    <!-- Khung cấu trúc chuẩn App Native -->
+    <div class="flex h-screen overflow-hidden">
+        <div id="mainContainer" class="flex-1 flex flex-col overflow-y-auto transition-colors duration-200 pt-16">
+            <main class="p-4 lg:p-6 min-w-0">
             <div class="max-w-7xl mx-auto space-y-5">
                 
                 <!-- Page Title -->
@@ -111,7 +113,7 @@
                                 <i data-lucide="search" class="w-4 h-4 text-theme-muted absolute left-2.5 top-2"></i>
                             </div>
 
-                            <!-- Bộ lọc Thời gian (Tháng, Quý, Năm) -->
+                            <!-- Bộ lọc Thời gian -->
                             <select id="filter-year" class="px-2.5 py-1.5 border rounded-lg bg-theme-bg border-theme-border text-xs focus:ring-2 focus:ring-theme-primary focus:outline-none">
                                 <option value="ALL">Tất cả Năm</option>
                             </select>
@@ -204,14 +206,12 @@
                 return str.toLowerCase().replace(/(?:^|\s)\S/g, (a) => a.toUpperCase());
             }
 
-            // Tính số kỳ đóng trong năm
             function getPeriodDivisor(paymentMode) {
-                if (paymentMode === 'HALF') return 2;
-                if (paymentMode === 'QUARTER') return 4;
-                return 1; // YEAR
+                if (paymentMode === 'HALF' || paymentMode === 'Nửa năm') return 2;
+                if (paymentMode === 'QUARTER' || paymentMode === 'Quý') return 4;
+                return 1;
             }
 
-            // 1. Khởi tạo danh sách Năm
             function initYearFilter(data) {
                 const years = new Set();
                 const currentYear = new Date().getFullYear();
@@ -236,49 +236,40 @@
                 });
             }
 
-            // 2. Tải & Chuẩn hóa dữ liệu
-            function loadSalesData() {
-                salesData = JSON.parse(localStorage.getItem('prudential_personal_sales') || '[]');
-                
-                // Chuẩn hóa cấu trúc Kỳ đóng phí & FYC kỳ
-                salesData.forEach(item => {
-                    const divisor = getPeriodDivisor(item.paymentMode);
-                    const splitRate = (item.splitRate || 100) / 100;
+            // Lấy tên đăng nhập agent hiện tại (dùng chung cho mọi lời gọi API bên dưới)
+            function getCurrentAgentName() {
+                const currentUser = JSON.parse(localStorage.getItem('user_info')) || {};
+                return currentUser.ten_dang_nhap || localStorage.getItem('ten_dang_nhap') || '';
+            }
 
-                    // Tổng FYC cả năm (Năm 1) chưa chia
-                    const fullFycY1 = item.fyc ? (item.fyc.fullY1 || item.fyc.y1 || 0) : 0;
-                    
-                    // FYC thực nhận của từng kỳ = (Tổng FYC N1 / Số kỳ) * Tỷ lệ chia
-                    const fycPerPeriod = (fullFycY1 / divisor) * splitRate;
+            // Gọi API backend để lấy danh sách doanh số (hợp đồng + lịch đóng phí)
+            // của đúng agent đang đăng nhập. Database là nguồn dữ liệu DUY NHẤT -
+            // không còn đọc/ghi localStorage nữa nên dữ liệu không bị mất khi
+            // đăng xuất, xoá cache hay đổi máy.
+            async function fetchServerSales() {
+                const tenDangNhap = getCurrentAgentName();
+                if (!tenDangNhap) return [];
 
-                    if (!item.installments || item.installments.length === 0) {
-                        item.installments = [];
-                        for (let i = 1; i <= divisor; i++) {
-                            item.installments.push({
-                                periodIndex: i,
-                                dueDate: item.issueDate,
-                                paidDate: i === 1 ? item.issueDate : null,
-                                status: i === 1 ? 'paid' : 'unpaid',
-                                fycAmount: fycPerPeriod
-                            });
-                        }
-                    } else {
-                        // Cập nhật lại fycAmount và Kỳ 1 mặc định Đã đóng
-                        item.installments.forEach((inst, idx) => {
-                            inst.fycAmount = fycPerPeriod;
-                            if (idx === 0) {
-                                inst.status = 'paid';
-                                if (!inst.paidDate) inst.paidDate = item.issueDate;
-                            }
-                        });
+                try {
+                    const response = await fetch(`/api/agent/sales?agent=${encodeURIComponent(tenDangNhap)}`);
+                    const result = await response.json();
+                    if (!response.ok || !result.success) {
+                        console.warn('Không lấy được doanh số từ server:', result.message);
+                        return [];
                     }
-                });
+                    return result.data || [];
+                } catch (err) {
+                    console.warn('Lỗi kết nối tới server khi lấy doanh số:', err);
+                    return [];
+                }
+            }
 
+            async function loadSalesData() {
+                salesData = await fetchServerSales();
                 initYearFilter(salesData);
                 applyFilters();
             }
 
-            // 3. Tính toán Doanh số thực thu theo Bộ lọc thời gian chọn
             function calculateContractRevenue(item, selectedYear, selectedPeriod) {
                 const divisor = getPeriodDivisor(item.paymentMode);
                 const fypPerPeriod = (item.totalAnnualPremium || 0) / divisor;
@@ -293,12 +284,10 @@
                     if (inst.status === 'paid' && inst.paidDate) {
                         const d = new Date(inst.paidDate);
                         const instYear = d.getFullYear().toString();
-                        const instMonth = d.getMonth() + 1; // 1-12
+                        const instMonth = d.getMonth() + 1;
 
-                        // Kiêm tra điều kiện Năm
                         if (selectedYear !== 'ALL' && instYear !== selectedYear) return;
 
-                        // Kiểm tra điều kiện Quý/Tháng
                         let matchPeriod = true;
                         if (selectedPeriod !== 'ALL') {
                             if (selectedPeriod.startsWith('Q')) {
@@ -322,7 +311,6 @@
                 return { periodFyp, periodFyc, paidCount };
             }
 
-            // 4. Áp dụng Bộ lọc
             function applyFilters() {
                 const term = searchInput.value.toLowerCase().trim();
                 const selectedYear = filterYear.value;
@@ -335,7 +323,6 @@
                 const displayList = [];
 
                 salesData.forEach((item, originalIndex) => {
-                    // Lọc theo từ khóa
                     const matchSearch = !term || 
                         (item.contractNumber && item.contractNumber.toLowerCase().includes(term)) ||
                         (item.policyHolder && item.policyHolder.toLowerCase().includes(term)) ||
@@ -343,10 +330,8 @@
 
                     if (!matchSearch) return;
 
-                    // Tính toán doanh số thực thu trong mốc thời gian lọc
                     const rev = calculateContractRevenue(item, selectedYear, selectedPeriod);
 
-                    // Nếu có phát sinh doanh số thực thu (hoặc chọn All)
                     if (selectedYear === 'ALL' && selectedPeriod === 'ALL') {
                         displayList.push({ item, originalIndex, rev });
                         grandFyp += rev.periodFyp;
@@ -360,15 +345,13 @@
                     }
                 });
 
-                // Cập nhật Thẻ KPI
                 document.getElementById('kpi-total-contracts').innerText = totalContracts;
-                document.getElementById('kpi-total-fyp').innerText = grandFyp.toLocaleString('vi-VN') + ' VNĐ';
-                document.getElementById('kpi-total-fyc').innerText = grandFyc.toLocaleString('vi-VN') + ' VNĐ';
+                document.getElementById('kpi-total-fyp').innerText = Math.round(grandFyp).toLocaleString('vi-VN') + ' VNĐ';
+                document.getElementById('kpi-total-fyc').innerText = Math.round(grandFyc).toLocaleString('vi-VN') + ' VNĐ';
 
                 renderSalesTable(displayList);
             }
 
-            // 5. Render bảng danh sách hợp đồng
             function renderSalesTable(displayList) {
                 salesTableBody.innerHTML = '';
 
@@ -379,7 +362,7 @@
                 noSalesMsg.classList.add('hidden');
 
                 displayList.forEach(({ item, originalIndex, rev }, index) => {
-                    const modeText = item.paymentMode === 'YEAR' ? 'Năm' : (item.paymentMode === 'HALF' ? 'Nửa năm' : 'Quý');
+                    const modeText = (item.paymentMode === 'YEAR' || item.paymentMode === 'Năm') ? 'Năm' : ((item.paymentMode === 'HALF' || item.paymentMode === 'Nửa năm') ? 'Nửa năm' : 'Quý');
                     const splitText = (item.splitRate || 100) + '%';
 
                     const rowHtml = `
@@ -398,13 +381,13 @@
                                 ${item.riders && item.riders.length > 0 ? `<span class="text-[11px] text-emerald-600">+ ${item.riders.length} sản phẩm bổ trợ</span>` : ''}
                             </td>
                             <td class="p-2.5 text-right font-bold text-theme-text">
-                                ${(item.totalAnnualPremium || 0).toLocaleString('vi-VN')} VNĐ
+                                ${Math.round(item.totalAnnualPremium || 0).toLocaleString('vi-VN')} VNĐ
                             </td>
                             <td class="p-2.5 text-right font-bold text-blue-600">
-                                ${rev.periodFyp.toLocaleString('vi-VN')} VNĐ
+                                ${Math.round(rev.periodFyp).toLocaleString('vi-VN')} VNĐ
                             </td>
                             <td class="p-2.5 text-right font-bold text-emerald-600">
-                                ${rev.periodFyc.toLocaleString('vi-VN')} VNĐ
+                                ${Math.round(rev.periodFyc).toLocaleString('vi-VN')} VNĐ
                             </td>
                             <td class="p-2.5 text-center">
                                 <span class="px-2 py-0.5 rounded text-[10px] bg-theme-bg border border-theme-border font-medium">
@@ -432,12 +415,10 @@
                 }, 50);
             }
 
-            // Event Listeners cho Bộ lọc
             searchInput.addEventListener('input', applyFilters);
             filterYear.addEventListener('change', applyFilters);
             filterPeriod.addEventListener('change', applyFilters);
 
-            // 6. SỬA HỢP ĐỒNG
             window.editContract = function(index) {
                 const item = salesData[index];
 
@@ -494,20 +475,33 @@
 
                         return { contractNumber, policyHolder, lifeInsured: lifeInsured || policyHolder };
                     }
-                }).then((result) => {
-                    if (result.isConfirmed) {
-                        salesData[index].contractNumber = result.value.contractNumber;
-                        salesData[index].policyHolder = result.value.policyHolder;
-                        salesData[index].lifeInsured = result.value.lifeInsured;
+                }).then(async (result) => {
+                    if (!result.isConfirmed) return;
 
-                        localStorage.setItem('prudential_personal_sales', JSON.stringify(salesData));
-                        loadSalesData();
+                    const oldNum = salesData[index].contractNumber;
+                    try {
+                        const response = await fetch(`/api/agent/sales/${encodeURIComponent(oldNum)}`, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                so_hop_dong: result.value.contractNumber,
+                                ben_mua_bao_hiem: result.value.policyHolder,
+                                nguoi_duoc_bao_hiem: result.value.lifeInsured
+                            })
+                        });
+                        const apiResult = await response.json();
+                        if (!response.ok || !apiResult.success) {
+                            throw new Error(apiResult.message || 'Không thể cập nhật hợp đồng');
+                        }
+
+                        await loadSalesData();
                         Swal.fire('Thành công', 'Đã cập nhật thông tin hợp đồng!', 'success');
+                    } catch (err) {
+                        Swal.fire({ icon: 'error', title: 'Lỗi!', text: err.message || 'Không thể cập nhật hợp đồng' });
                     }
                 });
             };
 
-            // 7. QUẢN LÝ KỲ ĐÓNG PHÍ
             window.viewInstallments = function(index) {
                 const item = salesData[index];
                 if (!item.installments || item.installments.length === 0) {
@@ -527,7 +521,7 @@
                                 <div class="font-bold text-sm text-theme-text">Kỳ ${inst.periodIndex} ${i === 0 ? '(Kỳ đầu)' : ''}</div>
                                 <div class="text-theme-muted mt-0.5">Ngày đóng dự kiến: <span class="font-semibold">${formatDateVN(inst.dueDate)}</span></div>
                                 ${isPaid ? `<div class="text-emerald-600 font-semibold mt-0.5">Đã thu ngày: ${displayDate}</div>` : ''}
-                                <div class="text-amber-600 font-medium mt-0.5">FYC Kỳ này: ${inst.fycAmount.toLocaleString('vi-VN')} VNĐ</div>
+                                <div class="text-amber-600 font-medium mt-0.5">FYC Kỳ này: ${Math.round(inst.fycAmount).toLocaleString('vi-VN')} VNĐ</div>
                             </div>
                             <div>
                                 ${isPaid ? `
@@ -554,7 +548,6 @@
                 });
             };
 
-            // Xác nhận nộp phí Kỳ tiếp theo
             window.confirmPayment = function(contractIndex, installmentIndex) {
                 const item = salesData[contractIndex];
                 const inst = item.installments[installmentIndex];
@@ -582,30 +575,44 @@
                         }
                         return paidDate;
                     }
-                }).then((result) => {
-                    if (result.isConfirmed) {
-                        // Cập nhật ngày thực đóng và trạng thái
-                        salesData[contractIndex].installments[installmentIndex].status = 'paid';
-                        salesData[contractIndex].installments[installmentIndex].paidDate = result.value;
+                }).then(async (result) => {
+                    if (!result.isConfirmed) return;
 
-                        localStorage.setItem('prudential_personal_sales', JSON.stringify(salesData));
-                        
-                        // Tải lại bộ lọc & dữ liệu bảng ngay lập tức
-                        loadSalesData();
+                    // Ghi thẳng xuống Database qua API - đây là điểm mấu chốt bị thiếu
+                    // trước đây (trạng thái đóng phí chỉ nằm ở localStorage nên mất
+                    // khi đăng nhập lại/đổi máy)
+                    try {
+                        const response = await fetch('/api/agent/sales/installment', {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                so_hop_dong: item.contractNumber,
+                                ky_thu_may: inst.periodIndex,
+                                ngay_da_dong: result.value
+                            })
+                        });
+                        const apiResult = await response.json();
+                        if (!response.ok || !apiResult.success) {
+                            throw new Error(apiResult.message || 'Không thể xác nhận đóng phí');
+                        }
+
+                        await loadSalesData();
 
                         Swal.fire({
                             icon: 'success',
                             title: 'Thành công!',
-                            text: `Kỳ ${inst.periodIndex} đã ghi nhận Đã đóng ngày ${formatDateVN(result.value)}. Doanh số & FYC đã được cộng vào Tháng/Quý tương ứng!`,
+                            text: `Kỳ ${inst.periodIndex} đã ghi nhận Đã đóng ngày ${formatDateVN(result.value)}.`,
                             timer: 2000,
                             showConfirmButton: false
                         });
+                    } catch (err) {
+                        Swal.fire({ icon: 'error', title: 'Lỗi!', text: err.message || 'Không thể xác nhận đóng phí' });
                     }
                 });
             };
 
-            // 8. Xóa hợp đồng
             window.deleteContract = function(index) {
+                const item = salesData[index];
                 Swal.fire({
                     title: 'Xác nhận xóa?',
                     text: 'Dữ liệu hợp đồng này sẽ bị xóa vĩnh viễn khỏi danh sách!',
@@ -614,17 +621,26 @@
                     confirmButtonColor: '#dc2626',
                     cancelButtonText: 'Hủy',
                     confirmButtonText: 'Xóa ngay'
-                }).then((result) => {
-                    if (result.isConfirmed) {
-                        salesData.splice(index, 1);
-                        localStorage.setItem('prudential_personal_sales', JSON.stringify(salesData));
-                        loadSalesData();
+                }).then(async (result) => {
+                    if (!result.isConfirmed) return;
+
+                    try {
+                        const response = await fetch(`/api/agent/sales/${encodeURIComponent(item.contractNumber)}`, {
+                            method: 'DELETE'
+                        });
+                        const apiResult = await response.json();
+                        if (!response.ok || !apiResult.success) {
+                            throw new Error(apiResult.message || 'Không thể xoá hợp đồng');
+                        }
+
+                        await loadSalesData();
                         Swal.fire('Đã xóa!', 'Hợp đồng đã được loại bỏ.', 'success');
+                    } catch (err) {
+                        Swal.fire({ icon: 'error', title: 'Lỗi!', text: err.message || 'Không thể xoá hợp đồng' });
                     }
                 });
             };
 
-            // 9. Xóa tất cả
             btnClearSales.addEventListener('click', () => {
                 Swal.fire({
                     title: 'Cảnh báo xóa sạch!',
@@ -634,17 +650,48 @@
                     confirmButtonColor: '#dc2626',
                     cancelButtonText: 'Hủy',
                     confirmButtonText: 'Xóa tất cả'
-                }).then((result) => {
-                    if (result.isConfirmed) {
-                        localStorage.removeItem('prudential_personal_sales');
-                        loadSalesData();
+                }).then(async (result) => {
+                    if (!result.isConfirmed) return;
+
+                    const tenDangNhap = getCurrentAgentName();
+                    try {
+                        const response = await fetch(`/api/agent/sales?agent=${encodeURIComponent(tenDangNhap)}`, {
+                            method: 'DELETE'
+                        });
+                        const apiResult = await response.json();
+                        if (!response.ok || !apiResult.success) {
+                            throw new Error(apiResult.message || 'Không thể xoá dữ liệu');
+                        }
+
+                        await loadSalesData();
                         Swal.fire('Đã dọn dẹp!', 'Toàn bộ danh sách đã được xóa.', 'success');
+                    } catch (err) {
+                        Swal.fire({ icon: 'error', title: 'Lỗi!', text: err.message || 'Không thể xoá dữ liệu' });
                     }
                 });
             });
 
             loadSalesData();
         });
+
+        function adjustMainMargin() {
+            const sidebarContainer = document.getElementById('sidebar-container');
+            if (!sidebarContainer) return;
+
+            const isCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
+
+            if (window.innerWidth >= 1024) {
+                sidebarContainer.style.width = isCollapsed ? '4rem' : '16rem';
+                sidebarContainer.style.minWidth = isCollapsed ? '4rem' : '16rem';
+            } else {
+                sidebarContainer.style.width = '0px';
+                sidebarContainer.style.minWidth = '0px';
+            }
+        }
+
+        window.addEventListener('resize', adjustMainMargin);
+        document.addEventListener('DOMContentLoaded', adjustMainMargin);
+        document.addEventListener('sidebarToggle', adjustMainMargin);
     </script>
 </body>
 </html>
