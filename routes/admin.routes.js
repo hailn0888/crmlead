@@ -393,7 +393,11 @@ router.post('/upload-data', upload.array('files'), async (req, res) => {
                         .from('contracts')
                         .upsert(contractRows, { onConflict: 'so_hop_dong' });
 
-                    if (insertErr) throw insertErr;
+                    if (insertErr) {
+                        // Rollback: xóa luôn record data_files vừa tạo vì upload thất bại giữa chừng
+                        await req.supabase.from('data_files').delete().eq('id', fileId);
+                        throw insertErr;
+                    }
                 }
             }
         }
@@ -651,9 +655,9 @@ router.post('/data-files/:fileId/assign', async (req, res) => {
             created_at: new Date().toISOString()
         }));
 
-        const { error: insertError } = await req.supabase
-            .from('lead_assignments')
-            .insert(assignments);
+        const { error: insertErr } = await req.supabase
+            .from('contracts')
+            .upsert(contractRows, { onConflict: 'so_hop_dong' });
 
         if (insertError) throw new Error(insertError.message);
 
