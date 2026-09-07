@@ -288,10 +288,16 @@
 
         function formatDateTimeVN(isoString) {
             if (!isoString) return '-';
-            const date = new Date(isoString);
+            // Backend đôi khi trả timestamp thiếu hậu tố 'Z' (UTC marker), khiến trình duyệt
+            // hiểu nhầm là giờ local thay vì UTC. Chuẩn hoá: nếu chuỗi chưa có 'Z' hoặc
+            // offset (+hh:mm/-hh:mm) ở cuối, tự thêm 'Z' để ép hiểu đúng là giờ UTC.
+            let normalized = isoString;
+            if (!/[zZ]|[+\-]\d{2}:\d{2}$/.test(normalized)) {
+                normalized += 'Z';
+            }
+            const date = new Date(normalized);
             if (isNaN(date.getTime())) return isoString;
-            // Cộng cứng +7 tiếng để quy đổi UTC -> giờ Việt Nam, tránh phụ thuộc múi giờ
-            // của máy/trình duyệt đang hiển thị (giống fix đã áp dụng ở quanlydata.html)
+
             const vnDate = new Date(date.getTime() + 7 * 60 * 60 * 1000);
             const hours = String(vnDate.getUTCHours()).padStart(2, '0');
             const minutes = String(vnDate.getUTCMinutes()).padStart(2, '0');
