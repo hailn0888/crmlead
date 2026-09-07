@@ -531,19 +531,46 @@
         sessionStorage.setItem(STORAGE_KEY, String(currentIndex));
     }
 
+    // ---- Đồng bộ vị trí trái theo trạng thái thu gọn/mở rộng của sidebar ----
+    // sidebar.js set trực tiếp mainContainer.style.marginLeft ('16rem' / '4rem') mỗi khi
+    // người dùng bấm nút thu gọn/mở rộng. Footer không sửa gì bên sidebar.js, chỉ "bám" theo
+    // đúng giá trị marginLeft thật đang được áp cho #mainContainer tại mọi thời điểm.
+    function getMainContainer() {
+        return document.getElementById('mainContainer');
+    }
+
+    function syncFooterOffset(footer) {
+        const mainContainer = getMainContainer();
+        footer.style.left = (mainContainer && mainContainer.style.marginLeft) ? mainContainer.style.marginLeft : '0px';
+    }
+
     // Tạo khung footer và chèn vào cuối trang
     function buildFooter() {
         const footer = document.createElement('footer');
         footer.id = 'app-footer';
-        // Dùng class "theme-card" có sẵn trong hệ thống để footer tự đổi màu theo theme.js
-        footer.className = 'theme-card';
+
+        // 1. MÀU SẮC: nền luôn trong suốt (không có khối màu nào che nội dung phía sau) -
+        // chỉ màu chữ/viền là đổi theo theme, không có màu nào định nghĩa cứng (tĩnh).
+        // Đọc 'crm_theme' trước vì đó chính là key mà nút Dark/Light trong header.js đang ghi;
+        // fallback sang 'theme' (key sidebar.js dùng) để tương thích ngược nếu trang nào chỉ có sidebar.
+        const savedTheme = localStorage.getItem('crm_theme') || localStorage.getItem('theme') || 'dark';
+        const isLight = savedTheme === 'light';
+        const themeClass = isLight
+            ? 'border-slate-300 text-slate-700'
+            : 'border-[#222] text-[#999]';
+
+        footer.className = 'border-t bg-transparent transition-colors duration-200 ' + themeClass;
+
+        // 2. BỐ CỤC: chỉ chứa style vị trí/khoảng cách, không có màu sắc ở đây.
+        // 'left' không đặt cứng mà sẽ do syncFooterOffset() gán động ngay bên dưới.
         footer.style.cssText = [
-            'position:fixed', 'left:0', 'right:0', 'bottom:0', 'z-index:40',
-            'border-top:1px solid rgba(128,128,128,0.25)',
+            'position:fixed', 'bottom:0', 'right:0', 'z-index:40',
+            'background:transparent',
             'padding:8px 16px',
             'text-align:center',
-            'font-size:12px',
-            'line-height:1.4'
+            'font-size:13.5px',
+            'line-height:1.4',
+            'transition:left 300ms ease'
         ].join(';');
 
         const quoteEl = document.createElement('span');
@@ -552,18 +579,47 @@
 
         footer.appendChild(quoteEl);
         document.body.appendChild(footer);
+
+        syncFooterOffset(footer);
+
+        // 3. Theo dõi #mainContainer: mỗi khi sidebar.js đổi marginLeft (thu gọn/mở rộng),
+        // observer này bắt được ngay và cập nhật lại 'left' của footer cho khớp.
+        const mainContainer = getMainContainer();
+        if (mainContainer) {
+            const offsetObserver = new MutationObserver(() => syncFooterOffset(footer));
+            offsetObserver.observe(mainContainer, { attributes: true, attributeFilter: ['style'] });
+        }
+
+        // 4. Theo dõi thay đổi theme - cùng cơ chế (quan sát class của body) mà sidebar.js
+        // đang dùng, để footer đổi màu ngay lập tức khi người dùng chuyển theme.
+        const themeObserver = new MutationObserver(() => {
+            const currentTheme = localStorage.getItem('crm_theme') || localStorage.getItem('theme');
+            if (currentTheme === 'light') {
+                footer.className = footer.className.replace('border-[#222] text-[#999]', 'border-slate-300 text-slate-700');
+            } else {
+                footer.className = footer.className.replace('border-slate-300 text-slate-700', 'border-[#222] text-[#999]');
+            }
+        });
+        themeObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+
         return { footer, quoteEl };
     }
 
-    // Chừa khoảng trống cuối trang để nội dung không bị footer che mất
+    // Chừa khoảng trống cuối trang để nội dung không bị footer che mất.
+    // Nếu trang có #mainContainer (khu vực có overflow-y-auto riêng, thực sự đang cuộn)
+    // thì spacer phải nằm bên trong đó chứ không phải trong body, nếu không content vẫn
+    // bị footer che dù đã "chừa chỗ" (body không phải là phần tử đang cuộn).
     function reserveSpaceForFooter(footer) {
         const spacer = document.createElement('div');
         spacer.id = 'app-footer-spacer';
+
+        const host = getMainContainer() || document.body;
+        host.appendChild(spacer);
+
         // Đo chiều cao thật của footer sau khi đã render xong 1 nhịp
         requestAnimationFrame(() => {
             spacer.style.height = footer.offsetHeight + 'px';
         });
-        document.body.appendChild(spacer);
     }
 
     function showQuote(quoteEl, index) {
@@ -588,7 +644,7 @@
         quoteEl.textContent = QUOTES[currentIndex];
         saveIndex();
 
-        // Sau đó cứ 30 giây đổi sang câu tiếp theo
-        setInterval(() => rotateQuote(quoteEl), 30000);
+        // Sau đó cứ 10 giây đổi sang câu tiếp theo
+        setInterval(() => rotateQuote(quoteEl), 10000);
     });
 })();
