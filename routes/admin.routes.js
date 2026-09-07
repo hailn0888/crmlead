@@ -655,9 +655,9 @@ router.post('/data-files/:fileId/assign', async (req, res) => {
             created_at: new Date().toISOString()
         }));
 
-        const { error: insertErr } = await req.supabase
-            .from('contracts')
-            .upsert(contractRows, { onConflict: 'so_hop_dong' });
+        const { error: insertError } = await req.supabase
+            .from('lead_assignments')
+            .insert(assignments);
 
         if (insertError) throw new Error(insertError.message);
 
