@@ -83,6 +83,8 @@
                                 <datalist id="main-products-list">
                                     <option value="PRU - Đầu Tư Vững Tiến (ULR9)">
                                     <option value="PRU - Bảo Vệ Tối Đa 2.0 (VLM1)">
+                                    <option value="PRU - Bảo Vệ Tối Đa (VLM9)"></option>
+                                    <option value="PRU - Đầu Tư Linh Hoạt (ULR6)"></option>
                                     <option value="PRU - Chủ Động Cuộc Sống (VLR6)">
                                     <option value="PRU - Bảo Vệ Tối Ưu (VLR7)">
                                     <option value="PRU - Hành Trang Trưởng Thành (VLR8)">
@@ -221,6 +223,7 @@
     <!-- Datalist cho sản phẩm bổ trợ -->
     <datalist id="rider-products-list">
         <option value="PRU - Hành trang vui khoẻ">
+        <option value="PRU - Thiết thực (SIR1)"></option>
         <option value="BH Hỗ trợ viện phí mở rộng (HSR9)">
         <option value="BH Hỗ trợ đóng phí BLNT (CIW9)">
         <option value="BH Bệnh lý nghiêm trọng (CIR9)">
@@ -348,7 +351,29 @@
         function calculateMainRateByYear(product, term, year, spbtCount, planType) {
             let rate = 0;
 
-            if (product.includes("PRU - Đầu Tư Vững Tiến (ULR9)")) {
+            if (product.includes("PRU - Đầu Tư Linh Hoạt (ULR6)")) {
+                if (year === 1) rate = 30.00;
+                else if (year === 2) rate = 15.00;
+                else if (year === 3) rate = 10.00;
+                else if (year === 4) rate = 5.00;
+                else rate = 0.00;
+
+            } else if (product.includes("PRU - Bảo Vệ Tối Đa (VLR9)")) {
+                if (year === 1) {
+                    if (planType === "CoBan") {
+                        if (spbtCount <= 1) rate = 24.00;
+                        else if (spbtCount <= 3) rate = 26.00;
+                        else rate = 28.00;
+                    } else {
+                        if (spbtCount <= 1) rate = 26.00;
+                        else if (spbtCount <= 3) rate = 28.00;
+                        else rate = 30.00;
+                    }
+                } else if (year === 2) rate = 15.00;
+                else if (year === 3) rate = 7.50;
+                else rate = 0.00;
+
+            } else if (product.includes("PRU - Đầu Tư Vững Tiến (ULR9)")) {
                 if (year === 1) {
                     if (spbtCount <= 1) rate = 24.00;
                     else if (spbtCount <= 3) rate = 27.00;
@@ -526,7 +551,14 @@
             const p = (productName || "").toUpperCase();
             const t = parseInt(term, 10) || 0;
             const y = parseInt(year, 10) || 0;
-
+            
+            if (p.includes("SIR1")) {
+                if (y === 1 || y === 2 || y === 3) return 20.00;
+                if (y === 4) return 15.00;
+                if (y === 5) return 10.00;
+                return 0.00;
+            }    
+            
             if (p.includes("HÀNH TRANG VUI KHOẺ") || p.includes("HTVK")) {
                 return y <= 5 ? 10.0 : 0.0;
             }
