@@ -551,7 +551,9 @@
                 // Cột Thao tác: chỉ có nút Thu hồi + xem chi tiết khách hàng (theo đúng yêu cầu)
                 const actionHtml = `
                     <div class="flex items-center justify-center gap-1">
-                        <button onclick="thuHoiHen(${item.id})" class="border px-2.5 py-1.5 rounded-lg text-xs font-medium bg-gray-600 text-white hover:bg-gray-700 transition">Thu hồi</button>
+                        <button onclick="thuHoiHen(${item.id})" class="p-2 rounded-lg text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 transition" title="Thu hồi">
+                            <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+                        </button>
                         <button onclick='showLeadDetailModal(${JSON.stringify(item).replace(/'/g, "&#39;")})' class="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition" title="Xem thông tin khách hàng">
                             <i data-lucide="eye" class="w-4 h-4"></i>
                         </button>
@@ -651,8 +653,12 @@
                     actionHtml = `
                         <div class="flex flex-col items-center gap-1">
                             <div class="flex items-center gap-1.5">
-                                <button onclick="tiepNhanHen(${item.id}, true)" class="border px-2.5 py-1.5 rounded-lg text-xs font-medium bg-emerald-600 text-white hover:bg-emerald-700 transition">Tiếp nhận</button>
-                                <button onclick="tiepNhanHen(${item.id}, false)" class="border px-2.5 py-1.5 rounded-lg text-xs font-medium bg-red-600 text-white hover:bg-red-700 transition">Không tiếp nhận</button>
+                                <button onclick="tiepNhanHen(${item.id}, true)" class="p-2 rounded-lg text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition" title="Tiếp nhận">
+                                    <i data-lucide="check" class="w-4 h-4"></i>
+                                </button>
+                                <button onclick="tiepNhanHen(${item.id}, false)" class="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition" title="Không tiếp nhận">
+                                    <i data-lucide="x" class="w-4 h-4"></i>
+                                </button>
                             </div>
                             <button onclick='showLeadDetailModal(${JSON.stringify(item).replace(/'/g, "&#39;")})' class="text-[11px] text-blue-600 underline mt-0.5">Xem thông tin (giới hạn)</button>
                         </div>
