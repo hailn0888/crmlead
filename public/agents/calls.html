@@ -290,11 +290,14 @@
             if (!isoString) return '-';
             const date = new Date(isoString);
             if (isNaN(date.getTime())) return isoString;
-            const hours = String(date.getHours()).padStart(2, '0');
-            const minutes = String(date.getMinutes()).padStart(2, '0');
-            const day = String(date.getDate()).padStart(2, '0');
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            const year = date.getFullYear();
+            // Cộng cứng +7 tiếng để quy đổi UTC -> giờ Việt Nam, tránh phụ thuộc múi giờ
+            // của máy/trình duyệt đang hiển thị (giống fix đã áp dụng ở quanlydata.html)
+            const vnDate = new Date(date.getTime() + 7 * 60 * 60 * 1000);
+            const hours = String(vnDate.getUTCHours()).padStart(2, '0');
+            const minutes = String(vnDate.getUTCMinutes()).padStart(2, '0');
+            const day = String(vnDate.getUTCDate()).padStart(2, '0');
+            const month = String(vnDate.getUTCMonth() + 1).padStart(2, '0');
+            const year = vnDate.getUTCFullYear();
             return `${hours}:${minutes} ngày ${day}/${month}/${year}`;
         }
 
@@ -597,12 +600,13 @@
                 // với nội dung ghi_chu_hen mà người gửi đã nhập
                 let ghiChuHtml = '';
                 if (item.loai_hen === 'Khách hẹn' && item.thoi_gian_khach_hen) {
-                    const kh = new Date(item.thoi_gian_khach_hen);
-                    const hh = String(kh.getHours()).padStart(2, '0');
-                    const mm = String(kh.getMinutes()).padStart(2, '0');
-                    const dd = String(kh.getDate()).padStart(2, '0');
-                    const mo = String(kh.getMonth() + 1).padStart(2, '0');
-                    const yy = kh.getFullYear();
+                    const khRaw = new Date(item.thoi_gian_khach_hen);
+                    const kh = new Date(khRaw.getTime() + 7 * 60 * 60 * 1000);
+                    const hh = String(kh.getUTCHours()).padStart(2, '0');
+                    const mm = String(kh.getUTCMinutes()).padStart(2, '0');
+                    const dd = String(kh.getUTCDate()).padStart(2, '0');
+                    const mo = String(kh.getUTCMonth() + 1).padStart(2, '0');
+                    const yy = kh.getUTCFullYear();
                     ghiChuHtml += `<div class="font-semibold text-[11px] text-amber-600">Khách hẹn lúc ${hh}:${mm} ngày ${dd}/${mo}/${yy}</div>`;
                 }
                 ghiChuHtml += `<div class="text-xs opacity-90">${item.ghi_chu_hen || '-'}</div>`;
