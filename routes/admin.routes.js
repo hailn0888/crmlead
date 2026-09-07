@@ -567,36 +567,39 @@ router.put('/data-files/:id/lock', async (req, res) => {
 router.delete('/data-files/:fileId', async (req, res) => {
     try {
         const { fileId } = req.params;
-
         if (!fileId) {
             return res.status(400).json({ success: false, message: 'Thiếu mã định danh file cần xóa!' });
         }
 
-        // 1. Xóa các dòng hợp đồng thuộc file_id trong bảng contracts
-        const { error: deleteContractsError } = await req.supabase
+        // 0. Lấy trước danh sách so_hop_dong thuộc file này (để dọn lead_assignments)
+        const { data: contractsToDelete, error: fetchErr } = await req.supabase
             .from('contracts')
-            .delete()
+            .select('so_hop_dong')
             .eq('file_id', fileId);
+        if (fetchErr) throw new Error(fetchErr.message);
 
-        if (deleteContractsError) {
-            throw new Error(`Không thể xóa dữ liệu hợp đồng: ${deleteContractsError.message}`);
+        const soHopDongList = (contractsToDelete || []).map(c => c.so_hop_dong).filter(Boolean);
+
+        // 1. Xóa lead_assignments tương ứng (MỚI THÊM)
+        if (soHopDongList.length > 0) {
+            const { error: delAssignErr } = await req.supabase
+                .from('lead_assignments')
+                .delete()
+                .in('so_hop_dong', soHopDongList);
+            if (delAssignErr) throw new Error(`Không thể xóa phân bổ lead: ${delAssignErr.message}`);
         }
 
-        // 2. Xóa thông tin file trong bảng data_files
+        // 2. Xóa contracts
+        const { error: deleteContractsError } = await req.supabase
+            .from('contracts').delete().eq('file_id', fileId);
+        if (deleteContractsError) throw new Error(`Không thể xóa dữ liệu hợp đồng: ${deleteContractsError.message}`);
+
+        // 3. Xóa data_files
         const { error: deleteFileError } = await req.supabase
-            .from('data_files')
-            .delete()
-            .eq('id', fileId);
+            .from('data_files').delete().eq('id', fileId);
+        if (deleteFileError) throw new Error(`Không thể xóa thông tin file: ${deleteFileError.message}`);
 
-        if (deleteFileError) {
-            throw new Error(`Không thể xóa thông tin file: ${deleteFileError.message}`);
-        }
-
-        return res.status(200).json({ 
-            success: true, 
-            message: 'Đã xóa sạch file và toàn bộ dữ liệu liên quan!' 
-        });
-
+        return res.status(200).json({ success: true, message: 'Đã xóa sạch file và toàn bộ dữ liệu liên quan!' });
     } catch (error) {
         console.error('Delete File Error:', error.message);
         return res.status(500).json({ success: false, message: error.message });
