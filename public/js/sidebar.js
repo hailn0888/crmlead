@@ -35,7 +35,8 @@ document.addEventListener("DOMContentLoaded", () => {
             { name: "Quản lý cuộc gọi/hẹn", icon: "phone-call", href: "/agents/calls.html" },
             { name: "Doanh số cá nhân", icon: "shield-check", href: "/agents/sales.html" },
             { name: "Công cụ tính FYC", icon: "calculator", href: "/agents/fyc.html" },
-            { name: "Thi đua - Memo", icon: "goal", href: "/agents/memos.html" }
+            { name: "Thi đua - Memo", icon: "goal", href: "/agents/memos.html" },
+            { name: "Sản phẩm Prudential", icon: "package-search", href: "/agents/products.html" }
         ]   
     };
 

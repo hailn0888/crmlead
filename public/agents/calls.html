@@ -55,6 +55,9 @@
                     <button onclick="switchTab(4)" id="tab-btn-4" class="px-4 py-2 text-xs font-semibold opacity-75 hover:opacity-100 border-b-2 border-transparent flex items-center gap-1.5 whitespace-nowrap transition">
                         <i data-lucide="bell" class="w-4 h-4"></i> Nhắc lịch chăm sóc khách hàng
                     </button>
+                    <button onclick="switchTab(5)" id="tab-btn-5" class="px-4 py-2 text-xs font-semibold opacity-75 hover:opacity-100 border-b-2 border-transparent flex items-center gap-1.5 whitespace-nowrap transition">
+                        <i data-lucide="bot-message-square" class="w-4 h-4"></i> AI Insights
+                    </button>
                 </div>
 
                 <!-- Thanh công cụ tìm kiếm & bộ lọc chung cho các tab -->
@@ -163,6 +166,28 @@
                     </div>
                 </div>
 
+                <!-- ================= TAB 5: AI INSIGHTS ================= -->
+                <!-- Danh sách các khách hàng có kết quả cuộc gọi (call_history) KHÁC "Hẹn gặp thành công"
+                     -> đây là nhóm khách cần chăm sóc lại, AI sẽ đọc ghi chú các lần gọi để đưa ra đánh giá/lời khuyên -->
+                <div id="tab-content-5" class="tab-content hidden">
+                    <div class="theme-card border rounded-xl shadow-sm overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse text-xs">
+                                <thead>
+                                    <tr class="border-b border-gray-200 dark:border-gray-700 opacity-80 bg-black/5 dark:bg-white/5 font-semibold">
+                                        <th class="p-3 text-center w-12">STT</th>
+                                        <th class="p-3 min-w-[200px]">Khách hàng</th>
+                                        <th class="p-3 min-w-[280px]">Ghi chú</th>
+                                        <th class="p-3 text-center min-w-[100px]">AI Insights</th>
+                                        <th class="p-3 text-center min-w-[100px]">Thao tác</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="table-body-5" class="divide-y divide-gray-200 dark:divide-gray-700"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
             </main>
         </div>
     </div>
@@ -180,6 +205,7 @@
         let tab1List = [];
         let tab2List = [];
         let tab3List = [];
+        let tab5List = []; // Tab 5: danh sách khách hàng cần chăm sóc lại (AI Insights)
 
         let colleaguesList = []; // Danh sách DMO (dùng cho popup Gửi hẹn + bộ lọc)
         let countdownIntervalId = null;
@@ -198,7 +224,7 @@
         // --- CHUYỂN TAB ---
         function switchTab(tabIndex) {
             currentActiveTab = tabIndex;
-            for (let i = 1; i <= 4; i++) {
+            for (let i = 1; i <= 5; i++) {
                 const content = document.getElementById(`tab-content-${i}`);
                 const btn = document.getElementById(`tab-btn-${i}`);
                 if (i === tabIndex) {
@@ -227,6 +253,7 @@
             if (currentActiveTab === 1) await fetchTab1();
             else if (currentActiveTab === 2) await fetchTab2();
             else if (currentActiveTab === 3) await fetchTab3();
+            else if (currentActiveTab === 5) await fetchTab5();
             renderCurrentTab();
         }
 
@@ -286,6 +313,27 @@
             }
         }
 
+        // Tab 5 - AI Insights: lấy các số điện thoại có kết quả cuộc gọi (call_history.ket_qua_cuoc_goi)
+        // KHÁC "Hẹn gặp thành công" (những khách chưa chốt được, cần chăm sóc/gọi lại), kèm toàn bộ
+        // lịch sử ghi chú các lần gọi và đánh giá AI đã lưu trước đó (nếu có) cho từng khách.
+        async function fetchTab5() {
+            try {
+                const agentName = getCurrentAgentName();
+                const date = document.getElementById('filter-ngay').value;
+                let url = `/api/calls/ai-insights?agent=${encodeURIComponent(agentName)}`;
+                if (date) url += `&date=${date}`;
+
+                const res = await fetch(url);
+                const result = await res.json();
+                if (!result.success) throw new Error(result.message);
+
+                tab5List = result.data || [];
+            } catch (err) {
+                console.error("Lỗi tải Tab 5:", err);
+                Swal.fire({ icon: 'error', title: 'Lỗi tải dữ liệu', text: 'Không thể kết nối tới máy chủ.' });
+            }
+        }
+
         // Hàm dùng chung: chuẩn hoá 1 chuỗi timestamp về đúng giờ Việt Nam (UTC+7).
         // Backend đôi khi trả timestamp thiếu hậu tố 'Z' (UTC marker), khiến trình duyệt
         // hiểu nhầm là giờ local thay vì UTC -> tự thêm 'Z' để ép hiểu đúng là giờ UTC.
@@ -323,6 +371,7 @@
             if (currentActiveTab === 1) renderTab1();
             if (currentActiveTab === 2) renderTab2();
             if (currentActiveTab === 3) renderTab3();
+            if (currentActiveTab === 5) renderTab5();
         }
 
         // ==========================================================================
@@ -698,6 +747,280 @@
             if (typeof lucide !== 'undefined') lucide.createIcons();
             if (typeof initTableSearch === 'function') initTableSearch('searchInput', null, 'table-body-3', [1]);
             startCountdownTimers();
+        }
+
+        // ================= RENDER TAB 5: AI INSIGHTS =================
+        // Dữ liệu mỗi item kỳ vọng có dạng:
+        // {
+        //   id: <id để gọi API cho khách/nhóm số ĐT này>,
+        //   dien_thoai, customers: { ho, ten },
+        //   ghi_chu_list: [ { lan_goi, thoi_gian_goi, noi_dung }, ... ],  // toàn bộ ghi chú các lần gọi (call_history)
+        //   ai_insight: <đánh giá AI đã lưu trước đó, null nếu chưa từng phân tích>
+        // }
+        function renderTab5() {
+            const tbody = document.getElementById('table-body-5');
+            tbody.innerHTML = '';
+
+            const list = tab5List;
+
+            if (!list || list.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center opacity-70 text-xs">Không có khách hàng nào cần chăm sóc lại.</td></tr>`;
+                return;
+            }
+
+            list.forEach((item, index) => {
+                const customer = item.customers || {};
+                const hoTen = `${customer.ho || ''} ${customer.ten || ''}`.trim() || '-';
+                const sdt = customer.dien_thoai || item.dien_thoai || '-';
+
+                // Cột Ghi chú: liệt kê toàn bộ các lần gọi, giữ nguyên nhãn "Gọi lần x:" + thời gian
+                const ghiChuList = item.ghi_chu_list || [];
+                let ghiChuHtml = '';
+                if (ghiChuList.length > 0) {
+                    ghiChuHtml = ghiChuList.map(gc => {
+                        const p = getVNDateParts(gc.thoi_gian_goi);
+                        const tg = p ? `${p.hh24}:${p.mm} ngày ${p.dd}/${p.mo}/${p.yy}` : '';
+                        return `
+                            <div class="mb-1.5 last:mb-0">
+                                <span class="font-semibold text-red-600 dark:text-red-400">Gọi lần ${gc.lan_goi}:</span>
+                                <span class="italic opacity-60 text-[11px]">(lúc ${tg})</span>
+                                <div class="opacity-90">${gc.noi_dung || '-'}</div>
+                            </div>
+                        `;
+                    }).join('');
+                } else {
+                    ghiChuHtml = `<span class="italic opacity-60">Chưa có ghi chú</span>`;
+                }
+
+                const ghiChuCellHtml = `
+                    <div class="flex items-start gap-2">
+                        <div class="flex-1">${ghiChuHtml}</div>
+                        <button onclick='openEditGhiChuPopup(${JSON.stringify(item).replace(/'/g, "&#39;")})' class="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition shrink-0" title="Chỉnh sửa / bổ sung ghi chú">
+                            <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
+                        </button>
+                    </div>
+                `;
+
+                // Cột AI Insights: icon bot-message-square, tô màu tím khi đã có đánh giá lưu sẵn
+                const hasInsight = !!item.ai_insight;
+                const aiBtnHtml = `
+                    <button onclick='openAiInsightPopup(${item.id}, ${JSON.stringify(item.ai_insight || "").replace(/'/g, "&#39;")})' class="p-2 rounded-lg ${hasInsight ? 'text-violet-600 bg-violet-50 dark:bg-violet-950/30' : 'text-gray-500'} hover:bg-violet-50 dark:hover:bg-violet-950/30 transition" title="${hasInsight ? 'Xem đánh giá AI đã lưu' : 'Phân tích AI Insights'}">
+                        <i data-lucide="bot-message-square" class="w-4 h-4"></i>
+                    </button>
+                `;
+
+                // Cột Thao tác: gọi lại (mở tel:) + nhắc hẹn gọi lại
+                const actionHtml = `
+                    <div class="flex items-center justify-center gap-1">
+                        <a href="tel:${sdt}" class="p-2 rounded-lg text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition" title="Gọi lại">
+                            <i data-lucide="phone-outgoing" class="w-4 h-4"></i>
+                        </a>
+                        <button onclick='openNhacHenGoiLaiPopup(${item.id}, ${JSON.stringify(hoTen).replace(/'/g, "&#39;")})' class="p-2 rounded-lg text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition" title="Nhắc hẹn gọi lại">
+                            <i data-lucide="alarm-clock-plus" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                `;
+
+                const tr = document.createElement('tr');
+                tr.className = 'border-b border-gray-100 dark:border-gray-800 hover:bg-black/5 dark:hover:bg-white/5 transition align-top';
+                tr.innerHTML = `
+                    <td class="p-3 text-center font-medium text-xs">${index + 1}</td>
+                    <td class="p-3">
+                        <div class="font-bold text-xs">${hoTen}</div>
+                        <a href="tel:${sdt}" class="text-red-600 dark:text-red-400 font-semibold inline-flex items-center gap-1 text-xs mt-1">
+                            <i data-lucide="phone" class="w-3 h-3"></i> ${sdt}
+                        </a>
+                    </td>
+                    <td class="p-3 text-xs">${ghiChuCellHtml}</td>
+                    <td class="p-3 text-center">${aiBtnHtml}</td>
+                    <td class="p-3 text-center">${actionHtml}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+            if (typeof initTableSearch === 'function') initTableSearch('searchInput', null, 'table-body-5', [1]);
+        }
+
+        // ==========================================================================
+        // TAB 5 - CHỈNH SỬA / BỔ SUNG GHI CHÚ (giữ nguyên nhãn "Gọi lần x:" + thời gian,
+        // chỉ cho phép sửa phần nội dung; thêm ghi chú mới sẽ tự đánh số lần gọi tiếp theo)
+        // ==========================================================================
+        function openEditGhiChuPopup(item) {
+            const ghiChuList = item.ghi_chu_list || [];
+            let itemsHtml = '';
+            ghiChuList.forEach(gc => {
+                const p = getVNDateParts(gc.thoi_gian_goi);
+                const tg = p ? `${p.hh24}:${p.mm} ngày ${p.dd}/${p.mo}/${p.yy}` : '';
+                itemsHtml += `
+                    <div class="mb-3 text-left">
+                        <div class="text-xs font-semibold text-red-600 dark:text-red-400 mb-1">Gọi lần ${gc.lan_goi}: <span class="font-normal italic opacity-60">(lúc ${tg})</span></div>
+                        <textarea class="swal2-textarea ai-ghichu-item" style="margin:0" rows="2" data-lan="${gc.lan_goi}" data-thoigian="${gc.thoi_gian_goi}">${gc.noi_dung || ''}</textarea>
+                    </div>
+                `;
+            });
+
+            Swal.fire({
+                title: '<div class="text-sm md:text-base font-bold">Ghi Chú Chăm Sóc Khách Hàng</div>',
+                html: `
+                    <div class="text-left max-h-72 overflow-y-auto pr-1">
+                        ${itemsHtml || '<div class="text-xs italic opacity-60 mb-3">Chưa có lịch sử ghi chú.</div>'}
+                        <div class="text-xs font-semibold text-emerald-600 dark:text-emerald-400 mb-1">+ Bổ sung ghi chú mới</div>
+                        <textarea id="ai-ghichu-new" class="swal2-textarea" style="margin:0" rows="2" placeholder="Nội dung ghi chú bổ sung (sẽ tự lưu kèm nhãn Gọi lần ${ghiChuList.length + 1} và thời gian hiện tại)..."></textarea>
+                    </div>
+                `,
+                showCancelButton: true,
+                confirmButtonText: 'Lưu',
+                cancelButtonText: 'Hủy',
+                confirmButtonColor: '#dc2626',
+                width: 600,
+                preConfirm: () => {
+                    const items = Array.from(document.querySelectorAll('.ai-ghichu-item')).map(el => ({
+                        lan_goi: Number(el.dataset.lan),
+                        thoi_gian_goi: el.dataset.thoigian,
+                        noi_dung: el.value
+                    }));
+                    const ghiChuMoi = document.getElementById('ai-ghichu-new').value.trim();
+                    return { items, ghiChuMoi };
+                }
+            }).then(async (res) => {
+                if (!res.isConfirmed) return;
+                try {
+                    const response = await fetch(`/api/calls/ai-insights/${item.id}/notes`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(res.value)
+                    });
+                    const data = await response.json();
+                    if (data.success) {
+                        Swal.fire('Thành công', 'Đã lưu ghi chú.', 'success');
+                        fetchData();
+                    } else {
+                        throw new Error(data.message);
+                    }
+                } catch (err) {
+                    Swal.fire('Lỗi', err.message || 'Không thể lưu ghi chú!', 'error');
+                }
+            });
+        }
+
+        // ==========================================================================
+        // TAB 5 - AI INSIGHTS: phân tích ghi chú chăm sóc và đưa đánh giá/lời khuyên
+        // ==========================================================================
+        function openAiInsightPopup(id, existingInsight) {
+            Swal.fire({
+                title: '<div class="text-sm md:text-base font-bold flex items-center justify-center gap-2"><i data-lucide="bot-message-square" class="w-4 h-4"></i>AI Insights</div>',
+                html: `
+                    <div id="ai-insight-loading" class="py-8 text-xs opacity-70 flex flex-col items-center gap-3">
+                        <div class="w-6 h-6 border-2 border-violet-500 border-t-transparent rounded-full animate-spin"></div>
+                        Đang phân tích ghi chú chăm sóc khách hàng...
+                    </div>
+                    <textarea id="ai-insight-textarea" class="swal2-textarea hidden" style="margin:0" rows="8" placeholder="Đánh giá và lời khuyên chăm sóc khách hàng..."></textarea>
+                `,
+                showCancelButton: true,
+                confirmButtonText: 'Lưu',
+                cancelButtonText: 'Hủy',
+                confirmButtonColor: '#7c3aed',
+                width: 560,
+                didOpen: async () => {
+                    if (typeof lucide !== 'undefined') lucide.createIcons();
+                    const loadingEl = document.getElementById('ai-insight-loading');
+                    const textareaEl = document.getElementById('ai-insight-textarea');
+
+                    // Nếu đã có đánh giá lưu sẵn từ trước -> hiển thị luôn, không cần gọi lại AI
+                    if (existingInsight) {
+                        loadingEl.classList.add('hidden');
+                        textareaEl.classList.remove('hidden');
+                        textareaEl.value = existingInsight;
+                        return;
+                    }
+
+                    try {
+                        const res = await fetch(`/api/calls/ai-insights/${id}/analyze`, { method: 'POST' });
+                        const data = await res.json();
+                        loadingEl.classList.add('hidden');
+                        textareaEl.classList.remove('hidden');
+                        if (data.success) {
+                            textareaEl.value = (data.data && data.data.insight) || '';
+                        } else {
+                            Swal.showValidationMessage(data.message || 'Không thể tạo đánh giá AI.');
+                        }
+                    } catch (err) {
+                        loadingEl.classList.add('hidden');
+                        textareaEl.classList.remove('hidden');
+                        Swal.showValidationMessage('Lỗi kết nối máy chủ AI.');
+                    }
+                },
+                preConfirm: () => document.getElementById('ai-insight-textarea').value
+            }).then(async (res) => {
+                if (!res.isConfirmed) return;
+                try {
+                    const response = await fetch(`/api/calls/ai-insights/${id}/save-insight`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ insight: res.value })
+                    });
+                    const data = await response.json();
+                    if (data.success) {
+                        Swal.fire('Thành công', 'Đã lưu đánh giá AI.', 'success');
+                        fetchData();
+                    } else {
+                        throw new Error(data.message);
+                    }
+                } catch (err) {
+                    Swal.fire('Lỗi', err.message || 'Không thể lưu đánh giá AI!', 'error');
+                }
+            });
+        }
+
+        // ==========================================================================
+        // TAB 5 - NHẮC HẸN GỌI LẠI
+        // ==========================================================================
+        function openNhacHenGoiLaiPopup(id, hoTen) {
+            Swal.fire({
+                title: '<div class="text-sm md:text-base font-bold">Nhắc Hẹn Gọi Lại</div>',
+                html: `
+                    <div class="text-left">
+                        <div class="text-xs mb-2">Khách hàng: <span class="font-semibold">${hoTen}</span></div>
+                        <label class="text-xs font-medium block mb-1">Thời gian nhắc gọi lại:</label>
+                        <input type="datetime-local" id="nhac-hen-thoi-gian" class="swal2-input" style="margin:0; width:100%;">
+                        <label class="text-xs font-medium block mt-3 mb-1">Ghi chú (nếu có):</label>
+                        <textarea id="nhac-hen-ghichu" class="swal2-textarea" style="margin:0" rows="2" placeholder="Nội dung cần lưu ý khi gọi lại..."></textarea>
+                    </div>
+                `,
+                showCancelButton: true,
+                confirmButtonText: 'Lưu nhắc hẹn',
+                cancelButtonText: 'Hủy',
+                confirmButtonColor: '#d97706',
+                preConfirm: () => {
+                    const thoiGian = document.getElementById('nhac-hen-thoi-gian').value;
+                    if (!thoiGian) {
+                        Swal.showValidationMessage('Vui lòng chọn thời gian nhắc hẹn!');
+                        return false;
+                    }
+                    return {
+                        thoi_gian_nhac: new Date(thoiGian).toISOString(),
+                        ghi_chu: document.getElementById('nhac-hen-ghichu').value
+                    };
+                }
+            }).then(async (res) => {
+                if (!res.isConfirmed) return;
+                try {
+                    const response = await fetch(`/api/calls/ai-insights/${id}/remind`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(res.value)
+                    });
+                    const data = await response.json();
+                    if (data.success) {
+                        Swal.fire('Thành công', 'Đã lưu nhắc hẹn gọi lại.', 'success');
+                    } else {
+                        throw new Error(data.message);
+                    }
+                } catch (err) {
+                    Swal.fire('Lỗi', err.message || 'Không thể lưu nhắc hẹn!', 'error');
+                }
+            });
         }
 
         // ==========================================================================
