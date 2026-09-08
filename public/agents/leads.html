@@ -167,58 +167,18 @@
                 lucide.createIcons();
             }
 
+            // Đặt ngày mặc định = hôm nay cho ô lọc Nhật Ký Cuộc Gọi.
+            // (Việc reload dữ liệu khi đổi ngày do leads.js đảm nhiệm - xem hàm
+            // loadCallHistory() và listener 'change' riêng ở cuối file đó)
             const todayStr = new Date().toISOString().split('T')[0];
             const filterDateEl = document.getElementById('filter-date');
-            if(filterDateEl) {
+            if (filterDateEl) {
                 filterDateEl.value = todayStr;
-
-                filterDateEl.addEventListener('change', function() {
-                    const selectedDate = this.value;
-                    Swal.fire({
-                        toast: true,
-                        position: 'top-end',
-                        icon: 'info',
-                        title: 'Đang tải nhật ký ngày: ' + selectedDate,
-                        showConfirmButton: false,
-                        timer: 1500
-                    });
-                });
             }
 
-            const ghiChuTextarea = document.querySelector('textarea');
-            const prefixNote = "Gọi lần 1: ";
-            
-            if(ghiChuTextarea) {
-                ghiChuTextarea.addEventListener('input', function() {
-                    if (!this.value.startsWith(prefixNote)) {
-                        this.value = prefixNote;
-                    }
-                });
-            }
-
-            const btnLuu = document.querySelector('button.bg-emerald-600');
-            if(btnLuu) {
-                btnLuu.addEventListener('click', function() {
-                    const ketQua = document.getElementById('select-ket-qua').value;
-                    if (!ketQua) {
-                        Swal.fire({
-                            icon: 'warning',
-                            title: 'Chưa chọn kết quả',
-                            text: 'Vui lòng chọn một mục trong danh sách kết quả cuộc gọi trước khi qua lead tiếp theo!',
-                            confirmButtonColor: '#059669'
-                        });
-                        return;
-                    }
-
-                    Swal.fire({
-                        icon: 'success',
-                        title: 'Đã lưu báo cáo!',
-                        text: 'Đang chuyển sang lead tiếp theo...',
-                        timer: 1500,
-                        showConfirmButton: false
-                    });
-                });
-            }
+            // Nút "Lưu & Tiếp Tục" và ô "Ghi chú cuộc gọi" do leads.js xử lý thật sự
+            // (gọi API lưu kết quả cuộc gọi, chuyển sang lead tiếp theo) - đã bỏ đoạn
+            // code mẫu/giả ở đây để tránh chạy trùng 2 lần khi bấm nút.
 
             const btnRefresh = document.getElementById('btn-refresh-nhat-ky');
             if (btnRefresh) {
