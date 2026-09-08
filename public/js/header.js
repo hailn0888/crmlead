@@ -96,7 +96,7 @@ document.addEventListener("DOMContentLoaded", () => {
             </button>
         </div>
 
-        <div class="flex-1 overflow-y-auto p-4 space-y-4 text-xs">
+        <div id="aiDrawerBody" class="flex-1 overflow-y-auto p-4 space-y-4 text-xs">
             <div class="p-3 rounded-xl border border-inherit opacity-90 bg-black/5 dark:bg-white/5">
                 <p class="font-medium mb-1 flex items-center gap-1.5 text-emerald-500">
                     <i data-lucide="sparkles" class="w-3.5 h-3.5"></i> Trợ lý thông minh CRM
@@ -289,6 +289,9 @@ document.addEventListener("DOMContentLoaded", () => {
         aiOverlay.classList.remove('hidden');
         setTimeout(() => aiOverlay.classList.remove('opacity-0'), 10);
         aiDrawer.classList.remove('translate-x-full');
+        // Cho phép các trang khác (vd leads.html) tự tuỳ biến nội dung #aiDrawerBody
+        // mỗi khi drawer được mở, mà không cần header.js biết trước đang ở trang nào.
+        document.dispatchEvent(new CustomEvent('crm:ai-drawer-open'));
     }
 
     function closeAiDrawerFunc() {

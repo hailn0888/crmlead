@@ -26,6 +26,7 @@ app.use('/api/admin', require('./routes/admin.routes'));
 app.use('/api/leader', require('./routes/leader.routes'));
 app.use('/api/agent', require('./routes/agent.routes'));
 app.use('/api/calls', require('./routes/calls.routes'));
+app.use('/api/ai', require('./routes/ai.routes'));
 
 app.get('/', (req, res) => {
     res.sendFile(__dirname + '/public/login.html');
