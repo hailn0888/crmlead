@@ -611,6 +611,6 @@
         saveIndex();
 
         // Sau đó cứ 30 giây đổi sang câu tiếp theo
-        setInterval(() => rotateQuote(quoteEl), 30000);
+        setInterval(() => rotateQuote(quoteEl), 7000);
     });
 })();
