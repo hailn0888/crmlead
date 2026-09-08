@@ -81,6 +81,7 @@
     function renderProfileSummaryHtml(profile) {
         const rows = [
             ['Họ tên', profile.ho_ten],
+            ['Ngày sinh (Tuổi)', profile.ngay_sinh],
             ['Số hợp đồng', profile.so_hop_dong],
             ['Điện thoại', profile.dien_thoai],
             ['Mệnh giá', profile.menh_gia],
