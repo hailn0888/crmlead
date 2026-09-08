@@ -19,7 +19,9 @@
 */
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
-const DEFAULT_MODEL = 'llama-3.3-70b-versatile'; // model free, chất lượng tốt cho tiếng Việt
+// LƯU Ý: llama-3.3-70b-versatile đã bị Groq NGỪNG HỖ TRỢ từ 16/08/2026.
+// openai/gpt-oss-120b là model được Groq khuyến nghị thay thế trực tiếp, vẫn miễn phí.
+const DEFAULT_MODEL = 'openai/gpt-oss-120b';
 
 async function callGroq({ prompt, temperature = 0.4, maxTokens = 600, jsonMode = false }) {
     const apiKey = process.env.GROQ_API_KEY;
@@ -86,12 +88,14 @@ Hãy phân tích và trả lời NGẮN GỌN bằng tiếng Việt, đúng theo
 
 /**
  * [Dùng cho nút AI Assistant ở leads.html] Phân tích chân dung khách hàng dựa trên hồ sơ
- * đang hiển thị + gợi ý 3 kịch bản gọi điện chăm sóc.
+ * đang hiển thị + lịch sử cuộc gọi + ghi chú bổ sung (nếu có) -> gợi ý 3 kịch bản gọi điện.
  * @param {Object} profile - { so_hop_dong, ho_ten, gioi_tinh, dien_thoai, cccd, ngay_sinh,
  *   ngay_tham_gia, nam_dao_han, menh_gia, dia_chi } (các field có thể rỗng nếu chưa có dữ liệu)
+ * @param {Array<{khach_hang:string, so_dt_dia_chi:string, ket_qua:string, ghi_chu:string}>} lichSuCuocGoi
+ * @param {string} ghiChuBoSung - agent tự gõ thêm thông tin/ngữ cảnh trước khi phân tích
  * @returns {Promise<{phan_tich:string, kich_ban:Array<{tieu_de:string, noi_dung:string}>}>}
  */
-async function generateLeadPersonaAndScripts(profile) {
+async function generateLeadPersonaAndScripts(profile, lichSuCuocGoi = [], ghiChuBoSung = '') {
     const thongTin = [
         profile.ho_ten && `Họ tên: ${profile.ho_ten}`,
         profile.gioi_tinh && `Giới tính: ${profile.gioi_tinh}`,
@@ -103,14 +107,26 @@ async function generateLeadPersonaAndScripts(profile) {
         profile.menh_gia && `Mệnh giá bảo hiểm: ${profile.menh_gia}`
     ].filter(Boolean).join('\n');
 
+    const lichSuText = (lichSuCuocGoi && lichSuCuocGoi.length > 0)
+        ? lichSuCuocGoi.map((c, idx) => `- Lần ${idx + 1}: Kết quả "${c.ket_qua || 'chưa rõ'}"${c.ghi_chu ? ` - Ghi chú: ${c.ghi_chu}` : ''}`).join('\n')
+        : 'Chưa có lịch sử cuộc gọi nào trong hệ thống.';
+
+    const boSungText = ghiChuBoSung && ghiChuBoSung.trim()
+        ? `\nThông tin bổ sung từ nhân viên tư vấn:\n${ghiChuBoSung.trim()}`
+        : '';
+
     const prompt = `Bạn là chuyên gia tư vấn bảo hiểm tại Việt Nam, hỗ trợ nhân viên telesale phân tích khách hàng trước khi gọi điện chăm sóc.
 
 Thông tin hồ sơ khách hàng:
 ${thongTin || 'Không có nhiều thông tin.'}
 
+Lịch sử cuộc gọi trước đây:
+${lichSuText}
+${boSungText}
+
 Hãy trả lời DUY NHẤT một đối tượng JSON hợp lệ (không markdown, không giải thích thêm) đúng cấu trúc sau:
 {
-  "phan_tich": "Đoạn phân tích chân dung khách hàng 3-5 câu bằng tiếng Việt: độ tuổi/giai đoạn cuộc sống, khả năng tài chính ước tính, mức độ ưu tiên chăm sóc, rủi ro/cơ hội liên quan hợp đồng bảo hiểm hiện tại (đáo hạn, mệnh giá...).",
+  "phan_tich": "Đoạn phân tích chân dung khách hàng 3-5 câu bằng tiếng Việt: độ tuổi/giai đoạn cuộc sống, khả năng tài chính ước tính, mức độ ưu tiên chăm sóc, rủi ro/cơ hội liên quan hợp đồng bảo hiểm hiện tại (đáo hạn, mệnh giá...), có tính đến lịch sử cuộc gọi và thông tin bổ sung nếu có.",
   "kich_ban": [
     { "tieu_de": "Tên ngắn gọn kịch bản 1", "noi_dung": "Gợi ý câu mở đầu và hướng trò chuyện cụ thể, thực tế, khoảng 3-4 câu." },
     { "tieu_de": "Tên ngắn gọn kịch bản 2", "noi_dung": "..." },

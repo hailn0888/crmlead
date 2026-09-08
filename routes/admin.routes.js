@@ -13,15 +13,24 @@ function parseFlexibleDate(rawVal) {
 
     const strVal = String(rawVal).trim();
 
-    // 1. Trường hợp đặc biệt: Excel trả về dạng chuỗi 8 số liên tục (VD: "20120816")
+    // 1. Trường hợp đặc biệt: Excel trả về dạng chuỗi 8 số liên tục (VD: "20120816" hoặc "12082012")
+    // Một số cột trong file dùng YYYYMMDD, số khác lại dùng DDMMYYYY -> thử cả 2 kiểu,
+    // ưu tiên YYYYMMDD trước (phổ biến hơn trong data hiện tại), kiểu nào ra ngày/tháng hợp lệ thì dùng.
     if (/^\d{8}$/.test(strVal)) {
-        const year = strVal.substring(0, 4);
-        const month = strVal.substring(4, 6);
-        const day = strVal.substring(6, 8);
-        const formatted = `${year}-${month}-${day}`;
-        const testDate = new Date(formatted);
-        if (!isNaN(testDate.getTime())) {
-            return formatted;
+        const y1 = strVal.substring(0, 4), m1 = strVal.substring(4, 6), d1 = strVal.substring(6, 8);
+        const isValidYMD = Number(m1) >= 1 && Number(m1) <= 12 && Number(d1) >= 1 && Number(d1) <= 31;
+        if (isValidYMD) {
+            const formatted = `${y1}-${m1}-${d1}`;
+            const testDate = new Date(formatted);
+            if (!isNaN(testDate.getTime())) return formatted;
+        }
+
+        const d2 = strVal.substring(0, 2), m2 = strVal.substring(2, 4), y2 = strVal.substring(4, 8);
+        const isValidDMY = Number(m2) >= 1 && Number(m2) <= 12 && Number(d2) >= 1 && Number(d2) <= 31;
+        if (isValidDMY) {
+            const formatted = `${y2}-${m2}-${d2}`;
+            const testDate = new Date(formatted);
+            if (!isNaN(testDate.getTime())) return formatted;
         }
     }
 
@@ -327,9 +336,6 @@ router.post('/upload-data', upload.array('files'), async (req, res) => {
                             let rawVal = row[index];
                             const val = rawVal !== undefined && rawVal !== null ? String(rawVal).trim() : '';
 
-                            // DEBUG: Bật dòng này nếu muốn xem tên cột thực tế trên console của server
-                            console.log(`Col header: [${keyClean}] -> Val: [${rawVal}]`);
-
                             if (keyClean.includes('hop_dong') || keyClean.includes('hợp đồng') || keyClean.includes('so_hd')) cRow.so_hop_dong = val;
                             if (keyClean.includes('dien_thoai') || keyClean.includes('điện thoại') || keyClean.includes('phone') || keyClean.includes('sdt') || keyClean.includes('so_dt')) {
                                 cRow.dien_thoai = val;
@@ -341,7 +347,12 @@ router.post('/upload-data', upload.array('files'), async (req, res) => {
                             if (keyClean.includes('cv')) cRow.cv = val;
                             
                             // MỞ RỘNG TỪ KHÓA BẮT NGÀY THAM GIA
-                            if (keyClean.includes('ngay_tham_gia') || keyClean.includes('ngày tham gia') || keyClean.includes('ngaythamgia') || keyClean.includes('tham gia')) {
+                            // Excel có 2 cột đều chứa chữ "tham gia": "Ngày tham gia" và
+                            // "Ngày tham gia đầy đủ" -> phải loại trừ cột "đầy đủ" ra, nếu không
+                            // nó sẽ khớp điều kiện luôn và ghi đè (sai định dạng) lên giá trị đúng
+                            // của cột "Ngày tham gia" chính, gây ra NULL trong database.
+                            const isCotThamGiaDayDu = keyClean.includes('đầy đủ') || keyClean.includes('day du') || keyClean.includes('daydu');
+                            if (!isCotThamGiaDayDu && (keyClean.includes('ngay_tham_gia') || keyClean.includes('ngày tham gia') || keyClean.includes('ngaythamgia') || keyClean.includes('tham gia'))) {
                                 cRow.ngay_tham_gia = parseFlexibleDate(rawVal);
                             }
 

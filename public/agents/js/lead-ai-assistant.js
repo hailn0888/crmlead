@@ -55,6 +55,28 @@
         return !!(profile.ho_ten || profile.so_hop_dong);
     }
 
+    // Đọc thêm bảng "Nhật Ký Cuộc Gọi" đang hiển thị trên trang để làm giàu dữ liệu cho AI
+    // (không cần biết leads.js load dữ liệu ra sao, chỉ đọc trực tiếp các dòng <tr> đang có)
+    function collectCallHistory() {
+        const tbody = document.getElementById('nhat-ky-tbody');
+        if (!tbody) return [];
+
+        const rows = Array.from(tbody.querySelectorAll('tr'));
+        const result = [];
+        rows.forEach(row => {
+            const cells = row.querySelectorAll('td');
+            // Bỏ qua dòng placeholder "Không có lịch sử gọi trong ngày này" (chỉ có 1 ô colspan)
+            if (cells.length < 5) return;
+
+            const ketQua = cells[3] ? cells[3].textContent.trim() : '';
+            const ghiChu = cells[4] ? cells[4].textContent.trim() : '';
+            if (!ketQua && !ghiChu) return;
+
+            result.push({ ket_qua: ketQua, ghi_chu: ghiChu });
+        });
+        return result;
+    }
+
     // ----- Các giao diện hiển thị trong drawer -----
     function renderProfileSummaryHtml(profile) {
         const rows = [
@@ -96,7 +118,11 @@
                 <p class="font-medium mb-1 flex items-center gap-1.5 text-emerald-500">
                     <i data-lucide="sparkles" class="w-3.5 h-3.5"></i> Trợ lý thông minh CRM
                 </p>
-                <p class="opacity-75 leading-relaxed">AI sẽ đọc hồ sơ khách hàng đang hiển thị để phân tích chân dung và gợi ý 3 kịch bản chăm sóc phù hợp.</p>
+                <p class="opacity-75 leading-relaxed">AI sẽ đọc hồ sơ khách hàng và lịch sử cuộc gọi đang hiển thị để phân tích chân dung và gợi ý 3 kịch bản chăm sóc phù hợp.</p>
+            </div>
+            <div class="mb-3">
+                <label class="text-xs font-medium block mb-1 opacity-75">Bổ sung thông tin cho AI (không bắt buộc):</label>
+                <textarea id="leadAiExtraNotes" rows="2" placeholder="Vd: khách đang cân nhắc tất toán sớm, khách bận giờ hành chính..." class="theme-card border rounded-xl w-full p-2 text-xs outline-none bg-transparent resize-none"></textarea>
             </div>
             <button id="btnAnalyzeLeadAi" class="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 px-4 rounded-xl text-xs font-medium transition shadow">
                 <i data-lucide="bot-message-square" class="w-4 h-4"></i>
@@ -106,7 +132,12 @@
         if (typeof lucide !== 'undefined') lucide.createIcons();
 
         const btn = document.getElementById('btnAnalyzeLeadAi');
-        if (btn) btn.addEventListener('click', () => runAnalyze(profile));
+        if (btn) {
+            btn.addEventListener('click', () => {
+                const extra = document.getElementById('leadAiExtraNotes');
+                runAnalyze(profile, extra ? extra.value : '');
+            });
+        }
     }
 
     function renderLoadingState(profile) {
@@ -121,7 +152,7 @@
         `;
     }
 
-    function renderResultState(profile, result) {
+    function renderResultState(profile, result, extraNotes) {
         const body = document.getElementById('aiDrawerBody');
         if (!body) return;
 
@@ -152,10 +183,10 @@
         if (typeof lucide !== 'undefined') lucide.createIcons();
 
         const btn = document.getElementById('btnReAnalyzeLeadAi');
-        if (btn) btn.addEventListener('click', () => runAnalyze(profile));
+        if (btn) btn.addEventListener('click', () => runAnalyze(profile, extraNotes));
     }
 
-    function renderErrorState(profile, message) {
+    function renderErrorState(profile, message, extraNotes) {
         const body = document.getElementById('aiDrawerBody');
         if (!body) return;
         body.innerHTML = `
@@ -171,23 +202,28 @@
         `;
         if (typeof lucide !== 'undefined') lucide.createIcons();
         const btn = document.getElementById('btnRetryAnalyzeLeadAi');
-        if (btn) btn.addEventListener('click', () => runAnalyze(profile));
+        if (btn) btn.addEventListener('click', () => runAnalyze(profile, extraNotes));
     }
 
-    async function runAnalyze(profile) {
+    async function runAnalyze(profile, extraNotes) {
         renderLoadingState(profile);
         try {
+            const lichSuCuocGoi = collectCallHistory();
             const res = await fetch('/api/ai/analyze-lead', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ profile })
+                body: JSON.stringify({
+                    profile,
+                    lich_su_cuoc_goi: lichSuCuocGoi,
+                    ghi_chu_bo_sung: extraNotes || ''
+                })
             });
             const data = await res.json();
             if (!data.success) throw new Error(data.message || 'AI không phân tích được.');
-            renderResultState(profile, data.data);
+            renderResultState(profile, data.data, extraNotes);
         } catch (err) {
             console.error('Lỗi phân tích AI khách hàng:', err);
-            renderErrorState(profile, err.message || 'Không thể kết nối tới máy chủ AI.');
+            renderErrorState(profile, err.message || 'Không thể kết nối tới máy chủ AI.', extraNotes);
         }
     }
 
