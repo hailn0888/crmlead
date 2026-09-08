@@ -531,33 +531,51 @@
         sessionStorage.setItem(STORAGE_KEY, String(currentIndex));
     }
 
-    // Tạo khung footer và chèn VÀO BÊN TRONG #mainContainer (không phải cuối <body>,
-    // không dùng position:fixed) - để nó nằm trong luồng nội dung trang, tự co giãn
-    // theo margin-left mà sidebar.js đang set mỗi khi thu gọn/mở rộng, KHÔNG che nội dung.
+    // Tạo khung footer CỐ ĐỊNH ở đáy màn hình (không di chuyển khi cuộn trang),
+    // nhưng vẫn đồng bộ "left offset" theo đúng margin-left mà sidebar.js đang set
+    // cho #mainContainer (16rem khi mở rộng / 4rem khi thu gọn) - nên không bao giờ
+    // đè lên sidebar, và tự động trượt theo mỗi khi bấm nút thu gọn/mở rộng.
     function buildFooter() {
         const footer = document.createElement('footer');
         footer.id = 'app-footer';
-        // Chỉ dùng class có sẵn của hệ thống (theme-card + border-inherit, đúng convention
-        // header.js/sidebar.js đang dùng) để tự bắt màu theo theme.js, không đặt màu tĩnh.
-        footer.className = 'theme-card border-t border-inherit text-center text-xs py-2 px-4 mt-auto shrink-0';
+        // Chỉ dùng class có sẵn của hệ thống để tự bắt màu theo theme.js, không đặt màu tĩnh
+        footer.className = 'theme-card border-t border-inherit text-center text-sm py-2.5 px-4';
+        footer.style.position = 'fixed';
+        footer.style.bottom = '0';
+        footer.style.right = '0';
+        footer.style.zIndex = '30'; // thấp hơn header (z-50) và sidebar (z-40), không che 2 khối đó
+        footer.style.transition = 'left 300ms ease';
 
         const quoteEl = document.createElement('span');
         quoteEl.id = 'footer-quote-text';
         quoteEl.className = 'inline-block opacity-75 transition-opacity duration-300';
 
         footer.appendChild(quoteEl);
-
-        // Ưu tiên chèn vào bên trong #mainContainer (khung nội dung chính, cùng khung
-        // mà sidebar.js đang chỉnh margin-left) để footer co giãn đồng bộ tự nhiên.
-        // Nếu trang nào không có #mainContainer (hiếm, ví dụ trang lỗi) thì mới fallback body.
-        const mainContainer = document.getElementById('mainContainer');
-        if (mainContainer) {
-            mainContainer.appendChild(footer);
-        } else {
-            document.body.appendChild(footer);
-        }
+        document.body.appendChild(footer);
 
         return { footer, quoteEl };
+    }
+
+    // Đồng bộ vị trí bên trái của footer theo đúng margin-left hiện tại của #mainContainer
+    function syncFooterLeft(footer, mainContainer) {
+        if (!mainContainer) {
+            footer.style.left = '0';
+            return;
+        }
+        footer.style.left = mainContainer.style.marginLeft || '0';
+    }
+
+    // Chừa khoảng trống ở đáy #mainContainer bằng đúng chiều cao thật của footer, để nội
+    // dung không bị footer che mất (tự cập nhật lại nếu câu quote dài phải xuống 2 dòng)
+    function reserveSpaceForFooter(footer, mainContainer) {
+        if (!mainContainer) return;
+        const apply = () => {
+            mainContainer.style.paddingBottom = footer.offsetHeight + 'px';
+        };
+        apply();
+        if (typeof ResizeObserver !== 'undefined') {
+            new ResizeObserver(apply).observe(footer);
+        }
     }
 
     function showQuote(quoteEl, index) {
@@ -575,7 +593,18 @@
     }
 
     document.addEventListener('DOMContentLoaded', function () {
-        const { quoteEl } = buildFooter();
+        const mainContainer = document.getElementById('mainContainer');
+        const { footer, quoteEl } = buildFooter();
+
+        syncFooterLeft(footer, mainContainer);
+        reserveSpaceForFooter(footer, mainContainer);
+
+        // Theo dõi mỗi khi sidebar.js đổi margin-left của #mainContainer (thu gọn/mở rộng)
+        // để footer trượt theo đúng nhịp, không cần sửa gì trong sidebar.js
+        if (mainContainer && typeof MutationObserver !== 'undefined') {
+            const observer = new MutationObserver(() => syncFooterLeft(footer, mainContainer));
+            observer.observe(mainContainer, { attributes: true, attributeFilter: ['style'] });
+        }
 
         // Hiện câu đầu tiên ngay khi trang load, không cần đợi 30 giây
         quoteEl.textContent = QUOTES[currentIndex];
