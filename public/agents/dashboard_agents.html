@@ -17,13 +17,24 @@
     <script src="/js/sidebar.js"></script>
     <script src="/js/footer.js"></script>
     <script src="/js/theme.js"></script>
+    <style>
+        .month-input { width: 100%; padding: 4px 6px; font-size: 12px; border-radius: 8px; border: 1px solid rgb(203 213 225); background: rgb(248 250 252); text-align: right; }
+        .dark .month-input { border-color: rgb(51 65 85); background: rgb(15 23 42); color: rgb(226 232 240); }
+        .month-auto-cell { width: 100%; padding: 4px 6px; font-size: 12px; border-radius: 8px; border: 1px dashed rgb(203 213 225); background: rgb(241 245 249); text-align: right; font-weight: 600; color: rgb(71 85 105); }
+        .dark .month-auto-cell { border-color: rgb(71 85 105); background: rgba(51,65,85,.4); color: rgb(203 213 225); }
+        .month-row.current-month { background: rgba(220,38,38,.08); border-radius: 10px; }
+        .dark .month-row.current-month { background: rgba(248,113,113,.10); }
+        .sched-row.is-next { background: rgba(220,38,38,.08); }
+        .dark .sched-row.is-next { background: rgba(248,113,113,.10); }
+        .sched-row.is-done { opacity: .55; }
+    </style>
 </head>
 <body class="bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-sans antialiased transition-colors duration-200">
 
     <div class="flex h-screen overflow-hidden">
         <div id="mainContainer" class="flex-1 flex flex-col overflow-y-auto transition-colors duration-200 pt-16">
             <main class="px-4 py-6 max-w-7xl mx-auto w-full flex flex-col gap-6">
-                
+
                 <!-- Header -->
                 <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
                     <div>
@@ -31,36 +42,104 @@
                             <i data-lucide="calculator" class="w-6 h-6 text-red-600 dark:text-red-500"></i>
                             <span>Quản Lý Doanh Số & Thu Nhập 2026</span>
                         </h1>
-                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Mô phỏng thu nhập, hạng Pru-Elite & Tiến độ MDRT 2027</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Nhập doanh số theo tháng — Tự động cập nhật hạng Pru-Elite, tiến độ MDRT 2027 & lịch chi trả thu nhập</p>
                     </div>
                     <div class="flex items-center gap-2">
                         <span class="px-3 py-1 bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 rounded-full text-xs font-semibold">Pru1 2026 Engine</span>
                     </div>
                 </div>
 
-                <!-- Input Controls Section -->
+                <!-- ===================== NHẬP DOANH SỐ THEO THÁNG ===================== -->
+                <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col gap-4">
+                    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <h2 class="text-sm font-bold text-red-600 dark:text-red-400 uppercase tracking-wider flex items-center gap-2">
+                                <i data-lucide="calendar-days" class="w-4 h-4"></i> Doanh Số Theo Tháng (2026)
+                            </h2>
+                            <span id="syncBadge" class="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                                <i data-lucide="loader" class="w-3 h-3"></i> Đang đồng bộ...
+                            </span>
+                        </div>
+                        <div class="flex items-center gap-2 text-xs">
+                            <label class="font-medium text-slate-600 dark:text-slate-300">Tháng đang xem:</label>
+                            <select id="selectViewMonth" class="px-2 py-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg font-semibold text-red-600 dark:text-red-400 focus:outline-none"></select>
+                            <button id="refreshDataBtn" class="ml-1 px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-1">
+                                <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Tải lại
+                            </button>
+                            <button id="resetManualBtn" class="px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-1">
+                                <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> Xóa số liệu nhập tay
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Tóm tắt tháng đang xem -->
+                    <div class="grid grid-cols-2 md:grid-cols-5 gap-3 text-center">
+                        <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-700/50">
+                            <span class="block text-[11px] text-slate-500 dark:text-slate-400">FYP tháng <i data-lucide="lock" class="w-2.5 h-2.5 inline align-middle opacity-50"></i></span>
+                            <span class="font-bold text-sm text-slate-800 dark:text-slate-100" id="sumMonthFYP">0</span>
+                        </div>
+                        <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-700/50">
+                            <span class="block text-[11px] text-slate-500 dark:text-slate-400">FYC tháng <i data-lucide="lock" class="w-2.5 h-2.5 inline align-middle opacity-50"></i></span>
+                            <span class="font-bold text-sm text-red-600 dark:text-red-400" id="sumMonthFYC">0</span>
+                        </div>
+                        <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-700/50">
+                            <span class="block text-[11px] text-slate-500 dark:text-slate-400">SYC tháng</span>
+                            <span class="font-bold text-sm text-slate-800 dark:text-slate-100" id="sumMonthSYC">0</span>
+                        </div>
+                        <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-700/50">
+                            <span class="block text-[11px] text-slate-500 dark:text-slate-400">RYP tháng</span>
+                            <span class="font-bold text-sm text-slate-800 dark:text-slate-100" id="sumMonthRYP">0</span>
+                        </div>
+                        <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-700/50">
+                            <span class="block text-[11px] text-slate-500 dark:text-slate-400">RYC tháng</span>
+                            <span class="font-bold text-sm text-slate-800 dark:text-slate-100" id="sumMonthRYC">0</span>
+                        </div>
+                    </div>
+
+                    <!-- Bảng nhập 12 tháng -->
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-x-6 gap-y-1">
+                        <div id="monthColA" class="flex flex-col gap-1"></div>
+                        <div id="monthColB" class="flex flex-col gap-1"></div>
+                    </div>
+                    <p class="text-[11px] text-slate-400 dark:text-slate-500">
+                        <i data-lucide="lock" class="w-3 h-3 inline align-middle"></i> FYP & FYC: tự động đồng bộ từ menu <b>Doanh số cá nhân</b> (không sửa được tại đây) ·
+                        SYC / RYP / RYC: nhập tay vì hệ thống Prudential mới ghi nhận được. Số liệu nhập tay tự lưu trên trình duyệt của bạn.
+                    </p>
+                </div>
+
+                <!-- ===================== KPI TỰ ĐỘNG THEO QUÝ / LŨY KẾ ===================== -->
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    
-                    <!-- Chỉ số kinh doanh quý -->
+
+                    <!-- Chỉ số kinh doanh quý (auto) -->
                     <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col gap-4">
                         <h2 class="text-sm font-bold text-red-600 dark:text-red-400 uppercase tracking-wider flex items-center gap-2">
-                            <i data-lucide="sliders" class="w-4 h-4"></i> Chỉ Số Kinh Doanh Quý
+                            <i data-lucide="sliders" class="w-4 h-4"></i> Chỉ Số Kinh Doanh Quý <span class="opacity-60 font-normal normal-case" id="quarterLabel">(Quý -)</span>
                         </h2>
-                        
+
                         <div>
-                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Doanh số FYC Quý (VNĐ)</label>
-                            <input type="number" id="inputFYC" value="120000000" step="5000000" class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-bold text-red-600 dark:text-red-400 focus:outline-none focus:ring-2 focus:ring-red-500">
+                            <span class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Doanh số FYC Quý (tự động, từ bảng tháng)</span>
+                            <div class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-bold text-red-600 dark:text-red-400" id="displayFYC">0</div>
                         </div>
 
                         <div class="grid grid-cols-2 gap-3">
                             <div>
-                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Hoa hồng SYC (Năm 2)</label>
-                                <input type="number" id="inputSYC" value="30000000" step="1000000" class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-red-500">
+                                <span class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Hoa hồng SYC (Quý, nhập tay)</span>
+                                <div class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-800 dark:text-slate-100" id="displaySYC">0</div>
                             </div>
                             <div>
-                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Hoa hồng RYC (Tái tục)</label>
-                                <input type="number" id="inputRYC" value="20000000" step="1000000" class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-red-500">
+                                <span class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Hoa hồng RYC (tháng, nhập tay)</span>
+                                <div class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-800 dark:text-slate-100" id="displayRYC">0</div>
                             </div>
+                        </div>
+
+                        <div>
+                            <span class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">RYP (tháng, nhập tay — tham khảo áp dụng HĐ trước 2026)</span>
+                            <div class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-800 dark:text-slate-100" id="displayRYP">0</div>
+                        </div>
+
+                        <div>
+                            <span class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Số tháng Active/Quý (tự động, FYC tháng ≥ 5tr)</span>
+                            <div class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-800 dark:text-slate-100" id="displayActiveMonths">0 Tháng</div>
                         </div>
 
                         <div>
@@ -75,43 +154,35 @@
                                 <span>80% (100%)</span>
                                 <span>≥90% (110%)</span>
                             </div>
+                            <p class="text-[10px] text-slate-400 dark:text-slate-500 mt-1">* Đây là tỷ lệ duy trì hợp đồng thực tế — không suy ra được từ doanh số, cần nhập tay.</p>
                         </div>
                     </div>
 
-                    <!-- Thi đua & Tích lũy -->
+                    <!-- Thi đua & Tích lũy (auto) -->
                     <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col gap-4">
                         <h2 class="text-sm font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider flex items-center gap-2">
                             <i data-lucide="award" class="w-4 h-4"></i> Thi Đua & Tích Luỹ Lũy Kế
                         </h2>
 
                         <div>
-                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Tổng FYP Lũy kế Tới Hiện Tại</label>
-                            <input type="number" id="inputFYPAcc" value="550000000" step="10000000" class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-bold text-amber-600 dark:text-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-500">
+                            <span class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Tổng FYP Lũy kế Từ Đầu Năm Tới Tháng Đang Xem</span>
+                            <div class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-bold text-amber-600 dark:text-amber-400" id="displayFYPAcc">0</div>
                         </div>
 
-                        <div class="grid grid-cols-2 gap-3">
-                            <div>
-                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Quý Xét Duyệt</label>
-                                <select id="selectQuarter" class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-800 dark:text-slate-100 focus:outline-none">
-                                    <option value="1">Quý 1 (31/03)</option>
-                                    <option value="2" selected>Quý 2 (30/06)</option>
-                                    <option value="3">Quý 3 (30/09)</option>
-                                    <option value="4">Quý 4 (31/12)</option>
-                                </select>
+                        <div class="grid grid-cols-2 gap-3 text-xs">
+                            <div class="p-2.5 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-100 dark:border-slate-700/50">
+                                <span class="text-slate-500 dark:text-slate-400 block">Quý xét duyệt</span>
+                                <span class="font-bold text-slate-800 dark:text-slate-200" id="displayQuarter">Quý -</span>
                             </div>
-                            <div>
-                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Số Tháng Active/Quý</label>
-                                <select id="selectActiveMonths" class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-800 dark:text-slate-100 focus:outline-none">
-                                    <option value="1">1 Tháng (FYC≥5tr)</option>
-                                    <option value="2">2 Tháng</option>
-                                    <option value="3" selected>3 Tháng Full Active</option>
-                                </select>
+                            <div class="p-2.5 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-100 dark:border-slate-700/50">
+                                <span class="text-slate-500 dark:text-slate-400 block">Tháng đang xem</span>
+                                <span class="font-bold text-slate-800 dark:text-slate-200" id="displayMonthLabel">Tháng -</span>
                             </div>
                         </div>
 
                         <div>
-                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">FYC 6 Tháng Gần Nhất (Xét Thưởng CSKH)</label>
-                            <input type="number" id="inputFYC6M" value="45000000" class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-800 dark:text-slate-100 focus:outline-none">
+                            <span class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">FYC 6 Tháng Gần Nhất (tự động, xét thưởng CSKH)</span>
+                            <div class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-800 dark:text-slate-100" id="displayFYC6M">0</div>
                         </div>
                     </div>
 
@@ -139,7 +210,7 @@
 
                 <!-- KPI & Details Breakdown -->
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    
+
                     <!-- Tiến độ MDRT 2027 -->
                     <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
                         <div class="flex justify-between items-center mb-4">
@@ -194,6 +265,31 @@
 
                 </div>
 
+                <!-- ===================== LỊCH KHÓA SỔ & CHI TRẢ THU NHẬP 2026 ===================== -->
+                <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
+                    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-2 mb-3">
+                        <h3 class="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                            <i data-lucide="calendar-clock" class="w-4 h-4 text-red-600 dark:text-red-500"></i> Lịch Khóa Sổ & Chi Trả Thu Nhập 2026 <span class="opacity-50 font-normal">(Memo 00041/AD/2026)</span>
+                        </h3>
+                        <span id="nextPayInfo" class="text-xs font-semibold px-3 py-1.5 rounded-full bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400"></span>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-xs text-left">
+                            <thead>
+                                <tr class="text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
+                                    <th class="py-2 pr-3 font-semibold">Tháng</th>
+                                    <th class="py-2 pr-3 font-semibold">Ngày khóa sổ</th>
+                                    <th class="py-2 pr-3 font-semibold">Chuyển TN: TVV & QLTVV</th>
+                                    <th class="py-2 pr-3 font-semibold">Chuyển TN: Tổng Đại lý</th>
+                                    <th class="py-2 pr-3 font-semibold">Trạng thái</th>
+                                </tr>
+                            </thead>
+                            <tbody id="scheduleBody"></tbody>
+                        </table>
+                    </div>
+                    <p class="text-[11px] text-slate-400 dark:text-slate-500 mt-3">Lưu ý: Công ty chỉ chuyển khoản khi thu nhập sau thuế đạt từ 100.000đ trở lên; phần chưa đủ mức sẽ được cộng dồn sang kỳ sau. Lịch có thể được điều chỉnh theo thông báo chính thức của Công ty.</p>
+                </div>
+
             </main>
         </div>
     </div>
@@ -202,28 +298,247 @@
         document.addEventListener("DOMContentLoaded", function() {
             if (typeof lucide !== 'undefined') lucide.createIcons();
 
-            const fmt = num => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(num);
+            const fmt = num => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Math.round(num || 0));
+            const fmtNum = num => new Intl.NumberFormat('vi-VN').format(Math.round(num || 0)); // vi du: 64.000.000
+            const MANUAL_STORAGE_KEY = 'pruDashboard2026Manual';
+            const K2_STORAGE_KEY = 'pruDashboard2026K2';
+            const YEAR = 2026;
+            const monthNames = ['Th\u00e1ng 1','Th\u00e1ng 2','Th\u00e1ng 3','Th\u00e1ng 4','Th\u00e1ng 5','Th\u00e1ng 6','Th\u00e1ng 7','Th\u00e1ng 8','Th\u00e1ng 9','Th\u00e1ng 10','Th\u00e1ng 11','Th\u00e1ng 12'];
+
+            // ---------- So lieu nhap tay (SYC / RYP / RYC) - luu tren trinh duyet ----------
+            const defaultManual = {};
+            for (let m = 1; m <= 12; m++) defaultManual[m] = { syc: 0, ryp: 0, ryc: 0 };
+            Object.assign(defaultManual, {
+                7:  { syc: 10000000, ryp: 0, ryc: 19000000 },
+                8:  { syc: 10000000, ryp: 0, ryc: 19000000 },
+                9:  { syc: 10000000, ryp: 0, ryc: 20000000 },
+            });
+
+            function loadManual() {
+                try {
+                    const raw = localStorage.getItem(MANUAL_STORAGE_KEY);
+                    if (raw) return JSON.parse(raw);
+                } catch (e) {}
+                return JSON.parse(JSON.stringify(defaultManual));
+            }
+            function saveManual() {
+                try { localStorage.setItem(MANUAL_STORAGE_KEY, JSON.stringify(manualData)); } catch (e) {}
+            }
+
+            let manualData = loadManual();
+            let autoData = {};
+            for (let m = 1; m <= 12; m++) autoData[m] = { fyp: 0, fyc: 0 };
+
+            function getMonthData(m) {
+                return { fyp: autoData[m].fyp, fyc: autoData[m].fyc, syc: manualData[m].syc, ryp: manualData[m].ryp, ryc: manualData[m].ryc };
+            }
+
+            // ---------- Lay du lieu hop dong tu he thong (giong trang Doanh so ca nhan) ----------
+            function getCurrentAgentName() {
+                try {
+                    const currentUser = JSON.parse(localStorage.getItem('user_info')) || {};
+                    return currentUser.ten_dang_nhap || localStorage.getItem('ten_dang_nhap') || '';
+                } catch (e) { return localStorage.getItem('ten_dang_nhap') || ''; }
+            }
+
+            function getPeriodDivisor(paymentMode) {
+                if (paymentMode === 'HALF' || paymentMode === 'N\u1eeda n\u0103m') return 2;
+                if (paymentMode === 'QUARTER' || paymentMode === 'Qu\u00fd') return 4;
+                return 1;
+            }
+
+            async function fetchAgentSales() {
+                const agent = getCurrentAgentName();
+                if (!agent) return null;
+                try {
+                    const res = await fetch(`/api/agent/sales?agent=${encodeURIComponent(agent)}`);
+                    const result = await res.json();
+                    if (!res.ok || !result.success) return null;
+                    return result.data || [];
+                } catch (e) { return null; }
+            }
+
+            function aggregateMonthlyFromSales(salesData) {
+                const agg = {};
+                for (let m = 1; m <= 12; m++) agg[m] = { fyp: 0, fyc: 0 };
+                (salesData || []).forEach(item => {
+                    const divisor = getPeriodDivisor(item.paymentMode);
+                    const fypPerPeriod = (item.totalAnnualPremium || 0) / divisor;
+                    (item.installments || []).forEach(inst => {
+                        if (inst.status === 'paid' && inst.paidDate) {
+                            const d = new Date(inst.paidDate);
+                            if (d.getFullYear() === YEAR) {
+                                const m = d.getMonth() + 1;
+                                agg[m].fyp += fypPerPeriod;
+                                agg[m].fyc += (inst.fycAmount || 0);
+                            }
+                        }
+                    });
+                });
+                return agg;
+            }
+
+            function setSyncBadge(state) {
+                const badge = document.getElementById('syncBadge');
+                if (state === 'ok') {
+                    badge.className = 'text-[11px] font-semibold px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center gap-1';
+                    badge.innerHTML = '<i data-lucide="check-circle-2" class="w-3 h-3"></i> \u0110\u00e3 \u0111\u1ed3ng b\u1ed9 t\u1eeb Doanh s\u1ed1 c\u00e1 nh\u00e2n';
+                } else if (state === 'empty') {
+                    badge.className = 'text-[11px] font-semibold px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center gap-1';
+                    badge.innerHTML = '<i data-lucide="info" class="w-3 h-3"></i> Ch\u01b0a c\u00f3 h\u1ee3p \u0111\u1ed3ng n\u00e0o trong Doanh s\u1ed1 c\u00e1 nh\u00e2n';
+                } else {
+                    badge.className = 'text-[11px] font-semibold px-2.5 py-1 rounded-full bg-red-500/15 text-red-600 dark:text-red-400 flex items-center gap-1';
+                    badge.innerHTML = '<i data-lucide="alert-triangle" class="w-3 h-3"></i> Kh\u00f4ng t\u1ea3i \u0111\u01b0\u1ee3c d\u1eef li\u1ec7u \u2014 ki\u1ec3m tra \u0111\u0103ng nh\u1eadp';
+                }
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+            }
+
+            async function loadAutoDataAndRender() {
+                setSyncBadge('loading');
+                const salesData = await fetchAgentSales();
+                if (salesData === null) {
+                    setSyncBadge('error');
+                } else if (salesData.length === 0) {
+                    autoData = aggregateMonthlyFromSales(salesData);
+                    setSyncBadge('empty');
+                } else {
+                    autoData = aggregateMonthlyFromSales(salesData);
+                    setSyncBadge('ok');
+                }
+                renderMonthTable();
+                calculate();
+            }
+
+            function attachFormattedInput(input, onChange) {
+                input.addEventListener('input', (e) => {
+                    const digits = e.target.value.replace(/\D/g, '');
+                    const num = digits ? parseInt(digits, 10) : 0;
+                    e.target.value = num ? fmtNum(num) : '';
+                    onChange(num);
+                });
+            }
+
+            function monthRowHtml(m) {
+                const d = getMonthData(m);
+                return `
+                <div class="month-row grid grid-cols-[40px_1fr_1fr_1fr_1fr_1fr] gap-1.5 items-center px-1.5 py-1" data-month="${m}">
+                    <span class="text-xs font-semibold text-slate-600 dark:text-slate-300">T${m}</span>
+                    <div class="month-auto-cell" title="Tu dong tu Doanh so ca nhan">${fmtNum(d.fyp)}</div>
+                    <div class="month-auto-cell" title="Tu dong tu Doanh so ca nhan">${fmtNum(d.fyc)}</div>
+                    <input type="text" inputmode="numeric" class="month-input" data-field="syc" value="${d.syc ? fmtNum(d.syc) : ''}" placeholder="SYC">
+                    <input type="text" inputmode="numeric" class="month-input" data-field="ryp" value="${d.ryp ? fmtNum(d.ryp) : ''}" placeholder="RYP">
+                    <input type="text" inputmode="numeric" class="month-input" data-field="ryc" value="${d.ryc ? fmtNum(d.ryc) : ''}" placeholder="RYC">
+                </div>`;
+            }
+
+            function renderMonthTable() {
+                const colA = document.getElementById('monthColA');
+                const colB = document.getElementById('monthColB');
+                const headerRow = `
+                <div class="grid grid-cols-[40px_1fr_1fr_1fr_1fr_1fr] gap-1.5 px-1.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">
+                    <span></span><span>FYP</span><span>FYC</span><span>SYC</span><span>RYP</span><span>RYC</span>
+                </div>`;
+                colA.innerHTML = headerRow + [1,2,3,4,5,6].map(monthRowHtml).join('');
+                colB.innerHTML = headerRow + [7,8,9,10,11,12].map(monthRowHtml).join('');
+
+                document.querySelectorAll('.month-input').forEach(inp => {
+                    attachFormattedInput(inp, (num) => {
+                        const row = inp.closest('.month-row');
+                        const m = row.getAttribute('data-month');
+                        const field = inp.getAttribute('data-field');
+                        manualData[m][field] = num;
+                        saveManual();
+                        calculate();
+                    });
+                });
+            }
+
+            const viewSelect = document.getElementById('selectViewMonth');
+            monthNames.forEach((name, idx) => {
+                const opt = document.createElement('option');
+                opt.value = idx + 1;
+                opt.textContent = name;
+                viewSelect.appendChild(opt);
+            });
+            const today = new Date();
+            const defaultMonth = (today.getFullYear() === YEAR) ? (today.getMonth() + 1) : 9;
+            viewSelect.value = defaultMonth;
+            viewSelect.addEventListener('change', calculate);
+
+            document.getElementById('refreshDataBtn').addEventListener('click', loadAutoDataAndRender);
+
+            document.getElementById('resetManualBtn').addEventListener('click', () => {
+                if (confirm('X\u00f3a to\u00e0n b\u1ed9 s\u1ed1 li\u1ec7u SYC/RYP/RYC \u0111\u00e3 nh\u1eadp tay? (FYP/FYC \u0111\u1ed3ng b\u1ed9 t\u1eeb h\u1ec7 th\u1ed1ng s\u1ebd kh\u00f4ng b\u1ecb \u1ea3nh h\u01b0\u1edfng)')) {
+                    manualData = {};
+                    for (let m = 1; m <= 12; m++) manualData[m] = { syc: 0, ryp: 0, ryc: 0 };
+                    saveManual();
+                    renderMonthTable();
+                    calculate();
+                }
+            });
+
+            const inputK2 = document.getElementById('inputK2');
+            try {
+                const savedK2 = localStorage.getItem(K2_STORAGE_KEY);
+                if (savedK2) inputK2.value = savedK2;
+            } catch (e) {}
+            inputK2.addEventListener('input', () => {
+                try { localStorage.setItem(K2_STORAGE_KEY, inputK2.value); } catch (e) {}
+                calculate();
+            });
 
             function calculate() {
-                const fyc = parseFloat(document.getElementById('inputFYC').value) || 0;
-                const syc = parseFloat(document.getElementById('inputSYC').value) || 0;
-                const ryc = parseFloat(document.getElementById('inputRYC').value) || 0;
-                const fypAcc = parseFloat(document.getElementById('inputFYPAcc').value) || 0;
-                const k2 = parseFloat(document.getElementById('inputK2').value) || 0;
-                const quarter = parseInt(document.getElementById('selectQuarter').value);
-                const activeMonths = parseInt(document.getElementById('selectActiveMonths').value);
-                const fyc6m = parseFloat(document.getElementById('inputFYC6M').value) || 0;
+                const month = parseInt(viewSelect.value);
+                const quarter = Math.ceil(month / 3);
+                const quarterMonths = [1,2,3].map(i => (quarter - 1) * 3 + i);
 
+                document.querySelectorAll('.month-row').forEach(row => {
+                    row.classList.toggle('current-month', parseInt(row.getAttribute('data-month')) === month);
+                });
+
+                const mData = getMonthData(month);
+                document.getElementById('sumMonthFYP').innerText = fmtNum(mData.fyp);
+                document.getElementById('sumMonthFYC').innerText = fmtNum(mData.fyc);
+                document.getElementById('sumMonthSYC').innerText = fmtNum(mData.syc);
+                document.getElementById('sumMonthRYP').innerText = fmtNum(mData.ryp);
+                document.getElementById('sumMonthRYC').innerText = fmtNum(mData.ryc);
+
+                const fyc = quarterMonths.reduce((s, m) => s + (getMonthData(m).fyc || 0), 0);
+                const syc = quarterMonths.reduce((s, m) => s + (getMonthData(m).syc || 0), 0);
+                const ryc = mData.ryc || 0;
+                const ryp = mData.ryp || 0;
+
+                let fypAcc = 0;
+                for (let m = 1; m <= month; m++) fypAcc += (getMonthData(m).fyp || 0);
+
+                let fyc6m = 0;
+                for (let i = 0; i < 6; i++) {
+                    const m = month - i;
+                    if (m >= 1) fyc6m += (getMonthData(m).fyc || 0);
+                }
+
+                const activeMonths = quarterMonths.filter(m => (getMonthData(m).fyc || 0) >= 5000000).length;
+
+                const k2 = parseFloat(inputK2.value) || 0;
                 document.getElementById('k2Val').innerText = k2 + '%';
 
-                // 1. K2 Ratio
+                document.getElementById('quarterLabel').innerText = `(Qu\u00fd ${quarter})`;
+                document.getElementById('displayFYC').innerText = fmtNum(fyc);
+                document.getElementById('displaySYC').innerText = fmtNum(syc);
+                document.getElementById('displayRYC').innerText = fmtNum(ryc);
+                document.getElementById('displayRYP').innerText = fmtNum(ryp);
+                document.getElementById('displayActiveMonths').innerText = activeMonths + ' Th\u00e1ng';
+                document.getElementById('displayFYPAcc').innerText = fmtNum(fypAcc);
+                document.getElementById('displayQuarter').innerText = 'Qu\u00fd ' + quarter;
+                document.getElementById('displayMonthLabel').innerText = monthNames[month - 1];
+                document.getElementById('displayFYC6M').innerText = fmtNum(fyc6m);
+
                 let k2Ratio = 0;
                 if (k2 >= 90) k2Ratio = 1.1;
                 else if (k2 >= 80) k2Ratio = 1.0;
                 else if (k2 >= 70) k2Ratio = 0.8;
                 else if (k2 >= 65) k2Ratio = 0.6;
 
-                // 2. Bonus Professional Activity
                 let profRate = 0;
                 if (fyc >= 130000000) profRate = 0.7;
                 else if (fyc >= 75000000) profRate = 0.5;
@@ -234,20 +549,17 @@
                 const profBonus = fyc * profRate * k2Ratio;
                 const sycBonus = syc * 0.25 * k2Ratio;
 
-                // 3. Pru-Elite
-                let peRank = 'Chưa đạt';
+                let peRank = 'Ch\u01b0a \u0111\u1ea1t';
                 let peRate = 0;
                 if (k2 >= 65) {
-                    if (fyc >= 180000000 && activeMonths >= 3) { peRank = 'Kim Cương'; peRate = 0.20; }
-                    else if (fyc >= 90000000 && activeMonths >= 3) { peRank = 'Bạch Kim'; peRate = 0.18; }
-                    else if (fyc >= 50000000 && activeMonths >= 2) { peRank = 'Vàng'; peRate = 0.15; }
+                    if (fyc >= 180000000 && activeMonths >= 3) { peRank = 'Kim C\u01b0\u01a1ng'; peRate = 0.20; }
+                    else if (fyc >= 90000000 && activeMonths >= 3) { peRank = 'B\u1ea1ch Kim'; peRate = 0.18; }
+                    else if (fyc >= 50000000 && activeMonths >= 2) { peRank = 'V\u00e0ng'; peRate = 0.15; }
                 }
                 const pruEliteBonus = fyc * peRate * k2Ratio;
 
-                // 4. CSKH Bonus
                 const cskhBonus = (fyc6m >= 10000000) ? (ryc * 0.10) : 0;
 
-                // 5. MDRT 2027
                 const mdrtTarget = 1073645200;
                 const mdrtTargetsQ = { 1: 250000000, 2: 500000000, 3: 750000000, 4: 1073645200 };
                 const mdrtBonusQBase = { 1: 5000000, 2: 10000000, 3: 15000000, 4: 20000000 };
@@ -260,11 +572,9 @@
                 const mdrtPct = Math.min(100, Math.round((fypAcc / mdrtTarget) * 100));
                 const mdrtGap = Math.max(0, mdrtTarget - fypAcc);
 
-                // 6. Total Income
                 const totalBaseCommission = fyc + syc;
                 const totalIncome = totalBaseCommission + profBonus + sycBonus + pruEliteBonus + cskhBonus + mdrtBonusQ;
 
-                // Update UI
                 document.getElementById('totalIncomeDisplay').innerText = fmt(totalIncome);
                 document.getElementById('valBaseCommission').innerText = fmt(totalBaseCommission);
                 document.getElementById('valProfBonus').innerText = fmt(profBonus);
@@ -273,7 +583,7 @@
                 document.getElementById('valCskhBonus').innerText = fmt(cskhBonus);
 
                 document.getElementById('peBadge').innerText = peRank;
-                document.getElementById('mdrtStatus').innerText = fypAcc >= mdrtTarget ? 'ĐÃ ĐẠT MDRT' : `Đạt ${mdrtPct}% Target`;
+                document.getElementById('mdrtStatus').innerText = fypAcc >= mdrtTarget ? '\u0110\u00c3 \u0110\u1ea0T MDRT' : `\u0110\u1ea1t ${mdrtPct}% Target`;
 
                 document.getElementById('mdrtPercent').innerText = mdrtPct + '%';
                 document.getElementById('mdrtProgressBar').style.width = mdrtPct + '%';
@@ -281,9 +591,8 @@
                 document.getElementById('mdrtBonusQ').innerText = fmt(mdrtBonusQ);
             }
 
-            const inputs = ['inputFYC', 'inputSYC', 'inputRYC', 'inputFYPAcc', 'inputK2', 'selectQuarter', 'selectActiveMonths', 'inputFYC6M'];
-            inputs.forEach(id => document.getElementById(id).addEventListener('input', calculate));
-
+            renderMonthTable();
+            loadAutoDataAndRender();
             calculate();
         });
     </script>
