@@ -38,6 +38,14 @@ async function callGroq({ prompt, temperature = 0.4, maxTokens = 600, jsonMode =
     };
     if (jsonMode) body.response_format = { type: 'json_object' };
 
+    // Các model "gpt-oss" là model reasoning: tự suy luận ngầm trước khi trả lời, tốn
+    // kha khá token cho phần suy luận đó. Nếu không giới hạn lại, model có thể dùng hết
+    // max_tokens để "suy nghĩ" mà chưa kịp xuất câu trả lời -> lỗi json_validate_failed.
+    // "low" giảm token suy luận ngầm, dành chỗ cho phần trả lời thật sự.
+    if (model.includes('gpt-oss')) {
+        body.reasoning_effort = 'low';
+    }
+
     const response = await fetch(GROQ_API_URL, {
         method: 'POST',
         headers: {
@@ -83,7 +91,7 @@ Hãy phân tích và trả lời NGẮN GỌN bằng tiếng Việt, đúng theo
 **Lời khuyên chăm sóc tiếp theo:**
 - (tối đa 4 gạch đầu dòng, gợi ý hành động cụ thể, thực tế cho lần gọi tiếp theo)`;
 
-    return callGroq({ prompt, temperature: 0.4, maxTokens: 500 });
+    return callGroq({ prompt, temperature: 0.4, maxTokens: 1200 });
 }
 
 /**
@@ -134,7 +142,7 @@ Hãy trả lời DUY NHẤT một đối tượng JSON hợp lệ (không markdo
   ]
 }`;
 
-    const raw = await callGroq({ prompt, temperature: 0.5, maxTokens: 900, jsonMode: true });
+    const raw = await callGroq({ prompt, temperature: 0.5, maxTokens: 2000, jsonMode: true });
 
     let parsed;
     try {
