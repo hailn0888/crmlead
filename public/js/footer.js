@@ -515,20 +515,66 @@
         "Chúc bạn một ngày làm việc tràn đầy năng lượng, niềm tin và những cuộc gọi thành công."
     ];
 
-    // Lấy chỉ số câu quote hiện tại từ sessionStorage để khi chuyển trang (không phải
-    // load lại từ đầu) danh sách vẫn tiếp tục đúng thứ tự thay vì luôn nhảy về câu 1
-    const STORAGE_KEY = 'footer_quote_index';
+    // Phát câu quote NGẪU NHIÊN, không lặp lại câu vừa hiện, và không lặp lại y hệt thứ tự
+    // giữa các lần đăng nhập/quay lại trang. Cách làm: mỗi "lượt" xáo ngẫu nhiên toàn bộ
+    // danh sách 1 lần (kiểu rút bài không hoàn lại) rồi phát lần lượt hết lượt đó mới xáo lại -
+    // vừa đảm bảo ngẫu nhiên thật sự, vừa đảm bảo không có 2 lần liên tiếp trùng câu, và vẫn
+    // rải đều hết ~500 câu trước khi có câu nào được lặp lại.
+    const STORAGE_KEY = 'footer_quote_queue';
 
-    function getStartIndex() {
-        const saved = parseInt(sessionStorage.getItem(STORAGE_KEY), 10);
-        if (!isNaN(saved) && saved >= 0 && saved < QUOTES.length) return saved;
-        return 0;
+    function shuffle(arr) {
+        for (let i = arr.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            const tmp = arr[i];
+            arr[i] = arr[j];
+            arr[j] = tmp;
+        }
+        return arr;
     }
 
-    let currentIndex = getStartIndex();
+    // Tạo 1 lượt xáo mới (mảng chỉ số 0..QUOTES.length-1 đã trộn ngẫu nhiên).
+    // avoidFirst: chỉ số vừa hiển thị ở lượt trước, để đảm bảo lượt mới không mở đầu bằng
+    // đúng câu vừa xem xong (tránh cảm giác lặp ở ranh giới giữa 2 lượt).
+    function buildShuffledQueue(avoidFirst) {
+        const indices = shuffle(QUOTES.map((_, i) => i));
+        if (indices.length > 1 && avoidFirst !== undefined && indices[0] === avoidFirst) {
+            const tmp = indices[0];
+            indices[0] = indices[1];
+            indices[1] = tmp;
+        }
+        return indices;
+    }
 
-    function saveIndex() {
-        sessionStorage.setItem(STORAGE_KEY, String(currentIndex));
+    function loadQueueState() {
+        try {
+            const raw = sessionStorage.getItem(STORAGE_KEY);
+            if (raw) {
+                const state = JSON.parse(raw);
+                if (Array.isArray(state.queue) && state.queue.length === QUOTES.length &&
+                    Number.isInteger(state.pos) && state.pos >= 0) {
+                    return state;
+                }
+            }
+        } catch (e) { /* dữ liệu hỏng thì bỏ qua, tạo lượt mới bên dưới */ }
+        return null;
+    }
+
+    let queueState = loadQueueState() || { queue: buildShuffledQueue(), pos: 0 };
+
+    function saveQueueState() {
+        sessionStorage.setItem(STORAGE_KEY, JSON.stringify(queueState));
+    }
+
+    // Lấy chỉ số câu quote NGẪU NHIÊN tiếp theo, tự động xáo lượt mới khi đã phát hết lượt hiện tại
+    function nextIndex() {
+        if (queueState.pos >= queueState.queue.length) {
+            const lastShown = queueState.queue[queueState.queue.length - 1];
+            queueState = { queue: buildShuffledQueue(lastShown), pos: 0 };
+        }
+        const idx = queueState.queue[queueState.pos];
+        queueState.pos += 1;
+        saveQueueState();
+        return idx;
     }
 
     // Tạo khung footer CỐ ĐỊNH ở đáy màn hình (không di chuyển khi cuộn trang),
@@ -587,9 +633,7 @@
     }
 
     function rotateQuote(quoteEl) {
-        currentIndex = (currentIndex + 1) % QUOTES.length; // hết danh sách thì quay lại câu đầu tiên (index 0)
-        saveIndex();
-        showQuote(quoteEl, currentIndex);
+        showQuote(quoteEl, nextIndex()); // hết danh sách thì tự xáo lượt mới, không quay lại đúng thứ tự cũ
     }
 
     document.addEventListener('DOMContentLoaded', function () {
@@ -606,9 +650,8 @@
             observer.observe(mainContainer, { attributes: true, attributeFilter: ['style'] });
         }
 
-        // Hiện câu đầu tiên ngay khi trang load, không cần đợi 30 giây
-        quoteEl.textContent = QUOTES[currentIndex];
-        saveIndex();
+        // Hiện câu đầu tiên ngay khi trang load (rút ngẫu nhiên từ lượt hiện tại), không cần đợi
+        quoteEl.textContent = QUOTES[nextIndex()];
 
         // Sau đó cứ 30 giây đổi sang câu tiếp theo
         setInterval(() => rotateQuote(quoteEl), 7000);
