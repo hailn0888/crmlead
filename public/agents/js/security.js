@@ -36,7 +36,7 @@
             // nền tối (dark) cần chữ SÁNG hơn mới thấy rõ. Nếu 1 màu cố định thì y hệt bug cũ:
             // xám nhạt trên nền tối gần như vô hình.
             colorLight: 'rgba(60,60,60,0.13)',   // chữ xám đậm, dùng khi theme = light
-            colorDark: 'rgba(255,255,255,0.14)', // chữ trắng mờ, dùng khi theme = dark
+            colorDark: 'rgba(177, 175, 175, 0.14)', // chữ trắng mờ, dùng khi theme = dark
             fontSize: 16,       // px
             angle: -28,         // độ nghiêng của chữ watermark
             tileWidth: 260,     // kích thước 1 ô lặp (px) - lặp lại (repeat) để phủ kín vùng
