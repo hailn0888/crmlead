@@ -2,7 +2,7 @@
  * public/js/security.js
  * Bảo mật nội dung cho các trang chứa dữ liệu khách hàng nhạy cảm (ví dụ leads.html).
  * Cách dùng: thêm 1 dòng vào cuối trang cần bảo vệ:
- *   <script src="/agents/js/security.js"></script>
+ *   <script src="/js/security.js"></script>
  *
  * File này làm 3 việc:
  *   1) Vô hiệu hoá copy / bôi đen dữ liệu bằng chuột và phím tắt.
@@ -35,8 +35,12 @@
             opacity: 0.07,
             fontSize: 16,       // px
             angle: -28,         // độ nghiêng của chữ watermark
-            tileWidth: 260,     // kích thước 1 ô lặp (px) - lặp lại (repeat) để phủ kín trang
-            tileHeight: 180
+            tileWidth: 260,     // kích thước 1 ô lặp (px) - lặp lại (repeat) để phủ kín vùng
+            tileHeight: 180,
+            // CSS selector của khung cần watermark (ví dụ chỉ khung "Hồ Sơ Khách Hàng").
+            // Nếu để rỗng '' hoặc không tìm thấy phần tử nào khớp selector này trên trang,
+            // sẽ tự động watermark TOÀN TRANG như mặc định cũ (không bị lỗi/mất tác dụng).
+            targetSelector: '#customer-profile-card'
         },
         // Tên các key trong localStorage có thể đang lưu thông tin người dùng đăng nhập.
         // Nếu login.js của bạn dùng tên key khác, sửa lại danh sách bên dưới cho khớp,
@@ -211,22 +215,43 @@
         return '';
     }
 
-    // Dựng (hoặc cập nhật) lớp watermark phủ toàn màn hình với nội dung "Họ tên • Tên đăng nhập • Ngày"
+    // Dựng (hoặc cập nhật) lớp watermark với nội dung "Họ tên • Tên đăng nhập • Ngày".
+    // Ưu tiên gắn BÊN TRONG khung theo CONFIG.watermark.targetSelector (ví dụ khung Hồ Sơ
+    // Khách Hàng) bằng position:absolute; nếu không tìm thấy khung đó thì tự fallback về
+    // phủ toàn trang bằng position:fixed như trước, để không bao giờ "mất tác dụng" âm thầm.
     function renderWatermark(hoVaTen, tenDangNhap) {
         const ngay = new Date().toLocaleDateString('vi-VN');
         const text = [hoVaTen, tenDangNhap, ngay].filter(Boolean).join('  •  ') || 'CRM Lead';
+
+        const targetSelector = CONFIG.watermark.targetSelector;
+        const targetEl = targetSelector ? document.querySelector(targetSelector) : null;
 
         let layer = document.getElementById('crm-security-watermark');
         if (!layer) {
             layer = document.createElement('div');
             layer.id = 'crm-security-watermark';
-            layer.style.cssText = [
-                'position:fixed', 'top:0', 'left:0', 'right:0', 'bottom:0',
-                'z-index:999998',      // nằm dưới banner cảnh báo (999999) nhưng trên mọi nội dung khác của trang
-                'pointer-events:none'  // không chặn thao tác chuột/chạm của người dùng bên dưới
-            ].join(';');
-            document.body.appendChild(layer);
+            layer.style.pointerEvents = 'none'; // không chặn thao tác chuột/chạm của người dùng bên dưới
         }
+
+        if (targetEl) {
+            // Watermark chỉ phủ đúng bên trong khung này. Khung cần position:relative để
+            // absolute bên trong nó tính toạ độ theo đúng khung, không theo toàn trang -
+            // leads.html đã thêm sẵn class "relative overflow-hidden" cho khung này.
+            layer.style.cssText = 'pointer-events:none; position:absolute; inset:0; z-index:5;';
+            if (layer.parentElement !== targetEl) {
+                targetEl.appendChild(layer);
+            }
+        } else {
+            // Không tìm thấy khung mục tiêu -> fallback: watermark toàn trang (hành vi cũ)
+            layer.style.cssText = [
+                'pointer-events:none', 'position:fixed', 'top:0', 'left:0', 'right:0', 'bottom:0',
+                'z-index:999998' // nằm dưới banner cảnh báo (999999) nhưng trên mọi nội dung khác của trang
+            ].join(';');
+            if (layer.parentElement !== document.body) {
+                document.body.appendChild(layer);
+            }
+        }
+
         layer.style.backgroundImage = 'url(' + buildWatermarkTile(text) + ')';
         layer.style.backgroundRepeat = 'repeat';
     }
