@@ -32,7 +32,11 @@
     const CONFIG = {
         blurDuration: 2500, // (ms) thời gian giữ hiệu ứng mờ sau khi phát hiện thao tác nghi chụp màn hình
         watermark: {
-            opacity: 0.07,
+            // Độ đậm/màu khác nhau theo theme - nền sáng (light) cần chữ SẪM hơn mới thấy rõ,
+            // nền tối (dark) cần chữ SÁNG hơn mới thấy rõ. Nếu 1 màu cố định thì y hệt bug cũ:
+            // xám nhạt trên nền tối gần như vô hình.
+            colorLight: 'rgba(60,60,60,0.13)',   // chữ xám đậm, dùng khi theme = light
+            colorDark: 'rgba(255,255,255,0.14)', // chữ trắng mờ, dùng khi theme = dark
             fontSize: 16,       // px
             angle: -28,         // độ nghiêng của chữ watermark
             tileWidth: 260,     // kích thước 1 ô lặp (px) - lặp lại (repeat) để phủ kín vùng
@@ -184,8 +188,9 @@
 
     // ==================== 3. WATERMARK HỌ TÊN + TÊN ĐĂNG NHẬP ====================
     // Vẽ 1 "viên gạch" (tile) chứa chữ watermark lên canvas, nghiêng theo CONFIG.watermark.angle,
-    // rồi dùng làm background-image lặp lại (repeat) để phủ kín toàn trang với độ mờ rất nhẹ.
-    function buildWatermarkTile(text) {
+    // rồi dùng làm background-image lặp lại (repeat) để phủ kín vùng với độ mờ rất nhẹ.
+    // isLight quyết định dùng màu nào (xem CONFIG.watermark.colorLight / colorDark).
+    function buildWatermarkTile(text, isLight) {
         const w = CONFIG.watermark.tileWidth;
         const h = CONFIG.watermark.tileHeight;
         const canvas = document.createElement('canvas');
@@ -197,7 +202,7 @@
         ctx.translate(w / 2, h / 2);
         ctx.rotate((CONFIG.watermark.angle * Math.PI) / 180);
         ctx.font = CONFIG.watermark.fontSize + 'px Arial, sans-serif';
-        ctx.fillStyle = 'rgba(120,120,120,' + CONFIG.watermark.opacity + ')';
+        ctx.fillStyle = isLight ? CONFIG.watermark.colorLight : CONFIG.watermark.colorDark;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(text, 0, 0);
@@ -215,13 +220,27 @@
         return '';
     }
 
+    // Đọc theme hiện tại - ưu tiên key 'crm_theme' vì đó là key nút Dark/Light trong header.js
+    // đang ghi vào; fallback 'theme' (key sidebar.js/footer.js dùng) để tương thích ngược.
+    function getIsLightTheme() {
+        const savedTheme = localStorage.getItem('crm_theme') || localStorage.getItem('theme') || 'dark';
+        return savedTheme === 'light';
+    }
+
+    // Lưu lại họ tên/tên đăng nhập lần gần nhất để khi theme đổi (xem themeObserver bên dưới)
+    // có thể vẽ lại watermark đúng nội dung mà không cần đọc lại localStorage/gọi API lần nữa.
+    let lastWatermarkUser = { hoVaTen: '', tenDangNhap: '' };
+
     // Dựng (hoặc cập nhật) lớp watermark với nội dung "Họ tên • Tên đăng nhập • Ngày".
     // Ưu tiên gắn BÊN TRONG khung theo CONFIG.watermark.targetSelector (ví dụ khung Hồ Sơ
     // Khách Hàng) bằng position:absolute; nếu không tìm thấy khung đó thì tự fallback về
     // phủ toàn trang bằng position:fixed như trước, để không bao giờ "mất tác dụng" âm thầm.
     function renderWatermark(hoVaTen, tenDangNhap) {
+        lastWatermarkUser = { hoVaTen: hoVaTen, tenDangNhap: tenDangNhap };
+
         const ngay = new Date().toLocaleDateString('vi-VN');
         const text = [hoVaTen, tenDangNhap, ngay].filter(Boolean).join('  •  ') || 'CRM Lead';
+        const isLight = getIsLightTheme();
 
         const targetSelector = CONFIG.watermark.targetSelector;
         const targetEl = targetSelector ? document.querySelector(targetSelector) : null;
@@ -252,8 +271,18 @@
             }
         }
 
-        layer.style.backgroundImage = 'url(' + buildWatermarkTile(text) + ')';
+        layer.style.backgroundImage = 'url(' + buildWatermarkTile(text, isLight) + ')';
         layer.style.backgroundRepeat = 'repeat';
+    }
+
+    // Theo dõi thay đổi theme (cùng cơ chế footer.js/sidebar.js đang dùng: quan sát class
+    // của <body>) để vẽ lại watermark đúng màu ngay lập tức khi người dùng bấm đổi theme,
+    // không cần load lại trang.
+    function initWatermarkThemeSync() {
+        const themeObserver = new MutationObserver(function () {
+            renderWatermark(lastWatermarkUser.hoVaTen, lastWatermarkUser.tenDangNhap);
+        });
+        themeObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
     }
 
     function initWatermark() {
@@ -276,5 +305,6 @@
         disableCopy();
         initScreenshotGuard();
         initWatermark();
+        initWatermarkThemeSync();
     });
 })();
