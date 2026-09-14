@@ -67,29 +67,39 @@ async function callGroq({ prompt, temperature = 0.4, maxTokens = 600, jsonMode =
 }
 
 /**
- * [Dùng cho Tab AI Insights ở calls.html] Phân tích lịch sử ghi chú chăm sóc khách hàng
- * và trả về đánh giá + lời khuyên.
+ * [Dùng cho Tab AI Insights ở calls.html] Phân tích lịch sử BÁO CÁO CUỘC GỌI
+ * (kết quả phân loại + nội dung chi tiết nhân viên tự nhập sau mỗi cuộc gọi)
+ * và trả về đánh giá + hướng xử lý từ chối/lời khuyên cho lần gọi tiếp theo.
+ * Nhập báo cáo (noi_dung) càng chi tiết thì phân tích càng chính xác.
  * @param {string} customerName
- * @param {Array<{lan_goi:number, thoi_gian_goi:string, noi_dung:string}>} ghiChuList
+ * @param {Array<{lan_goi:number, thoi_gian_goi:string, ket_qua_cuoc_goi:string, noi_dung:string}>} ghiChuList
  * @returns {Promise<string>}
  */
 async function generateAiInsight(customerName, ghiChuList) {
     const lichSuGoi = (ghiChuList && ghiChuList.length > 0)
-        ? ghiChuList.map(gc => `- Gọi lần ${gc.lan_goi} (${gc.thoi_gian_goi}): ${gc.noi_dung || '(không có ghi chú)'}`).join('\n')
-        : 'Chưa có ghi chú cuộc gọi nào.';
+        ? ghiChuList.map(gc =>
+            `- Gọi lần ${gc.lan_goi} (${gc.thoi_gian_goi}) - Kết quả: ${gc.ket_qua_cuoc_goi || 'chưa rõ'}\n  Báo cáo chi tiết: ${gc.noi_dung || '(nhân viên chưa nhập báo cáo chi tiết)'}`
+          ).join('\n')
+        : 'Chưa có báo cáo cuộc gọi nào.';
 
     const prompt = `Bạn là trợ lý CRM hỗ trợ nhân viên tư vấn bảo hiểm tại Việt Nam chăm sóc khách hàng qua điện thoại.
+Khách hàng "${customerName}" đã được gọi nhiều lần nhưng CHƯA chốt được lịch hẹn gặp. Dưới đây là toàn bộ báo cáo cuộc gọi
+(kết quả phân loại + nội dung chi tiết trao đổi với khách) do nhân viên tự nhập sau mỗi lần gọi, theo đúng thứ tự thời gian:
 
-Dưới đây là lịch sử ghi chú các lần gọi điện cho khách hàng "${customerName}":
 ${lichSuGoi}
+
+Lưu ý: báo cáo càng chi tiết thì phân tích của bạn càng phải bám sát nội dung thật (lý do khách đưa ra, thái độ, câu nói cụ thể nếu có) - KHÔNG suy diễn chung chung nếu nội dung báo cáo sơ sài.
 
 Hãy phân tích và trả lời NGẮN GỌN bằng tiếng Việt, đúng theo cấu trúc sau (không thêm lời chào/kết luận thừa):
 
 **Đánh giá tình trạng khách hàng:**
-(1-2 câu nhận định mức độ quan tâm / khả năng chốt hợp đồng của khách, dựa trên các ghi chú trên)
+(1-2 câu nhận định mức độ quan tâm / khả năng chốt hợp đồng, dựa trên diễn biến các lần gọi và xu hướng thay đổi thái độ của khách qua từng lần)
 
-**Lời khuyên chăm sóc tiếp theo:**
-- (tối đa 4 gạch đầu dòng, gợi ý hành động cụ thể, thực tế cho lần gọi tiếp theo)`;
+**Lý do từ chối / e ngại chính:**
+(Chỉ ra rõ (các) lý do khách đang từ chối hoặc còn e ngại, suy ra trực tiếp từ báo cáo - nếu báo cáo không đủ thông tin thì nói rõ "chưa đủ dữ kiện để xác định")
+
+**Hướng xử lý từ chối cho lần gọi tiếp theo:**
+- (tối đa 4 gạch đầu dòng, mỗi gạch là 1 cách phản hồi/lập luận CỤ THỂ nhắm đúng vào lý do từ chối đã nêu ở trên, không nói chung chung)`;
 
     return callGroq({ prompt, temperature: 0.4, maxTokens: 1200 });
 }

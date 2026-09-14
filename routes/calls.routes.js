@@ -4,6 +4,7 @@ const router = express.Router();
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const { generateAiInsight } = require('../services/groqService');
 
 // ==========================================================================
 // CẤU HÌNH UPLOAD FILE ĐÍNH KÈM CUỘC HẸN
@@ -567,6 +568,266 @@ router.post('/notifications/:id/read', async (req, res) => {
     } catch (error) {
         console.error("Lỗi đánh dấu thông báo đã đọc:", error);
         res.status(500).json({ success: false, message: 'Lỗi server nội bộ' });
+    }
+});
+
+// ==========================================================================
+// TAB 5: "AI INSIGHTS" - danh sách khách hàng cần chăm sóc lại
+// (những số điện thoại mà LẦN GỌI GẦN NHẤT của agent này KHÁC
+// "Hẹn gặp thành công" -> vẫn còn cơ hội chăm sóc/gọi lại để chốt hẹn)
+//
+// CẦN 2 BẢNG MỚI TRONG SUPABASE (chưa có sẵn trong schema hiện tại):
+//   ai_insights   (id, dien_thoai UNIQUE, insight, updated_at)
+//   nhac_hen_lai  (id, dien_thoai, ten_agent, thoi_gian_nhac, ghi_chu, da_nhac, created_at)
+// Xem file SQL đính kèm để tạo 2 bảng này.
+// ==========================================================================
+router.get('/ai-insights', async (req, res) => {
+    try {
+        const { agent, date } = req.query;
+        const supabase = req.supabase;
+
+        if (!agent) {
+            return res.status(400).json({ success: false, message: 'Thiếu thông tin Agent!' });
+        }
+
+        let query = supabase
+            .from('call_history')
+            .select(`
+                id, dien_thoai, ten_agent, ket_qua_cuoc_goi, ghi_chu, thoi_gian_goi,
+                customers:dien_thoai (ho, ten)
+            `)
+            .eq('ten_agent', agent)
+            .order('thoi_gian_goi', { ascending: true });
+
+        if (date) {
+            query = query.gte('thoi_gian_goi', `${date}T00:00:00`).lte('thoi_gian_goi', `${date}T23:59:59`);
+        }
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        // Gom nhóm các dòng call_history theo số điện thoại
+        const groupMap = new Map();
+        (data || []).forEach(row => {
+            const phone = String(row.dien_thoai || '').trim();
+            if (!phone) return;
+            if (!groupMap.has(phone)) groupMap.set(phone, []);
+            groupMap.get(phone).push(row);
+        });
+
+        // Chỉ giữ nhóm mà lần gọi GẦN NHẤT chưa phải "Hẹn gặp thành công"
+        const phonesNeedCare = [];
+        groupMap.forEach((rows, phone) => {
+            const lastRow = rows[rows.length - 1];
+            if (lastRow.ket_qua_cuoc_goi !== 'Hẹn gặp thành công') {
+                phonesNeedCare.push(phone);
+            }
+        });
+
+        if (phonesNeedCare.length === 0) {
+            return res.json({ success: true, data: [] });
+        }
+
+        // Lấy đánh giá AI đã lưu trước đó (nếu có) cho các số này
+        const { data: insightRows, error: insightErr } = await supabase
+            .from('ai_insights')
+            .select('dien_thoai, insight')
+            .in('dien_thoai', phonesNeedCare);
+        if (insightErr) throw insightErr;
+
+        const insightMap = new Map();
+        (insightRows || []).forEach(r => insightMap.set(String(r.dien_thoai).trim(), r.insight));
+
+        const result = phonesNeedCare.map(phone => {
+            const rows = groupMap.get(phone);
+            const anchor = rows[rows.length - 1]; // dòng gần nhất -> dùng id đại diện cho cả nhóm
+            const ghi_chu_list = rows.map((r, idx) => ({
+                lan_goi: idx + 1,
+                thoi_gian_goi: r.thoi_gian_goi,
+                noi_dung: r.ghi_chu || ''
+            }));
+            return {
+                id: anchor.id,
+                dien_thoai: phone,
+                customers: anchor.customers || {},
+                ghi_chu_list,
+                ai_insight: insightMap.get(phone) || null
+            };
+        });
+
+        // Khách có lần gọi gần nhất mới nhất lên đầu danh sách
+        result.sort((a, b) => {
+            const lastA = a.ghi_chu_list[a.ghi_chu_list.length - 1];
+            const lastB = b.ghi_chu_list[b.ghi_chu_list.length - 1];
+            return new Date(lastB.thoi_gian_goi).getTime() - new Date(lastA.thoi_gian_goi).getTime();
+        });
+
+        res.json({ success: true, data: result });
+    } catch (error) {
+        console.error("Lỗi lấy danh sách AI Insights:", error);
+        res.status(500).json({ success: false, message: 'Lỗi server nội bộ', error: error.message });
+    }
+});
+
+// API: Lưu/chỉnh sửa ghi chú chăm sóc (popup bút chì ở cột "Ghi chú")
+// - items: các ghi chú CŨ đã chỉnh sửa nội dung -> update đúng dòng call_history
+//   gốc (khớp theo dien_thoai + thoi_gian_goi vì đó là khoá xác định duy nhất
+//   cho từng lần gọi).
+// - ghiChuMoi: ghi chú THÊM MỚI, không gắn với 1 cuộc gọi thật nào -> tạo 1
+//   dòng call_history mới với ket_qua_cuoc_goi = 'Ghi chú chăm sóc' (đánh dấu
+//   rõ đây là ghi chú thủ công, KHÔNG phải cuộc gọi thật, để không ảnh hưởng
+//   thống kê số cuộc gọi ở các màn hình khác).
+router.post('/ai-insights/:id/notes', async (req, res) => {
+    try {
+        const supabase = req.supabase;
+        const { id } = req.params;
+        const { items, ghiChuMoi } = req.body;
+
+        const { data: anchorRow, error: anchorErr } = await supabase
+            .from('call_history')
+            .select('dien_thoai, ten_agent')
+            .eq('id', id)
+            .single();
+        if (anchorErr) throw anchorErr;
+
+        if (Array.isArray(items)) {
+            for (const it of items) {
+                if (!it.thoi_gian_goi) continue;
+                await supabase
+                    .from('call_history')
+                    .update({ ghi_chu: it.noi_dung || '' })
+                    .eq('dien_thoai', anchorRow.dien_thoai)
+                    .eq('thoi_gian_goi', it.thoi_gian_goi);
+            }
+        }
+
+        if (ghiChuMoi && ghiChuMoi.trim()) {
+            const { error: insertErr } = await supabase.from('call_history').insert([{
+                dien_thoai: anchorRow.dien_thoai,
+                ten_agent: anchorRow.ten_agent,
+                ket_qua_cuoc_goi: 'Ghi chú chăm sóc',
+                ghi_chu: ghiChuMoi.trim(),
+                thoi_gian_goi: new Date().toISOString()
+            }]);
+            if (insertErr) throw insertErr;
+        }
+
+        res.json({ success: true, message: 'Đã lưu ghi chú.' });
+    } catch (error) {
+        console.error("Lỗi lưu ghi chú chăm sóc:", error);
+        res.status(500).json({ success: false, message: 'Lỗi server nội bộ', error: error.message });
+    }
+});
+
+// API: Gọi AI (Groq) phân tích toàn bộ lịch sử ghi chú của 1 khách hàng,
+// đưa ra đánh giá + gợi ý kịch bản chăm sóc cho lần gọi tiếp theo.
+router.post('/ai-insights/:id/analyze', async (req, res) => {
+    try {
+        const supabase = req.supabase;
+        const { id } = req.params;
+
+        const { data: anchorRow, error: anchorErr } = await supabase
+            .from('call_history')
+            .select('dien_thoai')
+            .eq('id', id)
+            .single();
+        if (anchorErr) throw anchorErr;
+
+        const { data: rows, error: rowsErr } = await supabase
+            .from('call_history')
+            .select('ghi_chu, ket_qua_cuoc_goi, thoi_gian_goi')
+            .eq('dien_thoai', anchorRow.dien_thoai)
+            .order('thoi_gian_goi', { ascending: true });
+        if (rowsErr) throw rowsErr;
+
+        const { data: customer } = await supabase
+            .from('customers')
+            .select('ho, ten')
+            .eq('dien_thoai', anchorRow.dien_thoai)
+            .maybeSingle();
+        const hoTen = (customer ? `${customer.ho || ''} ${customer.ten || ''}`.trim() : '') || anchorRow.dien_thoai;
+
+        // Đúng shape mà generateAiInsight() ở services/groqService.js yêu cầu:
+        // gửi kèm cả ket_qua_cuoc_goi (phân loại) lẫn noi_dung (báo cáo chi tiết
+        // nhân viên tự nhập) - AI cần cả hai để đưa ra hướng xử lý từ chối đúng.
+        const ghiChuList = (rows || []).map((r, idx) => ({
+            lan_goi: idx + 1,
+            thoi_gian_goi: r.thoi_gian_goi,
+            ket_qua_cuoc_goi: r.ket_qua_cuoc_goi || '',
+            noi_dung: r.ghi_chu || ''
+        }));
+
+        const insight = await generateAiInsight(hoTen, ghiChuList);
+
+        res.json({ success: true, data: { insight } });
+    } catch (error) {
+        console.error("Lỗi phân tích AI Insights:", error);
+        res.status(500).json({ success: false, message: error.message || 'Lỗi phân tích AI' });
+    }
+});
+
+// API: Lưu lại đánh giá AI (sau khi agent xem/chỉnh sửa nội dung và bấm "Lưu")
+// -> lưu theo dien_thoai (upsert) để lần sau mở lại không cần gọi lại AI.
+router.post('/ai-insights/:id/save-insight', async (req, res) => {
+    try {
+        const supabase = req.supabase;
+        const { id } = req.params;
+        const { insight } = req.body;
+
+        const { data: anchorRow, error: anchorErr } = await supabase
+            .from('call_history')
+            .select('dien_thoai')
+            .eq('id', id)
+            .single();
+        if (anchorErr) throw anchorErr;
+
+        const { error } = await supabase
+            .from('ai_insights')
+            .upsert({
+                dien_thoai: anchorRow.dien_thoai,
+                insight: insight || '',
+                updated_at: new Date().toISOString()
+            }, { onConflict: 'dien_thoai' });
+        if (error) throw error;
+
+        res.json({ success: true, message: 'Đã lưu đánh giá AI.' });
+    } catch (error) {
+        console.error("Lỗi lưu đánh giá AI:", error);
+        res.status(500).json({ success: false, message: 'Lỗi server nội bộ', error: error.message });
+    }
+});
+
+// API: Lưu nhắc hẹn gọi lại (bấm chuông ở cột "Thao tác")
+router.post('/ai-insights/:id/remind', async (req, res) => {
+    try {
+        const supabase = req.supabase;
+        const { id } = req.params;
+        const { thoi_gian_nhac, ghi_chu } = req.body;
+
+        if (!thoi_gian_nhac) {
+            return res.status(400).json({ success: false, message: 'Thiếu thời gian nhắc hẹn!' });
+        }
+
+        const { data: anchorRow, error: anchorErr } = await supabase
+            .from('call_history')
+            .select('dien_thoai, ten_agent')
+            .eq('id', id)
+            .single();
+        if (anchorErr) throw anchorErr;
+
+        const { error } = await supabase.from('nhac_hen_lai').insert([{
+            dien_thoai: anchorRow.dien_thoai,
+            ten_agent: anchorRow.ten_agent,
+            thoi_gian_nhac,
+            ghi_chu: ghi_chu || null,
+            da_nhac: false
+        }]);
+        if (error) throw error;
+
+        res.json({ success: true, message: 'Đã lưu nhắc hẹn gọi lại.' });
+    } catch (error) {
+        console.error("Lỗi lưu nhắc hẹn gọi lại:", error);
+        res.status(500).json({ success: false, message: 'Lỗi server nội bộ', error: error.message });
     }
 });
 
