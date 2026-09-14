@@ -101,13 +101,93 @@
                         <div id="monthColA" class="flex flex-col gap-1"></div>
                         <div id="monthColB" class="flex flex-col gap-1"></div>
                     </div>
+
+                    <!-- Chú giải thuật ngữ -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 text-[11px] mt-1">
+                        <div class="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-700/50">
+                            <b class="text-slate-700 dark:text-slate-200">FYP</b> <span class="text-slate-500 dark:text-slate-400">— Phí bảo hiểm năm nhất: phí gốc của hợp đồng mới trong năm đầu tiên.</span>
+                        </div>
+                        <div class="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-700/50">
+                            <b class="text-slate-700 dark:text-slate-200">FYC</b> <span class="text-slate-500 dark:text-slate-400">— Hoa hồng năm nhất: hoa hồng TVV nhận trên phí năm đầu của HĐ mới.</span>
+                        </div>
+                        <div class="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-700/50">
+                            <b class="text-slate-700 dark:text-slate-200">SYC</b> <span class="text-slate-500 dark:text-slate-400">— Hoa hồng năm hai: hoa hồng khi HĐ tái tục sang năm thứ 2.</span>
+                        </div>
+                        <div class="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-700/50">
+                            <b class="text-slate-700 dark:text-slate-200">RYP</b> <span class="text-slate-500 dark:text-slate-400">— Phí bảo hiểm định kỳ thực thu của HĐ đã qua năm đầu (dùng cho HĐ phát hành trước 2026).</span>
+                        </div>
+                        <div class="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-700/50">
+                            <b class="text-slate-700 dark:text-slate-200">RYC</b> <span class="text-slate-500 dark:text-slate-400">— Hoa hồng tái tục: hoa hồng trên các HĐ đã phát sinh hoa hồng từ năm thứ 2 trở đi.</span>
+                        </div>
+                    </div>
                     <p class="text-[11px] text-slate-400 dark:text-slate-500">
                         <i data-lucide="lock" class="w-3 h-3 inline align-middle"></i> FYP & FYC: tự động đồng bộ từ menu <b>Doanh số cá nhân</b> (không sửa được tại đây) ·
                         SYC / RYP / RYC: nhập tay vì hệ thống Prudential mới ghi nhận được. Số liệu nhập tay tự lưu trên trình duyệt của bạn.
                     </p>
                 </div>
 
-                <!-- ===================== KPI TỰ ĐỘNG THEO QUÝ / LŨY KẾ ===================== -->
+                <!-- ===================== HÀNG 1 (hiển thị trước): TIẾN ĐỘ MDRT + THI ĐUA & TÍCH LŨY ===================== -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                    <!-- Tiến độ MDRT 2027 -->
+                    <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                                <i data-lucide="target" class="w-4 h-4 text-red-600 dark:text-red-500"></i> Tiến Độ MDRT 2027 (FYP Target: 1.073.645.200 VNĐ)
+                            </h3>
+                            <span class="text-xs font-bold text-red-600 dark:text-red-400" id="mdrtPercent">0%</span>
+                        </div>
+                        <div class="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-3 mb-4 overflow-hidden">
+                            <div id="mdrtProgressBar" class="bg-gradient-to-r from-red-500 to-amber-500 h-3 rounded-full transition-all duration-500" style="width: 0%"></div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2 text-xs">
+                            <div class="p-2.5 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-100 dark:border-slate-700/50">
+                                <span class="text-slate-500 dark:text-slate-400 block">Thiếu MDRT</span>
+                                <span class="font-bold text-slate-800 dark:text-slate-200" id="mdrtGap">0 VNĐ</span>
+                            </div>
+                            <div class="p-2.5 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-100 dark:border-slate-700/50">
+                                <span class="text-slate-500 dark:text-slate-400 block">Thưởng Tiến Độ Quý</span>
+                                <span class="font-bold text-emerald-600 dark:text-emerald-400" id="mdrtBonusQ">0 VNĐ</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Thi đua & Tích lũy lũy kế (đã chuyển xuống đây) -->
+                    <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col gap-4">
+                        <h2 class="text-sm font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider flex items-center gap-2">
+                            <i data-lucide="award" class="w-4 h-4"></i> Thi Đua & Tích Luỹ Lũy Kế
+                        </h2>
+
+                        <div>
+                            <span class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Tổng FYP Lũy kế Từ Đầu Năm Tới Tháng Đang Xem</span>
+                            <div class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-bold text-amber-600 dark:text-amber-400" id="displayFYPAcc">0</div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3 text-xs">
+                            <div class="p-2.5 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-100 dark:border-slate-700/50">
+                                <span class="text-slate-500 dark:text-slate-400 block">Quý xét duyệt</span>
+                                <span class="font-bold text-slate-800 dark:text-slate-200" id="displayQuarter">Quý -</span>
+                            </div>
+                            <div class="p-2.5 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-100 dark:border-slate-700/50">
+                                <span class="text-slate-500 dark:text-slate-400 block">Tháng đang xem</span>
+                                <span class="font-bold text-slate-800 dark:text-slate-200" id="displayMonthLabel">Tháng -</span>
+                            </div>
+                        </div>
+
+                        <div>
+                            <span class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">FYC 6 Tháng Gần Nhất (tự động, xét thưởng CSKH)</span>
+                            <div class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-800 dark:text-slate-100" id="displayFYC6M">0</div>
+                        </div>
+
+                        <div>
+                            <span class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">FYC 12 Tháng Gần Nhất (tự động, xét hạng Pru-Elite)</span>
+                            <div class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-800 dark:text-slate-100" id="displayFYC12M">0</div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- ===================== HÀNG 2 (hiển thị sau): CHỈ SỐ KINH DOANH QUÝ + PRU-ELITE/MDRT + TỔNG THU NHẬP ===================== -->
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
                     <!-- Chỉ số kinh doanh quý (auto) -->
@@ -158,109 +238,58 @@
                         </div>
                     </div>
 
-                    <!-- Thi đua & Tích lũy (auto) -->
+                    <!-- Pru-Elite & MDRT Status Card (thay cho Thi đua & tích luỹ cũ) -->
                     <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col gap-4">
-                        <h2 class="text-sm font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider flex items-center gap-2">
-                            <i data-lucide="award" class="w-4 h-4"></i> Thi Đua & Tích Luỹ Lũy Kế
+                        <h2 class="text-sm font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider flex items-center gap-2">
+                            <i data-lucide="gem" class="w-4 h-4"></i> Danh Hiệu Pru-Elite & MDRT
                         </h2>
 
-                        <div>
-                            <span class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Tổng FYP Lũy kế Từ Đầu Năm Tới Tháng Đang Xem</span>
-                            <div class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-bold text-amber-600 dark:text-amber-400" id="displayFYPAcc">0</div>
+                        <div class="p-4 rounded-xl bg-gradient-to-br from-purple-50 to-slate-50 dark:from-purple-900/20 dark:to-slate-900/40 border border-purple-100 dark:border-purple-800/40 text-center">
+                            <span class="block text-[11px] text-slate-500 dark:text-slate-400 mb-1">Hạng Pru-Elite hiện tại</span>
+                            <span id="peBadge" class="block text-2xl font-extrabold text-purple-600 dark:text-purple-300">Chưa đạt</span>
+                            <p id="peNextInfo" class="text-xs text-slate-500 dark:text-slate-400 mt-2 leading-relaxed"></p>
                         </div>
 
-                        <div class="grid grid-cols-2 gap-3 text-xs">
-                            <div class="p-2.5 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-100 dark:border-slate-700/50">
-                                <span class="text-slate-500 dark:text-slate-400 block">Quý xét duyệt</span>
-                                <span class="font-bold text-slate-800 dark:text-slate-200" id="displayQuarter">Quý -</span>
+                        <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-700/50 flex items-center justify-between">
+                            <div>
+                                <span class="text-slate-500 dark:text-slate-400 text-xs block">Trạng thái MDRT 2027</span>
+                                <span class="font-bold text-sm text-amber-600 dark:text-amber-400" id="mdrtStatus">Chưa đạt</span>
                             </div>
-                            <div class="p-2.5 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-100 dark:border-slate-700/50">
-                                <span class="text-slate-500 dark:text-slate-400 block">Tháng đang xem</span>
-                                <span class="font-bold text-slate-800 dark:text-slate-200" id="displayMonthLabel">Tháng -</span>
-                            </div>
-                        </div>
-
-                        <div>
-                            <span class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">FYC 6 Tháng Gần Nhất (tự động, xét thưởng CSKH)</span>
-                            <div class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-800 dark:text-slate-100" id="displayFYC6M">0</div>
+                            <i data-lucide="trophy" class="w-6 h-6 text-amber-500"></i>
                         </div>
                     </div>
 
-                    <!-- Summary Card Red Gradient -->
-                    <div class="bg-gradient-to-br from-red-600 to-rose-700 text-white p-5 rounded-2xl shadow-lg flex flex-col justify-between">
+                    <!-- Ước tính Tổng thu nhập quý + Phân tích cấu trúc (đã gộp) -->
+                    <div class="bg-gradient-to-br from-red-600 to-rose-700 text-white p-5 rounded-2xl shadow-lg flex flex-col gap-3">
                         <div>
                             <span class="text-xs text-red-100 font-semibold uppercase tracking-wider">Ước Tính Tổng Thu Nhập Quý</span>
                             <div class="text-3xl font-extrabold mt-1" id="totalIncomeDisplay">0 VNĐ</div>
-                            <p class="text-xs text-red-100/90 mt-2">Đã bao gồm Hoa hồng + Thưởng Chuyên nghiệp + Thưởng Pru-Elite + TCSKH.</p>
                         </div>
 
-                        <div class="pt-4 border-t border-white/20 flex justify-between items-center text-xs">
-                            <div>
-                                <span class="opacity-80 block">Danh hiệu Pru-Elite</span>
-                                <span class="font-bold text-sm text-yellow-300" id="peBadge">Chưa đạt</span>
+                        <div class="bg-white/10 rounded-xl p-3 space-y-1.5 text-xs">
+                            <div class="flex justify-between py-1 border-b border-white/15">
+                                <span class="text-red-100">Hoa hồng gốc (FYC + SYC):</span>
+                                <span class="font-semibold" id="valBaseCommission">0 VNĐ</span>
                             </div>
-                            <div class="text-right">
-                                <span class="opacity-80 block">Trạng thái MDRT 2027</span>
-                                <span class="font-bold text-sm text-amber-200" id="mdrtStatus">Chưa đạt</span>
+                            <div class="flex justify-between py-1 border-b border-white/15">
+                                <span class="text-red-100">Thưởng Hoạt động Chuyên nghiệp:</span>
+                                <span class="font-semibold" id="valProfBonus">0 VNĐ</span>
+                            </div>
+                            <div class="flex justify-between py-1 border-b border-white/15">
+                                <span class="text-red-100">Thưởng Khai thác hiệu quả (25% SYC):</span>
+                                <span class="font-semibold" id="valSycBonus">0 VNĐ</span>
+                            </div>
+                            <div class="flex justify-between py-1 border-b border-white/15">
+                                <span class="text-red-100">Thưởng Pru-Elite Quý:</span>
+                                <span class="font-semibold" id="valPruEliteBonus">0 VNĐ</span>
+                            </div>
+                            <div class="flex justify-between py-1">
+                                <span class="text-red-100">Thưởng Chăm sóc Khách hàng (TCSKH):</span>
+                                <span class="font-semibold" id="valCskhBonus">0 VNĐ</span>
                             </div>
                         </div>
-                    </div>
 
-                </div>
-
-                <!-- KPI & Details Breakdown -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-                    <!-- Tiến độ MDRT 2027 -->
-                    <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
-                        <div class="flex justify-between items-center mb-4">
-                            <h3 class="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2">
-                                <i data-lucide="target" class="w-4 h-4 text-red-600 dark:text-red-500"></i> Tiến Độ MDRT 2027 (FYP Target: 1.073.645.200 VNĐ)
-                            </h3>
-                            <span class="text-xs font-bold text-red-600 dark:text-red-400" id="mdrtPercent">0%</span>
-                        </div>
-                        <div class="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-3 mb-4 overflow-hidden">
-                            <div id="mdrtProgressBar" class="bg-gradient-to-r from-red-500 to-amber-500 h-3 rounded-full transition-all duration-500" style="width: 0%"></div>
-                        </div>
-                        <div class="grid grid-cols-2 gap-2 text-xs">
-                            <div class="p-2.5 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-100 dark:border-slate-700/50">
-                                <span class="text-slate-500 dark:text-slate-400 block">Thiếu MDRT</span>
-                                <span class="font-bold text-slate-800 dark:text-slate-200" id="mdrtGap">0 VNĐ</span>
-                            </div>
-                            <div class="p-2.5 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-100 dark:border-slate-700/50">
-                                <span class="text-slate-500 dark:text-slate-400 block">Thưởng Tiến Độ Quý</span>
-                                <span class="font-bold text-emerald-600 dark:text-emerald-400" id="mdrtBonusQ">0 VNĐ</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Bảng Chi Tiết Thu Nhập -->
-                    <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
-                        <h3 class="font-bold text-sm text-slate-900 dark:text-white mb-3 flex items-center gap-2">
-                            <i data-lucide="pie-chart" class="w-4 h-4 text-emerald-600 dark:text-emerald-500"></i> Phân Tích Cấu Trúc Thu Nhập Quý
-                        </h3>
-                        <div class="space-y-2 text-xs">
-                            <div class="flex justify-between py-1.5 border-b border-slate-100 dark:border-slate-700/60">
-                                <span class="text-slate-600 dark:text-slate-400">Hoa hồng gốc trong Quý (FYC + SYC):</span>
-                                <span class="font-semibold text-slate-800 dark:text-slate-200" id="valBaseCommission">0 VNĐ</span>
-                            </div>
-                            <div class="flex justify-between py-1.5 border-b border-slate-100 dark:border-slate-700/60">
-                                <span class="text-slate-600 dark:text-slate-400">Thưởng Hoạt động Chuyên nghiệp (Memo 00071):</span>
-                                <span class="font-semibold text-emerald-600 dark:text-emerald-400" id="valProfBonus">0 VNĐ</span>
-                            </div>
-                            <div class="flex justify-between py-1.5 border-b border-slate-100 dark:border-slate-700/60">
-                                <span class="text-slate-600 dark:text-slate-400">Thưởng Khai thác hiệu quả (25% SYC):</span>
-                                <span class="font-semibold text-emerald-600 dark:text-emerald-400" id="valSycBonus">0 VNĐ</span>
-                            </div>
-                            <div class="flex justify-between py-1.5 border-b border-slate-100 dark:border-slate-700/60">
-                                <span class="text-slate-600 dark:text-slate-400">Thưởng Pru-Elite Quý (Memo 01601):</span>
-                                <span class="font-semibold text-purple-600 dark:text-purple-400" id="valPruEliteBonus">0 VNĐ</span>
-                            </div>
-                            <div class="flex justify-between py-1.5">
-                                <span class="text-slate-600 dark:text-slate-400">Thưởng Chăm sóc Khách hàng (TCSKH):</span>
-                                <span class="font-semibold text-blue-600 dark:text-blue-400" id="valCskhBonus">0 VNĐ</span>
-                            </div>
-                        </div>
+                        <p class="text-[11px] text-red-100/90">Đã bao gồm Hoa hồng + Thưởng Chuyên nghiệp + Thưởng Pru-Elite + TCSKH.</p>
                     </div>
 
                 </div>
@@ -303,9 +332,9 @@
             const MANUAL_STORAGE_KEY = 'pruDashboard2026Manual';
             const K2_STORAGE_KEY = 'pruDashboard2026K2';
             const YEAR = 2026;
-            const monthNames = ['Th\u00e1ng 1','Th\u00e1ng 2','Th\u00e1ng 3','Th\u00e1ng 4','Th\u00e1ng 5','Th\u00e1ng 6','Th\u00e1ng 7','Th\u00e1ng 8','Th\u00e1ng 9','Th\u00e1ng 10','Th\u00e1ng 11','Th\u00e1ng 12'];
+            const monthNames = ['Tháng 1','Tháng 2','Tháng 3','Tháng 4','Tháng 5','Tháng 6','Tháng 7','Tháng 8','Tháng 9','Tháng 10','Tháng 11','Tháng 12'];
 
-            // ---------- So lieu nhap tay (SYC / RYP / RYC) - luu tren trinh duyet ----------
+            // ---------- Số liệu nhập tay (SYC / RYP / RYC) - lưu trên trình duyệt ----------
             const defaultManual = {};
             for (let m = 1; m <= 12; m++) defaultManual[m] = { syc: 0, ryp: 0, ryc: 0 };
             Object.assign(defaultManual, {
@@ -333,7 +362,7 @@
                 return { fyp: autoData[m].fyp, fyc: autoData[m].fyc, syc: manualData[m].syc, ryp: manualData[m].ryp, ryc: manualData[m].ryc };
             }
 
-            // ---------- Lay du lieu hop dong tu he thong (giong trang Doanh so ca nhan) ----------
+            // ---------- Lấy dữ liệu hợp đồng từ hệ thống (giống trang Doanh số cá nhân) ----------
             function getCurrentAgentName() {
                 try {
                     const currentUser = JSON.parse(localStorage.getItem('user_info')) || {};
@@ -342,8 +371,8 @@
             }
 
             function getPeriodDivisor(paymentMode) {
-                if (paymentMode === 'HALF' || paymentMode === 'N\u1eeda n\u0103m') return 2;
-                if (paymentMode === 'QUARTER' || paymentMode === 'Qu\u00fd') return 4;
+                if (paymentMode === 'HALF' || paymentMode === 'Nửa năm') return 2;
+                if (paymentMode === 'QUARTER' || paymentMode === 'Quý') return 4;
                 return 1;
             }
 
@@ -382,13 +411,13 @@
                 const badge = document.getElementById('syncBadge');
                 if (state === 'ok') {
                     badge.className = 'text-[11px] font-semibold px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center gap-1';
-                    badge.innerHTML = '<i data-lucide="check-circle-2" class="w-3 h-3"></i> \u0110\u00e3 \u0111\u1ed3ng b\u1ed9 t\u1eeb Doanh s\u1ed1 c\u00e1 nh\u00e2n';
+                    badge.innerHTML = '<i data-lucide="check-circle-2" class="w-3 h-3"></i> Đã đồng bộ từ Doanh số cá nhân';
                 } else if (state === 'empty') {
                     badge.className = 'text-[11px] font-semibold px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center gap-1';
-                    badge.innerHTML = '<i data-lucide="info" class="w-3 h-3"></i> Ch\u01b0a c\u00f3 h\u1ee3p \u0111\u1ed3ng n\u00e0o trong Doanh s\u1ed1 c\u00e1 nh\u00e2n';
+                    badge.innerHTML = '<i data-lucide="info" class="w-3 h-3"></i> Chưa có hợp đồng nào trong Doanh số cá nhân';
                 } else {
                     badge.className = 'text-[11px] font-semibold px-2.5 py-1 rounded-full bg-red-500/15 text-red-600 dark:text-red-400 flex items-center gap-1';
-                    badge.innerHTML = '<i data-lucide="alert-triangle" class="w-3 h-3"></i> Kh\u00f4ng t\u1ea3i \u0111\u01b0\u1ee3c d\u1eef li\u1ec7u \u2014 ki\u1ec3m tra \u0111\u0103ng nh\u1eadp';
+                    badge.innerHTML = '<i data-lucide="alert-triangle" class="w-3 h-3"></i> Không tải được dữ liệu — kiểm tra đăng nhập';
                 }
                 if (typeof lucide !== 'undefined') lucide.createIcons();
             }
@@ -423,8 +452,8 @@
                 return `
                 <div class="month-row grid grid-cols-[40px_1fr_1fr_1fr_1fr_1fr] gap-1.5 items-center px-1.5 py-1" data-month="${m}">
                     <span class="text-xs font-semibold text-slate-600 dark:text-slate-300">T${m}</span>
-                    <div class="month-auto-cell" title="Tu dong tu Doanh so ca nhan">${fmtNum(d.fyp)}</div>
-                    <div class="month-auto-cell" title="Tu dong tu Doanh so ca nhan">${fmtNum(d.fyc)}</div>
+                    <div class="month-auto-cell" title="Tự động từ Doanh số cá nhân">${fmtNum(d.fyp)}</div>
+                    <div class="month-auto-cell" title="Tự động từ Doanh số cá nhân">${fmtNum(d.fyc)}</div>
                     <input type="text" inputmode="numeric" class="month-input" data-field="syc" value="${d.syc ? fmtNum(d.syc) : ''}" placeholder="SYC">
                     <input type="text" inputmode="numeric" class="month-input" data-field="ryp" value="${d.ryp ? fmtNum(d.ryp) : ''}" placeholder="RYP">
                     <input type="text" inputmode="numeric" class="month-input" data-field="ryc" value="${d.ryc ? fmtNum(d.ryc) : ''}" placeholder="RYC">
@@ -468,7 +497,7 @@
             document.getElementById('refreshDataBtn').addEventListener('click', loadAutoDataAndRender);
 
             document.getElementById('resetManualBtn').addEventListener('click', () => {
-                if (confirm('X\u00f3a to\u00e0n b\u1ed9 s\u1ed1 li\u1ec7u SYC/RYP/RYC \u0111\u00e3 nh\u1eadp tay? (FYP/FYC \u0111\u1ed3ng b\u1ed9 t\u1eeb h\u1ec7 th\u1ed1ng s\u1ebd kh\u00f4ng b\u1ecb \u1ea3nh h\u01b0\u1edfng)')) {
+                if (confirm('Xóa toàn bộ số liệu SYC/RYP/RYC đã nhập tay? (FYP/FYC đồng bộ từ hệ thống sẽ không bị ảnh hưởng)')) {
                     manualData = {};
                     for (let m = 1; m <= 12; m++) manualData[m] = { syc: 0, ryp: 0, ryc: 0 };
                     saveManual();
@@ -511,10 +540,18 @@
                 let fypAcc = 0;
                 for (let m = 1; m <= month; m++) fypAcc += (getMonthData(m).fyp || 0);
 
+                // FYC 6 tháng gần nhất - dùng cho Thưởng CSKH
                 let fyc6m = 0;
                 for (let i = 0; i < 6; i++) {
                     const m = month - i;
                     if (m >= 1) fyc6m += (getMonthData(m).fyc || 0);
+                }
+
+                // FYC 12 tháng gần nhất - dùng để XÉT HẠNG PRU-ELITE (fix: trước đây dùng nhầm FYC quý 3 tháng)
+                let fyc12m = 0;
+                for (let i = 0; i < 12; i++) {
+                    const m = month - i;
+                    if (m >= 1) fyc12m += (getMonthData(m).fyc || 0);
                 }
 
                 const activeMonths = quarterMonths.filter(m => (getMonthData(m).fyc || 0) >= 5000000).length;
@@ -522,16 +559,17 @@
                 const k2 = parseFloat(inputK2.value) || 0;
                 document.getElementById('k2Val').innerText = k2 + '%';
 
-                document.getElementById('quarterLabel').innerText = `(Qu\u00fd ${quarter})`;
+                document.getElementById('quarterLabel').innerText = `(Quý ${quarter})`;
                 document.getElementById('displayFYC').innerText = fmtNum(fyc);
                 document.getElementById('displaySYC').innerText = fmtNum(syc);
                 document.getElementById('displayRYC').innerText = fmtNum(ryc);
                 document.getElementById('displayRYP').innerText = fmtNum(ryp);
-                document.getElementById('displayActiveMonths').innerText = activeMonths + ' Th\u00e1ng';
+                document.getElementById('displayActiveMonths').innerText = activeMonths + ' Tháng';
                 document.getElementById('displayFYPAcc').innerText = fmtNum(fypAcc);
-                document.getElementById('displayQuarter').innerText = 'Qu\u00fd ' + quarter;
+                document.getElementById('displayQuarter').innerText = 'Quý ' + quarter;
                 document.getElementById('displayMonthLabel').innerText = monthNames[month - 1];
                 document.getElementById('displayFYC6M').innerText = fmtNum(fyc6m);
+                document.getElementById('displayFYC12M').innerText = fmtNum(fyc12m);
 
                 let k2Ratio = 0;
                 if (k2 >= 90) k2Ratio = 1.1;
@@ -549,14 +587,43 @@
                 const profBonus = fyc * profRate * k2Ratio;
                 const sycBonus = syc * 0.25 * k2Ratio;
 
-                let peRank = 'Ch\u01b0a \u0111\u1ea1t';
+                // Pru-Elite: hạng xét theo FYC 12 THÁNG GẦN NHẤT + số tháng active trong quý (Memo 01601)
+                const peTiers = [
+                    { rank: 'Kim Cương', fyc: 180000000, months: 3, rate: 0.20 },
+                    { rank: 'Bạch Kim',   fyc: 90000000,  months: 3, rate: 0.18 },
+                    { rank: 'Vàng',       fyc: 50000000,  months: 2, rate: 0.15 },
+                ];
+                let peRank = 'Chưa đạt';
                 let peRate = 0;
+                let peTierIndex = -1;
                 if (k2 >= 65) {
-                    if (fyc >= 180000000 && activeMonths >= 3) { peRank = 'Kim C\u01b0\u01a1ng'; peRate = 0.20; }
-                    else if (fyc >= 90000000 && activeMonths >= 3) { peRank = 'B\u1ea1ch Kim'; peRate = 0.18; }
-                    else if (fyc >= 50000000 && activeMonths >= 2) { peRank = 'V\u00e0ng'; peRate = 0.15; }
+                    for (let i = 0; i < peTiers.length; i++) {
+                        const t = peTiers[i];
+                        if (fyc12m >= t.fyc && activeMonths >= t.months) {
+                            peRank = t.rank; peRate = t.rate;
+                            peTierIndex = (t.rank === 'Vàng') ? 0 : (t.rank === 'Bạch Kim') ? 1 : 2;
+                            break;
+                        }
+                    }
                 }
                 const pruEliteBonus = fyc * peRate * k2Ratio;
+
+                let peNextInfo = '';
+                if (k2 < 65) {
+                    peNextInfo = `Chưa đủ điều kiện xét Pru-Elite: cần Tỷ lệ duy trì hợp đồng (TLDTPTT) từ 65% trở lên (hiện tại ${k2}%).`;
+                } else if (peTierIndex === 2) {
+                    peNextInfo = 'Bạn đang là PE Cao quý nhất 🎉';
+                } else {
+                    const nextTier = peTierIndex === 1 ? peTiers[0] : (peTierIndex === 0 ? peTiers[1] : peTiers[2]);
+                    const fycGap = Math.max(0, nextTier.fyc - fyc12m);
+                    const monthsGap = Math.max(0, nextTier.months - activeMonths);
+                    const parts = [];
+                    if (fycGap > 0) parts.push(`còn thiếu ${fmtNum(fycGap)}đ FYC (12 tháng)`);
+                    if (monthsGap > 0) parts.push(`còn thiếu ${monthsGap} tháng hoạt động trong quý`);
+                    peNextInfo = parts.length
+                        ? `Để đạt hạng ${nextTier.rank}: ${parts.join(' và ')}.`
+                        : `Đã đủ điều kiện hạng ${nextTier.rank}, chờ xét duyệt vào cuối quý.`;
+                }
 
                 const cskhBonus = (fyc6m >= 10000000) ? (ryc * 0.10) : 0;
 
@@ -583,7 +650,8 @@
                 document.getElementById('valCskhBonus').innerText = fmt(cskhBonus);
 
                 document.getElementById('peBadge').innerText = peRank;
-                document.getElementById('mdrtStatus').innerText = fypAcc >= mdrtTarget ? '\u0110\u00c3 \u0110\u1ea0T MDRT' : `\u0110\u1ea1t ${mdrtPct}% Target`;
+                document.getElementById('peNextInfo').innerText = peNextInfo;
+                document.getElementById('mdrtStatus').innerText = fypAcc >= mdrtTarget ? 'ĐÃ ĐẠT MDRT' : `Đạt ${mdrtPct}% Target`;
 
                 document.getElementById('mdrtPercent').innerText = mdrtPct + '%';
                 document.getElementById('mdrtProgressBar').style.width = mdrtPct + '%';
@@ -591,7 +659,62 @@
                 document.getElementById('mdrtBonusQ').innerText = fmt(mdrtBonusQ);
             }
 
+            const schedule = [
+                { m: 1,  close: '2026-01-31', tvv: '2026-02-11', tdl: '2026-02-09' },
+                { m: 2,  close: '2026-02-28', tvv: '2026-03-10', tdl: '2026-03-09' },
+                { m: 3,  close: '2026-03-31', tvv: '2026-04-09', tdl: '2026-04-08' },
+                { m: 4,  close: '2026-04-30', tvv: '2026-05-12', tdl: '2026-05-11' },
+                { m: 5,  close: '2026-05-31', tvv: '2026-06-10', tdl: '2026-06-09' },
+                { m: 6,  close: '2026-06-30', tvv: '2026-07-09', tdl: '2026-07-08' },
+                { m: 7,  close: '2026-07-31', tvv: '2026-08-11', tdl: '2026-08-10' },
+                { m: 8,  close: '2026-08-31', tvv: '2026-09-11', tdl: '2026-09-11' },
+                { m: 9,  close: '2026-09-30', tvv: '2026-10-09', tdl: '2026-10-08' },
+                { m: 10, close: '2026-10-31', tvv: '2026-11-10', tdl: '2026-11-09' },
+                { m: 11, close: '2026-11-30', tvv: '2026-12-09', tdl: '2026-12-08' },
+                { m: 12, close: '2026-12-31', tvv: '2027-01-12', tdl: '2027-01-11' },
+            ];
+
+            function fmtDateVN(iso) {
+                const [y, m, d] = iso.split('-');
+                return `${d}/${m}/${y}`;
+            }
+
+            function renderSchedule() {
+                const now = new Date();
+                now.setHours(0,0,0,0);
+                const body = document.getElementById('scheduleBody');
+                if (!body) return;
+
+                let nextRow = schedule.find(r => new Date(r.tvv) >= now);
+                body.innerHTML = schedule.map(r => {
+                    const payDate = new Date(r.tvv);
+                    const isDone = payDate < now;
+                    const isNext = nextRow && r.m === nextRow.m;
+                    let statusHtml = '';
+                    if (isNext) statusHtml = '<span class="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-red-500/15 text-red-600 dark:text-red-400">Sắp chi trả</span>';
+                    else if (isDone) statusHtml = '<span class="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-500/15 text-slate-500 dark:text-slate-400">Đã chi trả</span>';
+                    else statusHtml = '<span class="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-300/20 text-slate-400">Sắp tới</span>';
+
+                    return `
+                    <tr class="sched-row ${isNext ? 'is-next font-semibold' : ''} ${isDone ? 'is-done' : ''} border-b border-slate-100 dark:border-slate-700/50">
+                        <td class="py-2 pr-3">Tháng ${r.m}</td>
+                        <td class="py-2 pr-3">${fmtDateVN(r.close)}</td>
+                        <td class="py-2 pr-3">${fmtDateVN(r.tvv)}</td>
+                        <td class="py-2 pr-3">${fmtDateVN(r.tdl)}</td>
+                        <td class="py-2 pr-3">${statusHtml}</td>
+                    </tr>`;
+                }).join('');
+
+                const info = document.getElementById('nextPayInfo');
+                if (nextRow) {
+                    info.textContent = `Kỳ lương gần nhất: TVV nhận ngày ${fmtDateVN(nextRow.tvv)} (thu nhập tháng ${nextRow.m})`;
+                } else {
+                    info.textContent = 'Đã hết lịch chi trả năm 2026';
+                }
+            }
+
             renderMonthTable();
+            renderSchedule();
             loadAutoDataAndRender();
             calculate();
         });
