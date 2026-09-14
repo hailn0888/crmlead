@@ -223,6 +223,7 @@
 
     <!-- Datalist cho sản phẩm bổ trợ -->
     <datalist id="rider-products-list">
+        <option value="Pru - Khoẻ Linh Hoạt">
         <option value="PRU - Hành trang vui khoẻ">
         <option value="PRU - Thiết thực (SIR1)"></option>
         <option value="BH Hỗ trợ viện phí mở rộng (HSR9)">
@@ -553,6 +554,16 @@
             const t = parseInt(term, 10) || 0;
             const y = parseInt(year, 10) || 0;
             
+            // Sản phẩm bổ trợ Pru - Khoẻ Linh Hoạt: hoa hồng giảm dần từ Năm 1 đến Năm 6
+            if (p.includes("KHOẺ LINH HOẠT") || p.includes("KHỎE LINH HOẠT")) {
+                if (y === 1) return 20.0;
+                if (y === 2) return 12.5;
+                if (y === 3) return 10.0;
+                if (y === 4) return 5.0;
+                if (y === 5) return 2.5;
+                return 0.0;
+            }
+
             if (p.includes("SIR1")) {
                 if (y === 1 || y === 2 || y === 3) return 20.00;
                 if (y === 4) return 15.00;
