@@ -1,9 +1,13 @@
 // public/agents/js/ip-guard.js
 //
-// Hiển thị màn hình chặn "Bạn cần đến văn phòng để nhận data lead" khi có API nào đó trả về
-// bị chặn IP (xem middleware/officeIp.middleware.js ở backend - middleware trả JSON
+// Hiện thông báo "Bạn cần đến văn phòng để nhận data lead" khi có API nào đó trả về bị chặn
+// IP (xem middleware/officeIp.middleware.js ở backend - middleware trả JSON
 // {success:false, blocked:true, message:'...'} kèm status 403 khi user đang bị admin bật
 // "Giới hạn IP" mà lại gọi từ ngoài IP văn phòng).
+//
+// Dùng SweetAlert2 (đã có sẵn trong leads.html) thay vì tự dựng overlay che kín màn hình -
+// popup có nút đóng, đóng xong thì trang dùng bình thường (bấm sang menu khác như "Công cụ
+// tính FYC" được ngay), không còn bị "giam" trong màn hình chặn như trước nữa.
 //
 // File này KHÔNG cần biết chính xác leads.js đang gọi API nào để lấy data lead - nó "nghe"
 // mọi lệnh gọi fetch() của trang bằng cách bọc lại window.fetch(), nên không cần sửa gì
@@ -12,31 +16,30 @@
 (function () {
     'use strict';
 
-    // Dựng và hiện overlay che kín màn hình kèm thông báo
-    function showBlockedOverlay(message) {
-        if (document.getElementById('ip-guard-overlay')) return; // đã hiện rồi thì không tạo lại
+    let isShowingBlockedAlert = false; // tránh hiện chồng nhiều popup nếu có nhiều request cùng bị chặn 1 lúc
 
-        const overlay = document.createElement('div');
-        overlay.id = 'ip-guard-overlay';
-        overlay.style.cssText = [
-            'position:fixed', 'inset:0', 'z-index:1000000',
-            'display:flex', 'flex-direction:column', 'align-items:center', 'justify-content:center',
-            'gap:12px', 'background:rgba(15,15,15,0.96)', 'color:#fff',
-            'text-align:center', 'padding:24px', 'font-family:Arial, sans-serif'
-        ].join(';');
-        overlay.innerHTML =
-            '<div style="font-size:42px;">🔒</div>' +
-            '<div style="font-size:18px; font-weight:700; max-width:480px; line-height:1.5;">' +
-                escapeHtml(message) +
-            '</div>';
-        document.body.appendChild(overlay);
-    }
+    function showBlockedAlert(message) {
+        if (isShowingBlockedAlert) return; // đang hiện rồi thì thôi, không hiện chồng thêm cái nữa
 
-    // Tránh lỗi XSS nếu message từ server lỡ chứa ký tự HTML đặc biệt
-    function escapeHtml(str) {
-        const div = document.createElement('div');
-        div.textContent = str;
-        return div.innerHTML;
+        // Fallback nếu vì lý do gì đó trang không có SweetAlert2 (ví dụ lỡ xoá script CDN) -
+        // dùng alert() mặc định của trình duyệt để thông báo vẫn hiện ra, không im lặng bỏ qua.
+        if (typeof Swal === 'undefined') {
+            alert(message);
+            return;
+        }
+
+        isShowingBlockedAlert = true;
+        Swal.fire({
+            icon: 'warning',
+            title: 'Không thể tải dữ liệu',
+            text: message,
+            confirmButtonText: 'Đã hiểu',
+            confirmButtonColor: '#dc2626',
+            allowOutsideClick: true,   // bấm ra ngoài popup cũng đóng được
+            allowEscapeKey: true       // nhấn Esc cũng đóng được
+        }).then(function () {
+            isShowingBlockedAlert = false;
+        });
     }
 
     // Bọc lại window.fetch: mọi request của trang (kể cả trong leads.js) đều đi qua đây trước
@@ -50,7 +53,7 @@
         if (response.status === 403) {
             response.clone().json().then(function (data) {
                 if (data && data.blocked) {
-                    showBlockedOverlay(data.message || 'Bạn cần đến văn phòng để nhận data lead');
+                    showBlockedAlert(data.message || 'Bạn cần đến văn phòng để nhận data lead');
                 }
             }).catch(function () {
                 // Response 403 không phải JSON -> không phải middleware chặn IP, bỏ qua
