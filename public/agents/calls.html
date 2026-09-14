@@ -856,7 +856,7 @@
                 itemsHtml += `
                     <div class="mb-3 text-left">
                         <div class="text-xs font-semibold text-red-600 dark:text-red-400 mb-1">Gọi lần ${gc.lan_goi}: <span class="font-normal italic opacity-60">(lúc ${tg})</span></div>
-                        <textarea class="swal2-textarea ai-ghichu-item" style="margin:0" rows="2" data-lan="${gc.lan_goi}" data-thoigian="${gc.thoi_gian_goi}">${gc.noi_dung || ''}</textarea>
+                        <textarea class="theme-card border rounded-lg p-2 w-full outline-none bg-transparent text-xs leading-relaxed ai-ghichu-item" style="margin:0" rows="2" data-lan="${gc.lan_goi}" data-thoigian="${gc.thoi_gian_goi}">${gc.noi_dung || ''}</textarea>
                     </div>
                 `;
             });
@@ -867,7 +867,7 @@
                     <div class="text-left max-h-72 overflow-y-auto pr-1">
                         ${itemsHtml || '<div class="text-xs italic opacity-60 mb-3">Chưa có lịch sử ghi chú.</div>'}
                         <div class="text-xs font-semibold text-emerald-600 dark:text-emerald-400 mb-1">+ Bổ sung ghi chú mới</div>
-                        <textarea id="ai-ghichu-new" class="swal2-textarea" style="margin:0" rows="2" placeholder="Nội dung ghi chú bổ sung (sẽ tự lưu kèm nhãn Gọi lần ${ghiChuList.length + 1} và thời gian hiện tại)..."></textarea>
+                        <textarea id="ai-ghichu-new" class="theme-card border rounded-lg p-2 w-full outline-none bg-transparent text-xs leading-relaxed" style="margin:0" rows="2" placeholder="Nội dung ghi chú bổ sung (sẽ tự lưu kèm nhãn Gọi lần ${ghiChuList.length + 1} và thời gian hiện tại)..."></textarea>
                     </div>
                 `,
                 showCancelButton: true,
@@ -916,13 +916,13 @@
                         <div class="w-6 h-6 border-2 border-violet-500 border-t-transparent rounded-full animate-spin"></div>
                         Đang phân tích ghi chú chăm sóc khách hàng...
                     </div>
-                    <textarea id="ai-insight-textarea" class="swal2-textarea hidden" style="margin:0" rows="8" placeholder="Đánh giá và lời khuyên chăm sóc khách hàng..."></textarea>
+                    <textarea id="ai-insight-textarea" class="theme-card border rounded-lg p-3 w-full outline-none bg-transparent text-xs leading-relaxed hidden" style="margin:0" rows="12" placeholder="Đánh giá và lời khuyên chăm sóc khách hàng..."></textarea>
                 `,
                 showCancelButton: true,
                 confirmButtonText: 'Lưu',
                 cancelButtonText: 'Hủy',
                 confirmButtonColor: '#7c3aed',
-                width: 560,
+                width: 620,
                 didOpen: async () => {
                     if (typeof lucide !== 'undefined') lucide.createIcons();
                     const loadingEl = document.getElementById('ai-insight-loading');
@@ -984,9 +984,9 @@
                     <div class="text-left">
                         <div class="text-xs mb-2">Khách hàng: <span class="font-semibold">${hoTen}</span></div>
                         <label class="text-xs font-medium block mb-1">Thời gian nhắc gọi lại:</label>
-                        <input type="datetime-local" id="nhac-hen-thoi-gian" class="swal2-input" style="margin:0; width:100%;">
+                        <input type="datetime-local" id="nhac-hen-thoi-gian" class="theme-card border rounded-lg p-2 w-full outline-none bg-transparent text-xs" style="margin:0; width:100%;">
                         <label class="text-xs font-medium block mt-3 mb-1">Ghi chú (nếu có):</label>
-                        <textarea id="nhac-hen-ghichu" class="swal2-textarea" style="margin:0" rows="2" placeholder="Nội dung cần lưu ý khi gọi lại..."></textarea>
+                        <textarea id="nhac-hen-ghichu" class="theme-card border rounded-lg p-2 w-full outline-none bg-transparent text-xs leading-relaxed" style="margin:0" rows="2" placeholder="Nội dung cần lưu ý khi gọi lại..."></textarea>
                     </div>
                 `,
                 showCancelButton: true,
