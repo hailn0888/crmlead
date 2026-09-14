@@ -7,6 +7,12 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Bắt buộc khi deploy trên Render/Heroku/Nginx...: server nằm sau 1 lớp reverse proxy,
+// nếu không bật dòng này thì req.ip sẽ trả về IP nội bộ của proxy chứ KHÔNG PHẢI IP thật
+// của nhân viên -> middleware chặn IP văn phòng (xem middleware/officeIp.middleware.js)
+// sẽ luôn chặn sai hoặc không chặn được gì cả.
+app.set('trust proxy', true);
+
 app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
@@ -34,4 +40,4 @@ app.get('/', (req, res) => {
 
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Hệ thống CRM Lead đang chạy mượt mà tại port ${PORT}`);
-}); 
+});

@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const supabase = require('../config/supabase');
+const checkOfficeIp = require('../middleware/officeIp.middleware');
 
 // Hàm phụ: Lấy ID của agent từ tên hoặc tên đăng nhập
 async function getAgentId(agentName) {
@@ -114,7 +115,10 @@ router.get('/colleagues', async (req, res) => {
 });
 
 // 2. API: Lấy danh sách lead chi tiết của agent
-router.get('/leads', async (req, res) => {
+// checkOfficeIp('agent'): CHỈ chặn nếu agent này đang bị admin bật "Giới hạn IP" (cột
+// ip_limit trong bảng users) VÀ đang gọi từ ngoài IP văn phòng - ai không bị bật cờ đó thì
+// middleware bỏ qua hoàn toàn, không ảnh hưởng gì (xem middleware/officeIp.middleware.js).
+router.get('/leads', checkOfficeIp('agent'), async (req, res) => {
     try {
         const agentName = req.query.agent;
         if (!agentName) {

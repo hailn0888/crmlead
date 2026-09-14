@@ -200,6 +200,30 @@ router.patch('/users/:id/toggle-lock', async (req, res) => {
     }
 });
 
+// Bật/tắt cờ "Giới hạn IP" cho 1 user (cột ip_limit trong bảng users).
+// Khi bật (true): user đó chỉ truy cập được data lead khi đang ở đúng IP văn phòng
+// (xem middleware/officeIp.middleware.js - middleware đọc chính cờ này để quyết định chặn).
+// Khi tắt (false): user đó không bị giới hạn gì, dùng như bình thường ở bất kỳ đâu.
+router.patch('/users/:id/toggle-ip-limit', async (req, res) => {
+    try {
+        const userId = req.params.id;
+        const { data: user, error: fetchError } = await req.supabase.from('users').select('ip_limit').eq('id', userId).single();
+
+        if (fetchError || !user) {
+            return res.status(404).json({ success: false, message: 'Không tìm thấy user' });
+        }
+
+        const newValue = !user.ip_limit;
+
+        const { error: updateError } = await req.supabase.from('users').update({ ip_limit: newValue }).eq('id', userId);
+        if (updateError) throw updateError;
+
+        res.json({ success: true, ip_limit: newValue });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
 
 // ==========================================
 // 2. QUẢN LÝ DATA FILE & BATCH (TẢI LÊN & XỬ LÝ EXCEL)

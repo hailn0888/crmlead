@@ -530,6 +530,37 @@
             }
         }
 
+        // Hàm bật/tắt "Giới hạn IP" cho 1 user - trước đây nút này chưa có hàm xử lý
+        // (onchange="toggleIpLimit(...)" gọi ra nhưng chưa tồn tại), giờ bổ sung đúng theo
+        // phong cách toggleLockUser() ở trên.
+        window.toggleIpLimit = async function(id) {
+            try {
+                const res = await fetch(`/api/admin/users/${id}/toggle-ip-limit`, { method: 'PATCH' });
+                const data = await res.json();
+
+                if (data.success) {
+                    const user = usersList.find(u => u.id === id);
+                    if (user) user.ip_limit = data.ip_limit;
+                    renderUsers();
+                } else {
+                    await Swal.fire({
+                        title: 'Lỗi trạng thái!',
+                        text: 'Lỗi khi đổi trạng thái Giới hạn IP!',
+                        icon: 'error',
+                        confirmButtonText: 'Đóng'
+                    });
+                }
+            } catch (error) {
+                console.error('Lỗi toggle ip limit:', error);
+                await Swal.fire({
+                    title: 'Lỗi kết nối!',
+                    text: 'Không thể kết nối đến server!',
+                    icon: 'error',
+                    confirmButtonText: 'Đóng'
+                });
+            }
+        }
+
         // Hàm Xóa User
         window.deleteUser = async function(id, tenNhanVien) {
             if (confirm(`Bạn có chắc chắn muốn xóa nhân viên "${tenNhanVien}" khỏi hệ thống không?`)) {
