@@ -39,6 +39,42 @@
             color: #ffffff;
         }
     </style>
+
+    <!-- ================================================================
+         TỐI ƯU HIỂN THỊ TRÊN ĐIỆN THOẠI (Mobile Scroll Optimization)
+         Các vùng chứa dùng .overflow-x-auto / .overflow-y-auto (bảng dữ liệu,
+         thanh tab, modal...) sẽ cuộn mượt kiểu native trên điện thoại thay vì
+         bị bóp méo/vỡ khối khi nội dung rộng hoặc cao hơn màn hình.
+    ================================================================= -->
+    <style>
+        .overflow-x-auto,
+        .overflow-y-auto {
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(148,163,184,.5) transparent;
+        }
+        .overflow-x-auto::-webkit-scrollbar,
+        .overflow-y-auto::-webkit-scrollbar {
+            height: 6px;
+            width: 6px;
+        }
+        .overflow-x-auto::-webkit-scrollbar-thumb,
+        .overflow-y-auto::-webkit-scrollbar-thumb {
+            background: rgba(148,163,184,.5);
+            border-radius: 999px;
+        }
+        .overflow-x-auto::-webkit-scrollbar-track,
+        .overflow-y-auto::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        @media (max-width: 768px) {
+            /* Cuộn ngang (thanh tab, bảng dữ liệu) sẽ không kích hoạt
+               cử chỉ vuốt back/forward của trình duyệt trên điện thoại */
+            .overflow-x-auto {
+                overscroll-behavior-x: contain;
+            }
+        }
+    </style>
 </head>
 <body class="bg-theme-bg text-theme-text font-sans antialiased transition-colors duration-200">
 

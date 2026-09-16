@@ -28,6 +28,42 @@
         .dark .sched-row.is-next { background: rgba(248,113,113,.10); }
         .sched-row.is-done { opacity: .55; }
     </style>
+
+    <!-- ================================================================
+         TỐI ƯU HIỂN THỊ TRÊN ĐIỆN THOẠI (Mobile Scroll Optimization)
+         Các vùng chứa dùng .overflow-x-auto / .overflow-y-auto (bảng dữ liệu,
+         thanh tab, modal...) sẽ cuộn mượt kiểu native trên điện thoại thay vì
+         bị bóp méo/vỡ khối khi nội dung rộng hoặc cao hơn màn hình.
+    ================================================================= -->
+    <style>
+        .overflow-x-auto,
+        .overflow-y-auto {
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(148,163,184,.5) transparent;
+        }
+        .overflow-x-auto::-webkit-scrollbar,
+        .overflow-y-auto::-webkit-scrollbar {
+            height: 6px;
+            width: 6px;
+        }
+        .overflow-x-auto::-webkit-scrollbar-thumb,
+        .overflow-y-auto::-webkit-scrollbar-thumb {
+            background: rgba(148,163,184,.5);
+            border-radius: 999px;
+        }
+        .overflow-x-auto::-webkit-scrollbar-track,
+        .overflow-y-auto::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        @media (max-width: 768px) {
+            /* Cuộn ngang (thanh tab, bảng dữ liệu) sẽ không kích hoạt
+               cử chỉ vuốt back/forward của trình duyệt trên điện thoại */
+            .overflow-x-auto {
+                overscroll-behavior-x: contain;
+            }
+        }
+    </style>
 </head>
 <body class="bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-sans antialiased transition-colors duration-200">
 
@@ -49,6 +85,125 @@
                     </div>
                 </div>
 
+                <!-- ===================== HÀNG 1: CHỈ SỐ KINH DOANH QUÝ + PRU-ELITE/MDRT + TỔNG THU NHẬP ===================== -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+                    <!-- Chỉ số kinh doanh quý (auto) -->
+                    <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col gap-4">
+                        <h2 class="text-sm font-bold text-red-600 dark:text-red-400 uppercase tracking-wider flex items-center gap-2">
+                            <i data-lucide="sliders" class="w-4 h-4"></i> Chỉ Số Kinh Doanh Quý <span class="opacity-60 font-normal normal-case" id="quarterLabel">(Quý -)</span>
+                        </h2>
+
+                        <div>
+                            <span class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Doanh số FYC Quý (tự động, từ bảng tháng)</span>
+                            <div class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-bold text-red-600 dark:text-red-400" id="displayFYC">0</div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <span class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Hoa hồng SYC (Quý, nhập tay)</span>
+                                <div class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-800 dark:text-slate-100" id="displaySYC">0</div>
+                            </div>
+                            <div>
+                                <span class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Hoa hồng RYC (tháng, nhập tay)</span>
+                                <div class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-800 dark:text-slate-100" id="displayRYC">0</div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <span class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">RYP (tháng, nhập tay — tham khảo áp dụng HĐ trước 2026)</span>
+                            <div class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-800 dark:text-slate-100" id="displayRYP">0</div>
+                        </div>
+
+                        <div>
+                            <span class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Số tháng Active/Quý (tự động, FYC tháng ≥ 5tr)</span>
+                            <div class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-800 dark:text-slate-100" id="displayActiveMonths">0 Tháng</div>
+                        </div>
+
+                        <div>
+                            <div class="flex justify-between text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                                <span>Tỷ lệ duy trì hợp đồng (TLDTPTT - K2)</span>
+                                <span id="k2Val" class="font-bold text-red-600 dark:text-red-400">80%</span>
+                            </div>
+                            <input type="range" id="inputK2" min="50" max="100" value="85" class="w-full accent-red-600">
+                            <div class="flex justify-between text-[10px] text-slate-400 dark:text-slate-500 mt-1">
+                                <span><65% (0%)</span>
+                                <span>65% (60%)</span>
+                                <span>80% (100%)</span>
+                                <span>≥90% (110%)</span>
+                            </div>
+                            <p class="text-[10px] text-slate-400 dark:text-slate-500 mt-1">* Đây là tỷ lệ duy trì hợp đồng thực tế — không suy ra được từ doanh số, cần nhập tay.</p>
+                        </div>
+                    </div>
+
+                    <!-- Pru-Elite & MDRT Status Card (thay cho Thi đua & tích luỹ cũ) -->
+                    <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col gap-4">
+                        <h2 class="text-sm font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider flex items-center gap-2">
+                            <i data-lucide="gem" class="w-4 h-4"></i> Danh Hiệu Pru-Elite & MDRT
+                        </h2>
+
+                        <div class="p-4 rounded-xl bg-gradient-to-br from-purple-50 to-slate-50 dark:from-purple-900/20 dark:to-slate-900/40 border border-purple-100 dark:border-purple-800/40 text-center">
+                            <span class="block text-[11px] text-slate-500 dark:text-slate-400 mb-1">Hạng Pru-Elite hiện tại</span>
+                            <span id="peBadge" class="block text-2xl font-extrabold text-purple-600 dark:text-purple-300">Chưa đạt</span>
+                            <p id="peNextInfo" class="text-xs text-slate-500 dark:text-slate-400 mt-2 leading-relaxed"></p>
+                        </div>
+
+                        <div class="p-3.5 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 flex items-center justify-between">
+                            <div>
+                                <span class="text-amber-700/80 dark:text-amber-400/80 text-xs font-medium block">Trạng thái MDRT 2027</span>
+                                <span class="font-extrabold text-lg text-amber-600 dark:text-amber-400" id="mdrtStatus">Chưa đạt</span>
+                            </div>
+                            <div class="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-800/40 flex items-center justify-center shrink-0">
+                                <i data-lucide="trophy" class="w-5 h-5 text-amber-600 dark:text-amber-400"></i>
+                            </div>
+                        </div>
+
+                        <div class="p-3.5 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 flex items-center justify-between">
+                            <div>
+                                <span class="text-red-700/80 dark:text-red-400/80 text-xs font-medium block">FYC Tháng Hiện Tại</span>
+                                <span class="font-extrabold text-lg text-red-600 dark:text-red-400" id="displayFYCMonth">0</span>
+                            </div>
+                            <div class="w-10 h-10 rounded-full bg-red-100 dark:bg-red-800/40 flex items-center justify-center shrink-0">
+                                <i data-lucide="banknote-check" class="w-5 h-5 text-red-600 dark:text-red-400"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Ước tính Tổng thu nhập quý + Phân tích cấu trúc (đã gộp) -->
+                    <div class="bg-gradient-to-br from-red-600 to-rose-700 text-white p-5 rounded-2xl shadow-lg flex flex-col gap-3">
+                        <div>
+                            <span class="text-xs text-red-100 font-semibold uppercase tracking-wider">Ước Tính Tổng Thu Nhập Quý</span>
+                            <div class="text-3xl font-extrabold mt-1" id="totalIncomeDisplay">0 VNĐ</div>
+                        </div>
+
+                        <div class="bg-white/10 rounded-xl p-3 space-y-1.5 text-xs">
+                            <div class="flex justify-between py-1 border-b border-white/15">
+                                <span class="text-red-100">Hoa hồng gốc (FYC + SYC):</span>
+                                <span class="font-semibold" id="valBaseCommission">0 VNĐ</span>
+                            </div>
+                            <div class="flex justify-between py-1 border-b border-white/15">
+                                <span class="text-red-100">Thưởng Hoạt động Chuyên nghiệp:</span>
+                                <span class="font-semibold" id="valProfBonus">0 VNĐ</span>
+                            </div>
+                            <div class="flex justify-between py-1 border-b border-white/15">
+                                <span class="text-red-100">Thưởng Khai thác hiệu quả (25% SYC):</span>
+                                <span class="font-semibold" id="valSycBonus">0 VNĐ</span>
+                            </div>
+                            <div class="flex justify-between py-1 border-b border-white/15">
+                                <span class="text-red-100">Thưởng Pru-Elite Quý:</span>
+                                <span class="font-semibold" id="valPruEliteBonus">0 VNĐ</span>
+                            </div>
+                            <div class="flex justify-between py-1">
+                                <span class="text-red-100">Thưởng Chăm sóc Khách hàng (TCSKH):</span>
+                                <span class="font-semibold" id="valCskhBonus">0 VNĐ</span>
+                            </div>
+                        </div>
+
+                        <p class="text-[11px] text-red-100/90">Đã bao gồm Hoa hồng + Thưởng Chuyên nghiệp + Thưởng Pru-Elite + TCSKH.</p>
+                    </div>
+
+                </div>
+
                 <!-- ===================== NHẬP DOANH SỐ THEO THÁNG ===================== -->
                 <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col gap-4">
                     <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
@@ -60,7 +215,7 @@
                                 <i data-lucide="loader" class="w-3 h-3"></i> Đang đồng bộ...
                             </span>
                         </div>
-                        <div class="flex items-center gap-2 text-xs">
+                        <div class="flex items-center gap-2 text-xs flex-wrap">
                             <label class="font-medium text-slate-600 dark:text-slate-300">Tháng đang xem:</label>
                             <select id="selectViewMonth" class="px-2 py-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg font-semibold text-red-600 dark:text-red-400 focus:outline-none"></select>
                             <button id="refreshDataBtn" class="ml-1 px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-1">
@@ -69,6 +224,10 @@
                             <button id="resetManualBtn" class="px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-1">
                                 <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> Xóa số liệu nhập tay
                             </button>
+                            <label class="ml-1 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-dashed border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400 cursor-pointer select-none" title="Khi bật: SYC/RYP/RYC bạn nhập sẽ được lưu lại trên trình duyệt này để tham khảo cho lần sau (không lưu vào hệ thống/database).">
+                                <input type="checkbox" id="chkSaveManual" class="accent-red-600 w-3.5 h-3.5">
+                                <span>Lưu số liệu để tham khảo</span>
+                            </label>
                         </div>
                     </div>
 
@@ -122,11 +281,12 @@
                     </div>
                     <p class="text-[11px] text-slate-400 dark:text-slate-500">
                         <i data-lucide="lock" class="w-3 h-3 inline align-middle"></i> FYP & FYC: tự động đồng bộ từ menu <b>Doanh số cá nhân</b> (không sửa được tại đây) ·
-                        SYC / RYP / RYC: nhập tay vì hệ thống Prudential mới ghi nhận được. Số liệu nhập tay tự lưu trên trình duyệt của bạn.
+                        SYC / RYP / RYC: nhập tay vì hệ thống Prudential mới ghi nhận được, mặc định luôn bắt đầu từ 0.
+                        Tick chọn <b>"Lưu số liệu để tham khảo"</b> nếu muốn số liệu mô phỏng được nhớ lại ở lần đăng nhập sau — dữ liệu chỉ lưu trên trình duyệt này (localStorage), không gửi lên hệ thống/database.
                     </p>
                 </div>
 
-                <!-- ===================== HÀNG 1 (hiển thị trước): TIẾN ĐỘ MDRT + THI ĐUA & TÍCH LŨY ===================== -->
+                <!-- ===================== HÀNG 2: TIẾN ĐỘ MDRT + THI ĐUA & TÍCH LŨY ===================== -->
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
 
                     <!-- Tiến độ MDRT 2027 -->
@@ -187,113 +347,6 @@
 
                 </div>
 
-                <!-- ===================== HÀNG 2 (hiển thị sau): CHỈ SỐ KINH DOANH QUÝ + PRU-ELITE/MDRT + TỔNG THU NHẬP ===================== -->
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-                    <!-- Chỉ số kinh doanh quý (auto) -->
-                    <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col gap-4">
-                        <h2 class="text-sm font-bold text-red-600 dark:text-red-400 uppercase tracking-wider flex items-center gap-2">
-                            <i data-lucide="sliders" class="w-4 h-4"></i> Chỉ Số Kinh Doanh Quý <span class="opacity-60 font-normal normal-case" id="quarterLabel">(Quý -)</span>
-                        </h2>
-
-                        <div>
-                            <span class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Doanh số FYC Quý (tự động, từ bảng tháng)</span>
-                            <div class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-bold text-red-600 dark:text-red-400" id="displayFYC">0</div>
-                        </div>
-
-                        <div class="grid grid-cols-2 gap-3">
-                            <div>
-                                <span class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Hoa hồng SYC (Quý, nhập tay)</span>
-                                <div class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-800 dark:text-slate-100" id="displaySYC">0</div>
-                            </div>
-                            <div>
-                                <span class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Hoa hồng RYC (tháng, nhập tay)</span>
-                                <div class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-800 dark:text-slate-100" id="displayRYC">0</div>
-                            </div>
-                        </div>
-
-                        <div>
-                            <span class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">RYP (tháng, nhập tay — tham khảo áp dụng HĐ trước 2026)</span>
-                            <div class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-800 dark:text-slate-100" id="displayRYP">0</div>
-                        </div>
-
-                        <div>
-                            <span class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Số tháng Active/Quý (tự động, FYC tháng ≥ 5tr)</span>
-                            <div class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-800 dark:text-slate-100" id="displayActiveMonths">0 Tháng</div>
-                        </div>
-
-                        <div>
-                            <div class="flex justify-between text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
-                                <span>Tỷ lệ duy trì hợp đồng (TLDTPTT - K2)</span>
-                                <span id="k2Val" class="font-bold text-red-600 dark:text-red-400">85%</span>
-                            </div>
-                            <input type="range" id="inputK2" min="50" max="100" value="85" class="w-full accent-red-600">
-                            <div class="flex justify-between text-[10px] text-slate-400 dark:text-slate-500 mt-1">
-                                <span><65% (0%)</span>
-                                <span>65% (60%)</span>
-                                <span>80% (100%)</span>
-                                <span>≥90% (110%)</span>
-                            </div>
-                            <p class="text-[10px] text-slate-400 dark:text-slate-500 mt-1">* Đây là tỷ lệ duy trì hợp đồng thực tế — không suy ra được từ doanh số, cần nhập tay.</p>
-                        </div>
-                    </div>
-
-                    <!-- Pru-Elite & MDRT Status Card (thay cho Thi đua & tích luỹ cũ) -->
-                    <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col gap-4">
-                        <h2 class="text-sm font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider flex items-center gap-2">
-                            <i data-lucide="gem" class="w-4 h-4"></i> Danh Hiệu Pru-Elite & MDRT
-                        </h2>
-
-                        <div class="p-4 rounded-xl bg-gradient-to-br from-purple-50 to-slate-50 dark:from-purple-900/20 dark:to-slate-900/40 border border-purple-100 dark:border-purple-800/40 text-center">
-                            <span class="block text-[11px] text-slate-500 dark:text-slate-400 mb-1">Hạng Pru-Elite hiện tại</span>
-                            <span id="peBadge" class="block text-2xl font-extrabold text-purple-600 dark:text-purple-300">Chưa đạt</span>
-                            <p id="peNextInfo" class="text-xs text-slate-500 dark:text-slate-400 mt-2 leading-relaxed"></p>
-                        </div>
-
-                        <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-700/50 flex items-center justify-between">
-                            <div>
-                                <span class="text-slate-500 dark:text-slate-400 text-xs block">Trạng thái MDRT 2027</span>
-                                <span class="font-bold text-sm text-amber-600 dark:text-amber-400" id="mdrtStatus">Chưa đạt</span>
-                            </div>
-                            <i data-lucide="trophy" class="w-6 h-6 text-amber-500"></i>
-                        </div>
-                    </div>
-
-                    <!-- Ước tính Tổng thu nhập quý + Phân tích cấu trúc (đã gộp) -->
-                    <div class="bg-gradient-to-br from-red-600 to-rose-700 text-white p-5 rounded-2xl shadow-lg flex flex-col gap-3">
-                        <div>
-                            <span class="text-xs text-red-100 font-semibold uppercase tracking-wider">Ước Tính Tổng Thu Nhập Quý</span>
-                            <div class="text-3xl font-extrabold mt-1" id="totalIncomeDisplay">0 VNĐ</div>
-                        </div>
-
-                        <div class="bg-white/10 rounded-xl p-3 space-y-1.5 text-xs">
-                            <div class="flex justify-between py-1 border-b border-white/15">
-                                <span class="text-red-100">Hoa hồng gốc (FYC + SYC):</span>
-                                <span class="font-semibold" id="valBaseCommission">0 VNĐ</span>
-                            </div>
-                            <div class="flex justify-between py-1 border-b border-white/15">
-                                <span class="text-red-100">Thưởng Hoạt động Chuyên nghiệp:</span>
-                                <span class="font-semibold" id="valProfBonus">0 VNĐ</span>
-                            </div>
-                            <div class="flex justify-between py-1 border-b border-white/15">
-                                <span class="text-red-100">Thưởng Khai thác hiệu quả (25% SYC):</span>
-                                <span class="font-semibold" id="valSycBonus">0 VNĐ</span>
-                            </div>
-                            <div class="flex justify-between py-1 border-b border-white/15">
-                                <span class="text-red-100">Thưởng Pru-Elite Quý:</span>
-                                <span class="font-semibold" id="valPruEliteBonus">0 VNĐ</span>
-                            </div>
-                            <div class="flex justify-between py-1">
-                                <span class="text-red-100">Thưởng Chăm sóc Khách hàng (TCSKH):</span>
-                                <span class="font-semibold" id="valCskhBonus">0 VNĐ</span>
-                            </div>
-                        </div>
-
-                        <p class="text-[11px] text-red-100/90">Đã bao gồm Hoa hồng + Thưởng Chuyên nghiệp + Thưởng Pru-Elite + TCSKH.</p>
-                    </div>
-
-                </div>
-
                 <!-- ===================== LỊCH KHÓA SỔ & CHI TRẢ THU NHẬP 2026 ===================== -->
                 <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
                     <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-2 mb-3">
@@ -307,10 +360,9 @@
                             <thead>
                                 <tr class="text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
                                     <th class="py-2 pr-3 font-semibold">Tháng</th>
-                                    <th class="py-2 pr-3 font-semibold">Ngày khóa sổ</th>
-                                    <th class="py-2 pr-3 font-semibold">Chuyển TN: TVV & QLTVV</th>
-                                    <th class="py-2 pr-3 font-semibold">Chuyển TN: Tổng Đại lý</th>
-                                    <th class="py-2 pr-3 font-semibold">Trạng thái</th>
+                                    <th class="py-2 pr-3 font-semibold text-center">Ngày khóa sổ</th>
+                                    <th class="py-2 pr-3 font-semibold text-center">Chuyển TN: TVV & QLTVV</th>
+                                    <th class="py-2 pr-3 font-semibold text-center">Trạng thái</th>
                                 </tr>
                             </thead>
                             <tbody id="scheduleBody"></tbody>
@@ -334,14 +386,14 @@
             const YEAR = 2026;
             const monthNames = ['Tháng 1','Tháng 2','Tháng 3','Tháng 4','Tháng 5','Tháng 6','Tháng 7','Tháng 8','Tháng 9','Tháng 10','Tháng 11','Tháng 12'];
 
-            // ---------- Số liệu nhập tay (SYC / RYP / RYC) - lưu trên trình duyệt ----------
+            // ---------- Số liệu nhập tay (SYC / RYP / RYC) - mặc định luôn = 0 ----------
+            // Lưu ý: KHÔNG gieo sẵn số liệu mô phỏng ở đây. Toàn bộ SYC/RYP/RYC mặc định = 0
+            // cho tới khi nhân viên tự nhập. Việc lưu lại số liệu để tham khảo lần sau là
+            // TÙY CHỌN (xem checkbox "Lưu số liệu để tham khảo") và chỉ lưu trên trình duyệt
+            // (localStorage) — không gửi lên server/database.
+            const SAVE_TOGGLE_KEY = 'pruDashboard2026SaveManualEnabled';
             const defaultManual = {};
             for (let m = 1; m <= 12; m++) defaultManual[m] = { syc: 0, ryp: 0, ryc: 0 };
-            Object.assign(defaultManual, {
-                7:  { syc: 10000000, ryp: 0, ryc: 19000000 },
-                8:  { syc: 10000000, ryp: 0, ryc: 19000000 },
-                9:  { syc: 10000000, ryp: 0, ryc: 20000000 },
-            });
 
             function loadManual() {
                 try {
@@ -350,7 +402,12 @@
                 } catch (e) {}
                 return JSON.parse(JSON.stringify(defaultManual));
             }
+            // Chỉ thực sự ghi vào localStorage khi checkbox "Lưu để tham khảo" đang bật.
+            // Khi tắt, số liệu vẫn tính toán bình thường trong phiên làm việc hiện tại,
+            // nhưng sẽ KHÔNG được nhớ lại ở lần đăng nhập/tải trang sau.
             function saveManual() {
+                const chk = document.getElementById('chkSaveManual');
+                if (!chk || !chk.checked) return;
                 try { localStorage.setItem(MANUAL_STORAGE_KEY, JSON.stringify(manualData)); } catch (e) {}
             }
 
@@ -496,11 +553,28 @@
 
             document.getElementById('refreshDataBtn').addEventListener('click', loadAutoDataAndRender);
 
+            // ---------- Checkbox "Lưu số liệu để tham khảo" (chỉ lưu trên trình duyệt) ----------
+            const chkSaveManual = document.getElementById('chkSaveManual');
+            try {
+                chkSaveManual.checked = localStorage.getItem(SAVE_TOGGLE_KEY) === '1';
+            } catch (e) {}
+            chkSaveManual.addEventListener('change', () => {
+                try { localStorage.setItem(SAVE_TOGGLE_KEY, chkSaveManual.checked ? '1' : '0'); } catch (e) {}
+                if (chkSaveManual.checked) {
+                    // Vừa bật lên: lưu ngay số liệu đang có trong phiên làm việc hiện tại
+                    saveManual();
+                } else {
+                    // Vừa tắt: xóa số liệu đã lưu trên trình duyệt để lần đăng nhập sau
+                    // không tự hiện lại số liệu mô phỏng cũ
+                    try { localStorage.removeItem(MANUAL_STORAGE_KEY); } catch (e) {}
+                }
+            });
+
             document.getElementById('resetManualBtn').addEventListener('click', () => {
                 if (confirm('Xóa toàn bộ số liệu SYC/RYP/RYC đã nhập tay? (FYP/FYC đồng bộ từ hệ thống sẽ không bị ảnh hưởng)')) {
                     manualData = {};
                     for (let m = 1; m <= 12; m++) manualData[m] = { syc: 0, ryp: 0, ryc: 0 };
-                    saveManual();
+                    try { localStorage.removeItem(MANUAL_STORAGE_KEY); } catch (e) {}
                     renderMonthTable();
                     calculate();
                 }
@@ -652,6 +726,7 @@
                 document.getElementById('peBadge').innerText = peRank;
                 document.getElementById('peNextInfo').innerText = peNextInfo;
                 document.getElementById('mdrtStatus').innerText = fypAcc >= mdrtTarget ? 'ĐÃ ĐẠT MDRT' : `Đạt ${mdrtPct}% Target`;
+                document.getElementById('displayFYCMonth').innerText = fmtNum(mData.fyc);
 
                 document.getElementById('mdrtPercent').innerText = mdrtPct + '%';
                 document.getElementById('mdrtProgressBar').style.width = mdrtPct + '%';
@@ -698,16 +773,15 @@
                     return `
                     <tr class="sched-row ${isNext ? 'is-next font-semibold' : ''} ${isDone ? 'is-done' : ''} border-b border-slate-100 dark:border-slate-700/50">
                         <td class="py-2 pr-3">Tháng ${r.m}</td>
-                        <td class="py-2 pr-3">${fmtDateVN(r.close)}</td>
-                        <td class="py-2 pr-3">${fmtDateVN(r.tvv)}</td>
-                        <td class="py-2 pr-3">${fmtDateVN(r.tdl)}</td>
-                        <td class="py-2 pr-3">${statusHtml}</td>
+                        <td class="py-2 pr-3 text-center">${fmtDateVN(r.close)}</td>
+                        <td class="py-2 pr-3 text-center">${fmtDateVN(r.tvv)}</td>
+                        <td class="py-2 pr-3 text-center">${statusHtml}</td>
                     </tr>`;
                 }).join('');
 
                 const info = document.getElementById('nextPayInfo');
                 if (nextRow) {
-                    info.textContent = `Kỳ lương gần nhất: TVV nhận ngày ${fmtDateVN(nextRow.tvv)} (thu nhập tháng ${nextRow.m})`;
+                    info.textContent = `Kỳ thu nhập gần nhất: TVV nhận ngày ${fmtDateVN(nextRow.tvv)} (thu nhập tháng ${nextRow.m})`;
                 } else {
                     info.textContent = 'Đã hết lịch chi trả năm 2026';
                 }
