@@ -130,9 +130,9 @@
                     <div>
                         <h3 class="font-bold text-sm flex items-center space-x-2">
                             <i data-lucide="users" class="w-4 h-4 text-emerald-500"></i>
-                            <span>Khu Vực Phân Công Data File Cho Nhân Sự</span>
+                            <span>Phân Công Data Files</span>
                         </h3>
-                        <p class="text-xs opacity-70 mt-0.5">Giao các tệp data đã tải lên cho các Agent hoặc khóa file khi cần thiết.</p>
+                        <p class="text-xs opacity-70 mt-0.5">Chức năng giao data files, khoá data files.</p>
                     </div>
                     
                     <!-- Các bộ lọc tìm kiếm, trạng thái và chọn Agent ở Tab 2 -->
@@ -154,10 +154,13 @@
                             <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
                             <span>Làm mới</span>
                         </button>
-                        <span id="selectedCountBadgeTab2" class="text-[10px] px-2 py-0.5 rounded-full bg-slate-500/10 text-slate-500 border border-slate-500/20 hidden">Đã chọn 0 file</span>
-                        <button onclick="bulkLockSelectedFiles()" id="btnBulkLockTab2" disabled class="px-3 py-1.5 rounded-xl bg-red-500 text-white hover:bg-red-600 transition text-xs font-medium flex items-center space-x-1.5 shadow-sm opacity-40 cursor-not-allowed disabled:opacity-40">
+                        <button onclick="bulkLockSelectedFiles('Đã khóa')" id="btnBulkLockTab2" disabled class="px-3 py-1.5 rounded-xl bg-red-500 text-white hover:bg-red-600 transition text-xs font-medium flex items-center space-x-1.5 shadow-sm opacity-40 cursor-not-allowed">
                             <i data-lucide="lock" class="w-3.5 h-3.5"></i>
-                            <span>Khóa Các File Đã Chọn</span>
+                            <span>Khóa Hàng Loạt</span>
+                        </button>
+                        <button onclick="bulkLockSelectedFiles('Đã phân bổ')" id="btnBulkUnlockTab2" disabled class="px-3 py-1.5 rounded-xl border border-emerald-500/30 text-emerald-500 hover:bg-emerald-500/10 transition text-xs font-medium flex items-center space-x-1.5 shadow-sm opacity-40 cursor-not-allowed">
+                            <i data-lucide="lock-open" class="w-3.5 h-3.5"></i>
+                            <span>Mở Khóa Hàng Loạt</span>
                         </button>
                     </div>
                 </div>
@@ -1008,44 +1011,40 @@
     };
 
     /**
-     * [MỚI - TAB 2] Cập nhật trạng thái nút "Khóa Các File Đã Chọn" + badge số lượng đã chọn
+     * [MỚI - TAB 2] Bật/tắt 2 nút "Khóa Hàng Loạt" và "Mở Khóa Hàng Loạt" theo số lượng file đang chọn
      */
     function updateBulkLockButtonTab2() {
-        const btn = document.getElementById('btnBulkLockTab2');
-        const badge = document.getElementById('selectedCountBadgeTab2');
         const count = selectedFileIdsTab2.size;
-
-        if (badge) {
-            if (count > 0) {
-                badge.textContent = `Đã chọn ${count} file`;
-                badge.classList.remove('hidden');
-            } else {
-                badge.classList.add('hidden');
-            }
-        }
-
-        if (btn) {
+        ['btnBulkLockTab2', 'btnBulkUnlockTab2'].forEach(id => {
+            const btn = document.getElementById(id);
+            if (!btn) return;
             btn.disabled = count === 0;
             btn.classList.toggle('opacity-40', count === 0);
             btn.classList.toggle('cursor-not-allowed', count === 0);
-        }
+        });
     }
 
     /**
-     * [MỚI - TAB 2] Khóa hàng loạt tất cả file đang được tick chọn, gọi 1 lần API bulk thay vì lặp từng file
+     * [MỚI - TAB 2] Khóa/Mở khóa hàng loạt tất cả file đang được tick chọn, gọi 1 lần API bulk
+     * thay vì lặp từng file. targetStatus: 'Đã khóa' (khóa) hoặc 'Đã phân bổ' (mở khóa).
      */
-    window.bulkLockSelectedFiles = async function() {
+    window.bulkLockSelectedFiles = async function(targetStatus) {
         const ids = Array.from(selectedFileIdsTab2);
         if (ids.length === 0) return;
 
+        const isLocking = targetStatus === 'Đã khóa';
+        const actionLabel = isLocking ? 'Khóa' : 'Mở khóa';
+
         const confirm = await Swal.fire({
-            title: `Khóa ${ids.length} file đã chọn?`,
-            text: 'Sau khi khóa, các Agent đang phụ trách những file này sẽ không thể tiếp tục gọi/cập nhật cho tới khi được mở khóa lại.',
+            title: `${actionLabel} ${ids.length} file đã chọn?`,
+            text: isLocking
+                ? 'Sau khi khóa, các Agent đang phụ trách những file này sẽ không thể tiếp tục gọi/cập nhật cho tới khi được mở khóa lại.'
+                : 'Các Agent đang phụ trách những file này sẽ tiếp tục gọi/cập nhật được như bình thường.',
             icon: 'warning',
             showCancelButton: true,
-            confirmButtonText: 'Khóa ngay',
+            confirmButtonText: `${actionLabel} ngay`,
             cancelButtonText: 'Hủy',
-            confirmButtonColor: '#ef4444'
+            confirmButtonColor: isLocking ? '#ef4444' : '#10b981'
         });
 
         if (!confirm.isConfirmed) return;
@@ -1054,7 +1053,7 @@
             const res = await fetch('/api/admin/data-files/lock-bulk', {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ids, status: 'Đã khóa' })
+                body: JSON.stringify({ ids, status: targetStatus })
             });
             const result = await res.json();
 
