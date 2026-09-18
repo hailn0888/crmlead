@@ -4,10 +4,13 @@
 // và đồng bộ màu sắc theo theme, xử lý thu gọn/mở rộng menu.
 // ==========================================
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
     // 1. Lấy thông tin phân quyền và theme hiện tại từ localStorage (chuẩn hóa về chữ thường, mặc định là agent nếu thiếu)
     const phanQuyen = (localStorage.getItem('phan_quyen') || 'agent').trim().toLowerCase();
-    const savedTheme = localStorage.getItem('theme') || 'dark';
+    // Dùng đúng key 'crm_theme' - key chung mà theme.js/header.js đang dùng để lưu theme
+    // (trước đây sidebar.js đọc nhầm key 'theme' không tồn tại ở đâu khác, nên sidebar luôn ra màu tối
+    // mặc định bất kể phần còn lại của trang đang sáng hay tối).
+    const savedTheme = localStorage.getItem('crm_theme') || 'light';
 
     // 2. Định nghĩa cấu trúc danh sách menu theo từng vai trò (phan_quyen)
     const menusByRole = {
@@ -41,11 +44,62 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     // Chọn bộ menu phù hợp với phân quyền thực tế của user đăng nhập
-    const currentMenu = menusByRole[phanQuyen] || menusByRole['agent'];
+    let currentMenu = menusByRole[phanQuyen] || menusByRole['agent'];
+
+    // 1.1. Hàm gọi API kiểm tra trạng thái tài khoản (mọi vai trò) + quyền Data Lead (riêng agent).
+    // Dùng chung cho lần load trang đầu tiên VÀ vòng lặp kiểm tra định kỳ bên dưới.
+    async function kiemTraTaiKhoan() {
+        const tenDangNhap = localStorage.getItem('ten_dang_nhap');
+        if (!tenDangNhap) return null;
+        try {
+            const res = await fetch(`/api/auth/account-status/${encodeURIComponent(tenDangNhap)}`);
+            const result = await res.json();
+            return (result && result.success) ? result : null;
+        } catch (err) {
+            console.error('Không thể kiểm tra trạng thái tài khoản:', err);
+            return null; // Lỗi mạng tạm thời -> fail-open, không ép đăng xuất oan
+        }
+    }
+
+    // Buộc đăng xuất ngay lập tức: xoá sạch localStorage và đưa về trang login.
+    // Gọi khi phát hiện tài khoản đã bị admin khoá, dù đang ở bất kỳ trang nào.
+    function buocDangXuat(message) {
+        localStorage.clear();
+        alert(message || 'Tài khoản của bạn đã bị khoá. Vui lòng liên hệ admin.');
+        window.location.href = '/login.html';
+    }
+
+    // 1.2. Kiểm tra ngay khi vừa load trang: nếu tài khoản đã bị khoá -> đăng xuất luôn,
+    // không cần đợi user tự F5 hay bấm đăng xuất mới nhận ra.
+    const trangThaiKq = await kiemTraTaiKhoan();
+    if (trangThaiKq && trangThaiKq.trang_thai === 'Tạm khoá') {
+        buocDangXuat('Tài khoản của bạn đã bị khoá. Vui lòng liên hệ admin.');
+        return; // Dừng luôn, không build sidebar cho tài khoản đã bị khoá
+    }
+
+    // 1.3. Với agent: lọc bỏ mục "Data Lead" nếu chưa được cấp quyền xem_data_leads
+    if (phanQuyen === 'agent') {
+        const coQuyenXemLeads = !!(trangThaiKq && trangThaiKq.xem_data_leads);
+        if (!coQuyenXemLeads) {
+            currentMenu = currentMenu.filter(item => item.href !== '/agents/leads.html');
+        }
+    }
+
+    // 1.4. Kiểm tra ĐỊNH KỲ mỗi 20 giây trong lúc đang mở trang: nếu admin vừa khoá tài khoản
+    // trong lúc user đang ngồi im không chuyển trang, vẫn bị đăng xuất ngay mà không cần F5.
+    setInterval(async () => {
+        const kq = await kiemTraTaiKhoan();
+        if (kq && kq.trang_thai === 'Tạm khoá') {
+            buocDangXuat('Tài khoản của bạn vừa bị quản trị viên khoá.');
+        }
+    }, 20000);
     // Đổi lại logic: Nếu trong localStorage chưa có giá trị (null) thì mặc định là 'true' (mở rộng). 
     // Nếu người dùng đã từng bấm thu gọn thì mới nhận giá trị 'false'.
+    const isMobileScreen = window.innerWidth < 768;
     const savedSidebarState = localStorage.getItem('sidebar_expanded');
-    const isExpanded = savedSidebarState === null ? true : savedSidebarState === 'true';
+    // Trên điện thoại, nếu người dùng chưa từng bấm chọn trạng thái, mặc định THU GỌN
+    // để dành tối đa không gian cho nội dung chính (bảng, form...) thay vì bị sidebar che mất.
+    const isExpanded = savedSidebarState === null ? !isMobileScreen : savedSidebarState === 'true';
     const sidebarWidth = isExpanded ? 'w-64' : 'w-12';
 
     // Thiết lập màu sắc giao diện theo theme (light/dark)
@@ -129,22 +183,35 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // 6. Hàm chức năng: Điều chỉnh lề trái của khung nội dung chính theo độ rộng Sidebar
+    // Trên mobile (< 768px): KHÔNG ép margin-left cố định (16rem/4rem) vì màn hình quá hẹp,
+    // sẽ làm nội dung (bảng, form) bị bóp méo/tràn ngang không kiểm soát được.
+    // Sidebar lúc này hoạt động như 1 lớp phủ (overlay) đè lên nội dung khi mở, thay vì đẩy nội dung sang.
     function updateMainContainerMargin(expand) {
         const mainContainer = document.getElementById('mainContainer');
         if (mainContainer) {
-            mainContainer.style.marginLeft = expand ? '16rem' : '4rem';
+            const isMobile = window.innerWidth < 768;
+            mainContainer.style.marginLeft = isMobile ? '0' : (expand ? '16rem' : '4rem');
             mainContainer.style.transition = 'margin-left 300ms ease';
         }
     }
 
+    // Khi xoay ngang/dọc màn hình điện thoại hoặc thay đổi kích thước cửa sổ,
+    // tính lại margin cho đúng (tránh trường hợp bị kẹt margin cũ sai khi resize qua lại breakpoint 768px)
+    window.addEventListener('resize', () => {
+        const nowExpanded = document.getElementById('appSidebar')?.classList.contains('w-64');
+        updateMainContainerMargin(!!nowExpanded);
+    });
+
     // 7. Hàm chức năng: Lắng nghe sự kiện thay đổi Theme động từ tệp theme.js
+    // theme.js gắn/gỡ class "dark" trên <html> (document.documentElement), không phải <body>,
+    // nên phải observe đúng documentElement thì mới bắt được sự kiện đổi theme tức thời (không cần reload trang).
     const observer = new MutationObserver(() => {
-        const currentTheme = localStorage.getItem('theme');
+        const currentTheme = localStorage.getItem('crm_theme');
         if (currentTheme === 'light') {
             sidebar.className = sidebar.className.replace('bg-[#141414] border-[#222] text-[#999]', 'bg-slate-50 border-slate-200 text-slate-800');
         } else {
             sidebar.className = sidebar.className.replace('bg-slate-50 border-slate-200 text-slate-800', 'bg-[#141414] border-[#222] text-[#999]');
         }
     });
-    observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
 });

@@ -6,10 +6,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Quản lý User - CRM Lead</title>
     <link rel="icon" type="image/png" href="/uploads/favicon.png">
+
+    <!-- Meta OG/Twitter: hiển thị ảnh thumbnail + tiêu đề khi dán link chia sẻ qua Zalo/Facebook -->
+    <meta property="og:title" content="CRM Lead - Quản lý User">
+    <meta property="og:description" content="Hệ thống quản lý chăm sóc khách hàng CRM Lead">
+    <meta property="og:image" content="https://i.ibb.co/W4SpWjYy/icon.png">
+    <meta property="og:type" content="website">
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="CRM Lead - Quản lý User">
+    <meta name="twitter:image" content="https://i.ibb.co/W4SpWjYy/icon.png">
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- SweetAlert2: dùng cho toàn bộ popup thông báo (Swal.fire) trong trang này -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <!-- File Theme chung -->
     <script src="/js/theme.js"></script>
 
@@ -29,7 +40,7 @@
     <script src="/js/sidebar.js"></script>
 
     <!-- Khung nội dung chính -->
-    <div id="mainContainer" class="flex-1 flex flex-col overflow-y-auto transition-colors duration-200 pt-16 ml-64 p-6">
+    <div id="mainContainer" class="flex-1 flex flex-col transition-colors duration-200 pt-16 ml-0 md:ml-64 p-3 md:p-6 overflow-x-hidden">
         
         <!-- Tiêu đề trang & Các nút thao tác -->
         <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
@@ -77,6 +88,7 @@
                             <th class="p-3.5">Nhóm</th>
                             <th class="p-3.5">Trưởng nhóm</th>
                             <th class="p-3.5 text-center">Trạng thái</th>
+                            <th class="p-3.5 text-center whitespace-nowrap">Data Leads</th>
                             <th class="p-3.5 text-center">Giới hạn IP</th>
                             <th class="p-3.5 text-center">Thao tác</th>
                         </tr>
@@ -90,8 +102,8 @@
     </div>
 
     <!-- MODAL: Thêm nhân viên mới -->
-    <div id="userModal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4">
-        <div class="w-full max-w-md rounded-2xl border border-inherit theme-dropdown p-6 shadow-2xl relative animate-in fade-in zoom-in-95 duration-200">
+    <div id="userModal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4 overflow-y-auto">
+        <div class="w-full max-w-md my-8 max-h-[90vh] overflow-y-auto rounded-2xl border border-inherit theme-dropdown p-6 shadow-2xl relative animate-in fade-in zoom-in-95 duration-200">
             <div class="flex items-center justify-between mb-4 pb-3 border-b border-inherit">
                 <div class="flex items-center space-x-2">
                     <i data-lucide="user-plus" class="w-5 h-5 text-emerald-500"></i>
@@ -143,8 +155,8 @@
     </div>
 
     <!-- Modal Tạo Nhóm Mới -->
-    <div id="groupModal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4">
-        <div class="w-full max-w-lg rounded-2xl border border-inherit theme-dropdown p-6 shadow-2xl relative animate-in fade-in zoom-in-95 duration-200">
+    <div id="groupModal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4 overflow-y-auto">
+        <div class="w-full max-w-lg my-8 max-h-[90vh] overflow-y-auto rounded-2xl border border-inherit theme-dropdown p-6 shadow-2xl relative animate-in fade-in zoom-in-95 duration-200">
             <div class="flex items-center justify-between mb-4 pb-3 border-b border-inherit">
                 <div class="flex items-center space-x-2">
                     <i data-lucide="folder-plus" class="w-5 h-5 text-emerald-500"></i>
@@ -184,8 +196,8 @@
     </div>
 
     <!-- MODAL: Phân lại nhóm cho 1 user cụ thể -->
-    <div id="assignSingleGroupModal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4">
-        <div class="w-full max-w-sm rounded-2xl border border-inherit theme-dropdown p-6 shadow-2xl relative animate-in fade-in zoom-in-95 duration-200">
+    <div id="assignSingleGroupModal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4 overflow-y-auto">
+        <div class="w-full max-w-sm my-8 max-h-[90vh] overflow-y-auto rounded-2xl border border-inherit theme-dropdown p-6 shadow-2xl relative animate-in fade-in zoom-in-95 duration-200">
             <div class="flex items-center justify-between mb-4 pb-3 border-b border-inherit">
                 <div class="flex items-center space-x-2">
                     <i data-lucide="user-check" class="w-5 h-5 text-emerald-500"></i>
@@ -247,7 +259,7 @@
                 renderUsers();
             } catch (error) {
                 console.error("Lỗi khi tải dữ liệu:", error);
-                userTableBody.innerHTML = `<tr><td colspan="8" class="text-center py-8 text-red-500">Lỗi kết nối đến server.</td></tr>`;
+                userTableBody.innerHTML = `<tr><td colspan="9" class="text-center py-8 text-red-500">Lỗi kết nối đến server.</td></tr>`;
             }
         }
 
@@ -263,7 +275,7 @@
             });
 
             if (filtered.length === 0) {
-                userTableBody.innerHTML = `<tr><td colspan="8" class="text-center py-8 opacity-60">Không tìm thấy nhân sự phù hợp trong hệ thống.</td></tr>`;
+                userTableBody.innerHTML = `<tr><td colspan="9" class="text-center py-8 opacity-60">Không tìm thấy nhân sự phù hợp trong hệ thống.</td></tr>`;
                 return;
             }
 
@@ -283,6 +295,12 @@
                             <span class="px-2 py-0.5 rounded-full text-[10px] font-medium ${isActive ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'bg-red-500/10 text-red-500 border border-red-500/20'}">
                                 ${u.trang_thai || 'Đang hoạt động'}
                             </span>
+                        </td>
+                        <td class="p-3.5 text-center" title="Cho phép truy cập Data Lead">
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" class="sr-only peer" ${u.xem_data_leads === true ? 'checked' : ''} onchange="toggleLeadsAccess(${u.id})">
+                                <div class="w-7 h-4 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-500"></div>
+                            </label>
                         </td>
                         <td class="p-3.5 text-center">
                             <label class="relative inline-flex items-center cursor-pointer">
@@ -561,6 +579,35 @@
             }
         }
 
+        // Hàm bật/tắt quyền truy cập trang Data Lead (leads.html) cho 1 agent
+        window.toggleLeadsAccess = async function(id) {
+            try {
+                const res = await fetch(`/api/admin/users/${id}/toggle-leads-access`, { method: 'PATCH' });
+                const data = await res.json();
+
+                if (data.success) {
+                    const user = usersList.find(u => u.id === id);
+                    if (user) user.xem_data_leads = data.xem_data_leads;
+                    renderUsers();
+                } else {
+                    await Swal.fire({
+                        title: 'Lỗi trạng thái!',
+                        text: 'Lỗi khi đổi quyền Data Lead!',
+                        icon: 'error',
+                        confirmButtonText: 'Đóng'
+                    });
+                }
+            } catch (error) {
+                console.error('Lỗi toggle leads access:', error);
+                await Swal.fire({
+                    title: 'Lỗi kết nối!',
+                    text: 'Không thể kết nối đến server!',
+                    icon: 'error',
+                    confirmButtonText: 'Đóng'
+                });
+            }
+        }
+
         // Hàm Xóa User
         window.deleteUser = async function(id, tenNhanVien) {
             if (confirm(`Bạn có chắc chắn muốn xóa nhân viên "${tenNhanVien}" khỏi hệ thống không?`)) {
@@ -701,6 +748,12 @@
                                     <span class="px-2 py-0.5 rounded-full text-[10px] font-medium ${isActive ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'bg-red-500/10 text-red-500 border border-red-500/20'}">
                                         ${u.trang_thai || 'Đang hoạt động'}
                                     </span>
+                                </td>
+                                <td class="p-3.5 text-center" title="Cho phép truy cập Data Lead">
+                                    <label class="relative inline-flex items-center cursor-pointer">
+                                        <input type="checkbox" class="sr-only peer" ${u.xem_data_leads === true ? 'checked' : ''} onchange="toggleLeadsAccess(${u.id})">
+                                        <div class="w-7 h-4 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-500"></div>
+                                    </label>
                                 </td>
                                 <td class="p-3.5 text-center">
                                     <label class="relative inline-flex items-center cursor-pointer">

@@ -255,13 +255,9 @@ function toggleTheme() {
     applyTheme(nextTheme);
 }
 
-// Chạy ngay khi tải file để tránh chớp màn hình trắng/đen
-(function () {
-    const savedTheme = localStorage.getItem('crm_theme') || 'dark';
-    applyTheme(savedTheme);
-})();
-
-// Chạy ngay khi tải file: Ưu tiên lấy theme đã lưu trong localStorage, nếu chưa có thì mặc định là 'light'
+// Chạy ngay khi tải file để tránh chớp màn hình trắng/đen.
+// Ưu tiên lấy theme đã lưu trong localStorage (lần chọn gần nhất của tài khoản này trên trình duyệt này);
+// nếu tài khoản đó CHƯA TỪNG chọn theme (localStorage rỗng, ví dụ đăng nhập lần đầu) thì mặc định 'light'.
 (function () {
     const savedTheme = localStorage.getItem('crm_theme') || 'light';
     applyTheme(savedTheme);

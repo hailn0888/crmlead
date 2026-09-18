@@ -164,6 +164,31 @@ router.post('/users', async (req, res) => {
     }
 });
 
+// Cập nhật lại nhóm (group_id, ten_nhom, truong_nhom) cho 1 user - dùng cho modal "Phân lại nhóm nhân sự".
+// Route này trước đây CHƯA TỒN TẠI dù frontend (users.html) đã gọi PUT /users/:id/group,
+// nên bấm "Lưu thay đổi" luôn bị lỗi 404.
+router.put('/users/:id/group', async (req, res) => {
+    try {
+        const userId = req.params.id;
+        const { group_id, ten_nhom, truong_nhom } = req.body;
+
+        const { error } = await req.supabase
+            .from('users')
+            .update({
+                group_id: group_id || null,
+                ten_nhom: ten_nhom || null,
+                truong_nhom: truong_nhom || null
+            })
+            .eq('id', userId);
+
+        if (error) throw error;
+
+        res.json({ success: true, message: 'Cập nhật nhóm thành công!' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
 router.delete('/users/:id', async (req, res) => {
     try {
         const userId = req.params.id;
@@ -219,6 +244,32 @@ router.patch('/users/:id/toggle-ip-limit', async (req, res) => {
         if (updateError) throw updateError;
 
         res.json({ success: true, ip_limit: newValue });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// Bật/tắt quyền truy cập trang leads.html cho 1 agent (cột xem_data_leads, mặc định false).
+// Khi tắt (false, mặc định): agent không thấy mục "Data Lead" trong sidebar.
+// Khi bật (true): agent dùng trang Data Lead bình thường.
+// sidebar.js gọi API /api/auth/leads-access/:ten_dang_nhap ở mỗi lần load trang để đọc cờ này.
+router.patch('/users/:id/toggle-leads-access', async (req, res) => {
+    try {
+        const userId = req.params.id;
+        const { data: user, error: fetchError } = await req.supabase
+            .from('users').select('xem_data_leads').eq('id', userId).single();
+
+        if (fetchError || !user) {
+            return res.status(404).json({ success: false, message: 'Không tìm thấy user' });
+        }
+
+        const newValue = !user.xem_data_leads;
+
+        const { error: updateError } = await req.supabase
+            .from('users').update({ xem_data_leads: newValue }).eq('id', userId);
+        if (updateError) throw updateError;
+
+        res.json({ success: true, xem_data_leads: newValue });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
