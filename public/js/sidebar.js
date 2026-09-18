@@ -17,6 +17,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         admin: [
             { name: "Tổng quan", icon: "layout-dashboard", href: "/admin/dashboard_admin.html" },
             { name: "Báo cáo doanh số nhóm", icon: "users", href: "/admin/rpsale_team.html" },
+            { name: "Pru Champion", icon: "trophy", href: "/admin/pru_champion.html" },
             { name: "Báo cáo doanh số cá nhân", icon: "user", href: "/admin/rpsale_personal.html" },
             { name: "Báo cáo Lead nhóm", icon: "network", href: "/admin/rplead_team.html" },
             { name: "Báo cáo Lead cá nhân", icon: "headset", href: "/admin/rplead_personal.html" },

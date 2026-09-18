@@ -359,6 +359,60 @@ router.get('/data-files/stats', async (req, res) => {
 });
 
 /**
+ * [MỚI] GET /invalid-leads - Lấy danh sách lead bị loại do thiếu dữ liệu (hiện tại: thiếu SĐT).
+ * Query optional: ?file_id=xxx để lọc theo 1 file cụ thể (dùng cho Tab 5).
+ */
+router.get('/invalid-leads', async (req, res) => {
+    try {
+        const { file_id } = req.query;
+        let query = req.supabase.from('invalid_leads').select('*').order('created_at', { ascending: false });
+        if (file_id) query = query.eq('file_id', file_id);
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        res.json({ success: true, data: data || [] });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+/**
+ * [MỚI] DELETE /invalid-leads - Xóa TẤT CẢ lead thiếu dữ liệu, hoặc chỉ những lead
+ * thuộc 1 file cụ thể nếu có truyền ?file_id=xxx (dùng cho nút "Xóa tất cả" ở Tab 5,
+ * khớp với bộ lọc file đang chọn trên giao diện).
+ */
+router.delete('/invalid-leads', async (req, res) => {
+    try {
+        const { file_id } = req.query;
+        let query = req.supabase.from('invalid_leads').delete();
+        query = file_id ? query.eq('file_id', file_id) : query.gte('id', 0); // gte('id', 0) = xóa toàn bộ (Supabase yêu cầu điều kiện WHERE tường minh)
+
+        const { error } = await query;
+        if (error) throw error;
+
+        res.json({ success: true, message: file_id ? 'Đã xóa toàn bộ lead thiếu dữ liệu của file này.' : 'Đã xóa toàn bộ danh sách leads thiếu dữ liệu.' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+/**
+ * [MỚI] DELETE /invalid-leads/:id - Xóa 1 bản ghi lead thiếu dữ liệu sau khi Admin đã xử lý
+ * xong thủ công (ví dụ: đã bổ sung SĐT và re-upload).
+ */
+router.delete('/invalid-leads/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { error } = await req.supabase.from('invalid_leads').delete().eq('id', id);
+        if (error) throw error;
+        res.json({ success: true, message: 'Đã xóa bản ghi khỏi danh sách leads thiếu dữ liệu.' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+/**
  * POST /upload-data - Tải lên file Excel và tự động gán file_id cho từng dòng contracts
  */
 router.post('/upload-data', upload.array('files'), async (req, res) => {
@@ -369,6 +423,8 @@ router.post('/upload-data', upload.array('files'), async (req, res) => {
             return res.status(400).json({ success: false, message: 'Vui lòng chọn file tải lên.' });
         }
 
+        const summary = []; // Thống kê valid/invalid từng file để trả về cho frontend hiển thị
+
         for (const file of uploadedFiles) {
             const fileName = file.originalname;
             const workbook = XLSX.read(file.buffer, { type: 'buffer' });
@@ -377,7 +433,8 @@ router.post('/upload-data', upload.array('files'), async (req, res) => {
             const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
             const totalRecords = rows.length > 1 ? rows.length - 1 : 0;
 
-            // Bước 1: Lưu thông tin file vào bảng data_files
+            // Bước 1: Lưu thông tin file vào bảng data_files (total_records/untouched_count
+            // sẽ được cập nhật lại chính xác ở Bước 6, sau khi tách xong lead thiếu SĐT)
             const { data: fileRecord, error: fileErr } = await req.supabase
                 .from('data_files')
                 .insert([{
@@ -395,21 +452,28 @@ router.post('/upload-data', upload.array('files'), async (req, res) => {
             if (fileErr) throw fileErr;
             const fileId = fileRecord.id; // Lấy ID file vừa tạo
 
+            let validCount = 0;
+            let invalidCount = 0;
+
             // Bước 2: Đọc dữ liệu Excel và chuẩn bị dữ liệu
             if (rows.length > 1) {
                 const headers = rows[0];
                 let customerMap = new Map();
                 let contractRows = [];
+                let invalidRows = []; // [MỚI] Lead thiếu Số điện thoại -> tách riêng, không ghi vào customers/contracts
 
                 rows.slice(1).forEach(row => {
                     let cRow = { file_id: fileId, so_hop_dong: '', dien_thoai: '' };
                     let cusRow = { dien_thoai: '' };
+                    let rawRowObj = {}; // [MỚI] Giữ nguyên dữ liệu gốc theo đúng tên cột Excel, dùng để lưu/xuất lại invalid_leads
 
                     headers.forEach((h, index) => {
                         if (h) {
                             const keyClean = h.toString().trim().toLowerCase();
                             let rawVal = row[index];
                             const val = rawVal !== undefined && rawVal !== null ? String(rawVal).trim() : '';
+
+                            rawRowObj[h.toString().trim()] = (rawVal !== undefined && rawVal !== null) ? rawVal : '';
 
                             if (keyClean.includes('hop_dong') || keyClean.includes('hợp đồng') || keyClean.includes('so_hd')) cRow.so_hop_dong = val;
                             if (keyClean.includes('dien_thoai') || keyClean.includes('điện thoại') || keyClean.includes('phone') || keyClean.includes('sdt') || keyClean.includes('so_dt')) {
@@ -451,17 +515,29 @@ router.post('/upload-data', upload.array('files'), async (req, res) => {
                         }
                     });
 
+                    // [MỚI] Nếu dòng này KHÔNG có Số điện thoại -> tách riêng, không ghi customers/contracts,
+                    // để không làm fail cả batch upsert (dien_thoai là cột unique/khoá liên kết chính).
+                    if (!cRow.dien_thoai) {
+                        invalidRows.push({
+                            file_id: fileId,
+                            raw_data: rawRowObj,
+                            reason: 'Thiếu số điện thoại'
+                        });
+                        return; // Bỏ qua, không xử lý tiếp dòng này
+                    }
+
                     if (!cRow.so_hop_dong) cRow.so_hop_dong = 'HD_' + (cRow.dien_thoai || Math.random().toString(36).substring(7));
 
-                    if (cusRow.dien_thoai) {
-                        customerMap.set(cusRow.dien_thoai, {
-                            ...cusRow,
-                            ngay_tao: new Date().toISOString()
-                        });
-                    }
+                    customerMap.set(cusRow.dien_thoai, {
+                        ...cusRow,
+                        ngay_tao: new Date().toISOString()
+                    });
 
                     contractRows.push(cRow);
                 });
+
+                validCount = contractRows.length;
+                invalidCount = invalidRows.length;
 
                 // Bước 3: Insert bảng customers
                 if (customerMap.size > 0) {
@@ -485,10 +561,37 @@ router.post('/upload-data', upload.array('files'), async (req, res) => {
                         throw insertErr;
                     }
                 }
+
+                // Bước 5: [MỚI] Insert các lead thiếu SĐT vào bảng invalid_leads (nếu có)
+                if (invalidRows.length > 0) {
+                    const { error: invalidErr } = await req.supabase
+                        .from('invalid_leads')
+                        .insert(invalidRows);
+
+                    if (invalidErr) throw invalidErr;
+                }
             }
+
+            // Bước 6: [MỚI] Cập nhật lại total_records/untouched_count cho ĐÚNG số lead hợp lệ
+            // đã thực sự lưu vào DB, và ghi nhận invalid_count để hiển thị ở Tab 1/5.
+            await req.supabase
+                .from('data_files')
+                .update({
+                    total_records: validCount,
+                    untouched_count: validCount,
+                    invalid_count: invalidCount
+                })
+                .eq('id', fileId);
+
+            summary.push({ file_id: fileId, file_name: fileName, total: totalRecords, valid: validCount, invalid: invalidCount });
         }
 
-        res.json({ success: true, message: 'Upload và xử lý dữ liệu thành công!' });
+        const totalInvalid = summary.reduce((sum, s) => sum + s.invalid, 0);
+        const messageSuffix = totalInvalid > 0
+            ? ` (${totalInvalid} lead thiếu số điện thoại đã được tách sang mục "Leads Thiếu Dữ Liệu")`
+            : '';
+
+        res.json({ success: true, message: `Upload và xử lý dữ liệu thành công!${messageSuffix}`, summary });
     } catch (error) {
         console.error("Upload error:", error.message);
         res.status(500).json({ success: false, message: error.message });

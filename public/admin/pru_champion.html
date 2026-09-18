@@ -1,0 +1,573 @@
+<!-- 
+  Tên file: public/agents/pru_champion.html
+  Chức năng: Theo dõi tiến độ danh hiệu PruChampion (Vàng / Bạch Kim / Kim Cương) cho các Quản lý Tư vấn viên (QLTVV).
+  Vị trí: public/agents/pru_champion.html (thay thế cho memos.html cũ trong menu phân quyền admin)
+  Nghiệp vụ tham chiếu: Memo 01901/AD/2026 (Phát triển QLTVV), Memo 00407/AD/2026 (Mở Rộng Đội Hình, đường tắt Vàng
+  hiệu lực 01/07–31/12/2026), Memo 00601/AD/2026 (thu nhập QLTVV, duy trì chức danh), Memo 00211/AD/2026 (TLDTPTT),
+  Memo 01201/AD/2026 (khái niệm chung, Phụ lục 4 - trường hợp đặc biệt).
+
+  GHI CHÚ TÍCH HỢP:
+  - Dữ liệu bên dưới (MOCK_LEADERS) là dữ liệu mẫu để dựng giao diện & logic. Khi tích hợp thật, thay hàm
+    loadLeaders() để gọi Supabase (bảng leaders + bảng chỉ tiêu FYC/TVV theo tháng), giữ nguyên cấu trúc object
+    leader như mô tả trong comment của MOCK_LEADERS.
+  - Các trường TLDTPTT, tỷ lệ duy trì hợp đồng, cờ vi phạm nội quy là NHẬP TAY (theo yêu cầu), lưu qua
+    hàm saveManualFields() — hiện đang lưu tạm vào bộ nhớ JS, cần nối vào API cập nhật Supabase khi tích hợp.
+  - Có 2 điểm nghiệp vụ chưa chốt cần xác nhận với bộ phận chính sách (xem TODO trong tính TIERS bên dưới):
+    (1) Cửa sổ FYC xét hạng là 12 tháng trượt hay theo quý; (2) Khoản 5%/10% theo QLTVV con có áp dụng cho hạng Vàng không.
+-->
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Pru Champion - CRM Lead</title>
+
+    <link rel="icon" type="image/png" href="/uploads/favicon.png">
+    <link rel="apple-touch-icon" href="/uploads/icon.png">
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="/js/lucide.min.js"></script>
+    <!-- SweetAlert2 cho Popup -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <!-- Các script dùng chung hệ thống chuẩn -->
+    <script src="/js/header.js"></script>
+    <script src="/js/sidebar.js"></script>
+    <script src="/js/footer.js"></script>
+    <script src="/js/theme.js"></script>
+
+    <style>
+        /* Dải màu riêng cho từng hạng PruChampion — tách biệt khỏi bảng màu chung của hệ thống */
+        .rank-kimcuong   { background: linear-gradient(135deg,#4c6ef5,#7048e8); }
+        .rank-bachkim    { background: linear-gradient(135deg,#8d99ae,#495057); }
+        .rank-vang       { background: linear-gradient(135deg,#f5a623,#c47f0a); }
+        .rank-none       { background: #e9ecef; color:#495057; }
+        .dark .rank-none { background: #2b2f36; color:#cbd2d9; }
+
+        .avatar-circle {
+            width: 56px; height: 56px; border-radius: 9999px;
+            display:flex; align-items:center; justify-content:center;
+            font-weight:700; font-size:18px; color:#fff; flex-shrink:0;
+        }
+
+        .progress-track { background:#eef0f2; border-radius:9999px; height:8px; overflow:hidden; }
+        .dark .progress-track { background:#30343b; }
+        .progress-fill { height:100%; border-radius:9999px; transition: width .4s ease; }
+
+        .leader-card { transition: transform .15s ease, box-shadow .15s ease; }
+        .leader-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,.08); }
+    </style>
+</head>
+<body class="font-sans antialiased transition-colors duration-200">
+
+    <div class="flex h-screen overflow-hidden">
+        <div id="mainContainer" class="flex-1 flex flex-col overflow-y-auto transition-colors duration-200 pt-16">
+            <main class="px-4 py-4 max-w-full w-full flex flex-col gap-4">
+
+                <!-- Tiêu đề trang -->
+                <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                    <h1 class="text-base md:text-lg font-bold flex items-center gap-2">
+                        <i data-lucide="trophy" class="w-5 h-5 text-red-600 dark:text-red-500"></i>
+                        <span>Pru Champion</span>
+                    </h1>
+                    <button id="btnAddLeader"
+                        class="w-full md:w-auto justify-center inline-flex items-center gap-1.5 text-xs md:text-sm font-medium px-3 py-2.5 rounded-lg
+                               bg-red-600 hover:bg-red-700 active:scale-[0.98] text-white transition-transform">
+                        <i data-lucide="user-plus" class="w-4 h-4"></i>
+                        Thêm Leader
+                    </button>
+                </div>
+
+                <!-- Thống kê tổng quan -->
+                <div id="statsRow" class="grid grid-cols-2 md:grid-cols-5 gap-3"></div>
+
+                <!-- Thanh lọc / tìm kiếm -->
+                <div class="theme-card border rounded-xl p-3 flex flex-col md:flex-row gap-2 md:items-center">
+                    <div class="relative flex-1">
+                        <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 opacity-50"></i>
+                        <input id="searchInput" type="text" placeholder="Tìm theo tên hoặc phòng..."
+                            class="w-full pl-9 pr-3 py-2.5 text-sm rounded-lg border theme-input bg-transparent">
+                    </div>
+                    <select id="filterRank" class="text-sm rounded-lg border theme-input bg-transparent px-3 py-2.5">
+                        <option value="all">Tất cả hạng</option>
+                        <option value="Kim Cương">Kim Cương</option>
+                        <option value="Bạch Kim">Bạch Kim</option>
+                        <option value="Vàng">Vàng</option>
+                        <option value="none">Đang chinh phục</option>
+                    </select>
+                    <select id="sortBy" class="text-sm rounded-lg border theme-input bg-transparent px-3 py-2.5">
+                        <option value="progress_desc">Sắp đạt hạng nhất</option>
+                        <option value="name_asc">Tên A-Z</option>
+                        <option value="risk_first">Rủi ro duy trì trước</option>
+                    </select>
+                </div>
+
+                <!-- Danh sách thẻ Leader -->
+                <div id="leaderGrid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"></div>
+
+            </main>
+        </div>
+    </div>
+
+    <script>
+    /* ============================================================
+       1) CẤU HÌNH NGHIỆP VỤ (theo các memo đã cung cấp)
+       ============================================================ */
+
+    // Điều kiện xếp hạng PruChampion chuẩn — Bảng 2.3, Memo 01901/AD/2026
+    // TODO xác nhận với bộ phận chính sách: cột "FYC" là 12 tháng trượt hay theo quý (mâu thuẫn giữa
+    // tiêu đề bảng và ghi chú (*) trong memo gốc). Đang tạm dùng field fyc12m (12 tháng gần nhất).
+    const TIERS = [
+        { key: 'vang',     name: 'Vàng',       fyc: 150, tvvMoi: 1, tldtptt: 60 },
+        { key: 'bachkim',  name: 'Bạch Kim',   fyc: 300, tvvMoi: 2, tldtptt: 60 },
+        { key: 'kimcuong', name: 'Kim Cương',  fyc: 800, tvvMoi: 3, tldtptt: 60 },
+    ];
+
+    // Đường tắt lên Vàng — Memo 00407/AD/2026, chỉ hiệu lực 01/07/2026 – 31/12/2026
+    const FAST_TRACK_VANG = [
+        { months: 9, fyc: 115 },
+        { months: 6, fyc: 75 },
+        { months: 3, fyc: 40 },
+    ];
+    const FAST_TRACK_DEADLINE = new Date('2026-12-31');
+
+    // Mốc xét duyệt PruChampion: hàng quý (04, 07, 10, 01)
+    const QUARTERLY_REVIEW_MONTHS = [4, 7, 10, 1];
+
+    // Mốc xét duy trì chức danh QLTVV: tháng 1 và tháng 7 hằng năm
+    const MAINTAIN_REVIEW_MONTHS = [1, 7];
+
+    // Phụ lục 4, Memo 01201/AD/2026 — số tháng miễn xét PruChampion kể từ tháng T trên hồ sơ
+    const SPECIAL_CASE_MONTHS = {
+        thaiSan:    12, // mang thai từ tuần 25
+        conSoSinh:  9,
+        tangGia:    3,
+        namVien:    3,
+    };
+    const SPECIAL_CASE_LABEL = {
+        thaiSan: 'thai sản', conSoSinh: 'con nhỏ sơ sinh', tangGia: 'tang gia', namVien: 'nằm viện',
+    };
+
+    /* ============================================================
+       2) DỮ LIỆU MẪU — thay bằng gọi Supabase khi tích hợp thật
+       ============================================================ */
+    // Cấu trúc 1 leader:
+    // {
+    //   id, name, office, avatarUrl (có thể rỗng -> dùng initials),
+    //   currentBadge: 'Vàng'|'Bạch Kim'|'Kim Cương'|null   (hạng đã XÁC NHẬN ở đợt xét gần nhất),
+    //   fyc12m, fyc9m, fyc6m, fyc3m: FYC phòng trực tiếp (triệu đồng) — TỰ ĐỘNG từ dữ liệu hợp đồng,
+    //   tvvMoiChatLuong: số TVV mới chất lượng — TỰ ĐỘNG,
+    //   tldtptt: Tỷ lệ duy trì phí tái tục (%) — NHẬP TAY,
+    //   tyLeDuyTriHD: Tỷ lệ hợp đồng còn hiệu lực (%) — NHẬP TAY,
+    //   viPhamNoiQuy: boolean — NHẬP TAY,
+    //   fyc6mThuanDuyTri, tvvHoatDongDuyTri: dùng riêng cho xét DUY TRÌ chức danh QLTVV (Memo 00601, mục C),
+    //   hoSoDacBiet: { loai: 'thaiSan'|'conSoSinh'|'tangGia'|'namVien', thangT: 'YYYY-MM' } | null
+    // }
+    const MOCK_LEADERS = [
+        {
+            id: 1, name: 'Trần Thị Mai', office: 'VP Tổng Đại Lý Q7', avatarUrl: '',
+            currentBadge: 'Kim Cương',
+            fyc12m: 850, fyc9m: 700, fyc6m: 520, fyc3m: 300,
+            tvvMoiChatLuong: 4, tldtptt: 88, tyLeDuyTriHD: 91, viPhamNoiQuy: false,
+            fyc6mThuanDuyTri: 45, tvvHoatDongDuyTri: 9,
+            hoSoDacBiet: null,
+        },
+        {
+            id: 2, name: 'Nguyễn Văn Bình', office: 'VP Tổng Đại Lý Bình Thạnh', avatarUrl: '',
+            currentBadge: 'Bạch Kim',
+            fyc12m: 620, fyc9m: 500, fyc6m: 360, fyc3m: 190,
+            tvvMoiChatLuong: 2, tldtptt: 75, tyLeDuyTriHD: 84, viPhamNoiQuy: false,
+            fyc6mThuanDuyTri: 38, tvvHoatDongDuyTri: 8,
+            hoSoDacBiet: null,
+        },
+        {
+            id: 3, name: 'Lê Thị Hồng', office: 'VP Tổng Đại Lý Thủ Đức', avatarUrl: '',
+            currentBadge: 'Vàng',
+            fyc12m: 210, fyc9m: 170, fyc6m: 120, fyc3m: 60,
+            tvvMoiChatLuong: 1, tldtptt: 65, tyLeDuyTriHD: 80, viPhamNoiQuy: false,
+            fyc6mThuanDuyTri: 24, tvvHoatDongDuyTri: 7,
+            hoSoDacBiet: null,
+        },
+        {
+            id: 4, name: 'Phạm Minh Tuấn', office: 'VP Tổng Đại Lý Gò Vấp', avatarUrl: '',
+            currentBadge: null,
+            fyc12m: 90, fyc9m: 88, fyc6m: 62, fyc3m: 42,
+            tvvMoiChatLuong: 1, tldtptt: 60, tyLeDuyTriHD: 78, viPhamNoiQuy: false,
+            fyc6mThuanDuyTri: 18, tvvHoatDongDuyTri: 5,
+            hoSoDacBiet: null,
+        },
+        {
+            id: 5, name: 'Đỗ Thị Lan', office: 'VP Tổng Đại Lý Tân Bình', avatarUrl: '',
+            currentBadge: 'Vàng',
+            fyc12m: 140, fyc9m: 130, fyc6m: 95, fyc3m: 40,
+            tvvMoiChatLuong: 1, tldtptt: 62, tyLeDuyTriHD: 79, viPhamNoiQuy: false,
+            fyc6mThuanDuyTri: 15, tvvHoatDongDuyTri: 4,
+            hoSoDacBiet: { loai: 'thaiSan', thangT: '2026-02' },
+        },
+        {
+            id: 6, name: 'Vũ Đức Anh', office: 'VP Tổng Đại Lý Q10', avatarUrl: '',
+            currentBadge: 'Vàng',
+            fyc12m: 155, fyc9m: 100, fyc6m: 15, fyc3m: 8,
+            tvvMoiChatLuong: 0, tldtptt: 55, tyLeDuyTriHD: 70, viPhamNoiQuy: false,
+            fyc6mThuanDuyTri: 15, tvvHoatDongDuyTri: 4,
+            hoSoDacBiet: null,
+        },
+    ];
+
+    let leaders = [];
+
+    async function loadLeaders() {
+        // TODO tích hợp thật: thay bằng fetch từ Supabase, ví dụ:
+        // const { data } = await supabase.from('pru_champion_leaders').select('*, pru_champion_manual(*)');
+        leaders = JSON.parse(JSON.stringify(MOCK_LEADERS));
+    }
+
+    /* ============================================================
+       3) LOGIC TÍNH TOÁN
+       ============================================================ */
+
+    function todayIsWithinFastTrack() {
+        return new Date() <= FAST_TRACK_DEADLINE;
+    }
+
+    function tierIndexOf(badgeName) {
+        return TIERS.findIndex(t => t.name === badgeName);
+    }
+
+    function pct(value, target) {
+        if (!target) return 100;
+        return Math.max(0, Math.min(100, Math.round((value / target) * 100)));
+    }
+
+    // Trả về { route, targetName, items: [{label, value, target, unit, percent, met}], overallPercent }
+    function computeTarget(leader) {
+        const curIdx = tierIndexOf(leader.currentBadge);
+        const nextTier = TIERS[curIdx + 1];
+
+        // Chưa có hạng nào -> ưu tiên xét đường tắt Vàng (Memo 00407) nếu còn hiệu lực, chọn cửa sổ gần đạt nhất
+        if (!leader.currentBadge && todayIsWithinFastTrack()) {
+            let bestFastTrack = null;
+            FAST_TRACK_VANG.forEach(ft => {
+                const fycKey = 'fyc' + ft.months + 'm';
+                const fycVal = leader[fycKey] ?? 0;
+                const items = [
+                    { label: `FYC phòng trực tiếp (${ft.months} tháng)`, value: fycVal, target: ft.fyc, unit: 'triệu', percent: pct(fycVal, ft.fyc), met: fycVal >= ft.fyc },
+                    { label: 'TVV mới chất lượng', value: leader.tvvMoiChatLuong, target: 1, unit: '', percent: pct(leader.tvvMoiChatLuong, 1), met: leader.tvvMoiChatLuong >= 1 },
+                    { label: 'TLDTPTT', value: leader.tldtptt, target: 60, unit: '%', percent: pct(leader.tldtptt, 60), met: leader.tldtptt >= 60 },
+                ];
+                const overall = Math.round(items.reduce((s, i) => s + i.percent, 0) / items.length);
+                if (!bestFastTrack || overall > bestFastTrack.overallPercent) {
+                    bestFastTrack = { route: `Đường tắt Vàng (${ft.months} tháng — Memo 00407)`, targetName: 'Vàng', items, overallPercent: overall };
+                }
+            });
+
+            // So sánh với đường chuẩn Vàng (12 tháng) — chọn cái gần đạt hơn
+            const standard = computeStandardTarget(leader, TIERS[0]);
+            return bestFastTrack.overallPercent >= standard.overallPercent ? bestFastTrack : standard;
+        }
+
+        // Đã đạt Kim Cương -> chế độ duy trì, không còn hạng cao hơn
+        if (!nextTier) {
+            return { route: 'Duy trì hạng Kim Cương', targetName: 'Kim Cương (duy trì)', items: [], overallPercent: 100, isMaxTier: true };
+        }
+
+        return computeStandardTarget(leader, nextTier);
+    }
+
+    function computeStandardTarget(leader, tier) {
+        const items = [
+            { label: 'FYC phòng trực tiếp (12 tháng)', value: leader.fyc12m, target: tier.fyc, unit: 'triệu', percent: pct(leader.fyc12m, tier.fyc), met: leader.fyc12m >= tier.fyc },
+            { label: 'TVV mới chất lượng', value: leader.tvvMoiChatLuong, target: tier.tvvMoi, unit: '', percent: pct(leader.tvvMoiChatLuong, tier.tvvMoi), met: leader.tvvMoiChatLuong >= tier.tvvMoi },
+            { label: 'TLDTPTT', value: leader.tldtptt, target: tier.tldtptt, unit: '%', percent: pct(leader.tldtptt, tier.tldtptt), met: leader.tldtptt >= tier.tldtptt },
+        ];
+        const overall = Math.round(items.reduce((s, i) => s + i.percent, 0) / items.length);
+        return { route: `Chuẩn Memo 01901`, targetName: tier.name, items, overallPercent: overall };
+    }
+
+    // Rủi ro duy trì chức danh QLTVV — Memo 00601 mục C (6 tháng: FYC thuần ≥20tr, ≥6 lượt TVV hoạt động, TLDTPTT ≥60% giai đoạn 2026)
+    function computeMaintainRisk(leader) {
+        if (leader.hoSoDacBiet) return { atRisk: false, reasons: [] }; // được miễn xét theo Phụ lục 4
+        const reasons = [];
+        if (leader.fyc6mThuanDuyTri < 20) reasons.push(`FYC thuần phòng trực tiếp 6 tháng: ${leader.fyc6mThuanDuyTri}tr (cần ≥20tr)`);
+        if (leader.tvvHoatDongDuyTri < 6) reasons.push(`Lượt TVV hoạt động 6 tháng: ${leader.tvvHoatDongDuyTri} (cần ≥6)`);
+        if (leader.tldtptt < 60) reasons.push(`TLDTPTT: ${leader.tldtptt}% (cần ≥60% cho đợt 07/2026 & 01/2027)`);
+        return { atRisk: reasons.length > 0, reasons };
+    }
+
+    function nextQuarterlyReviewDate() {
+        const now = new Date();
+        const year = now.getFullYear();
+        const candidates = QUARTERLY_REVIEW_MONTHS.map(m => {
+            let y = year;
+            if (m === 1 && now.getMonth() + 1 > 1) y = year + 1; // mốc tháng 1 thuộc năm sau nếu đã qua
+            return new Date(y, m - 1, 1);
+        }).filter(d => d > now).sort((a, b) => a - b);
+        return candidates[0];
+    }
+
+    function daysUntil(date) {
+        const diff = date - new Date();
+        return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+    }
+
+    function specialCaseNote(leader) {
+        if (!leader.hoSoDacBiet) return null;
+        const { loai, thangT } = leader.hoSoDacBiet;
+        const [y, m] = thangT.split('-').map(Number);
+        const monthsAdd = SPECIAL_CASE_MONTHS[loai];
+        const endDate = new Date(y, m - 1 + monthsAdd, 1);
+        const endLabel = `${String(endDate.getMonth() + 1).padStart(2, '0')}/${endDate.getFullYear()}`;
+        return `Miễn xét đến hết ${endLabel} (hồ sơ ${SPECIAL_CASE_LABEL[loai]}, Phụ lục 4 - Memo 01201)`;
+    }
+
+    /* ============================================================
+       4) RENDER GIAO DIỆN
+       ============================================================ */
+
+    function initials(name) {
+        return name.split(' ').filter(Boolean).slice(-2).map(w => w[0]).join('').toUpperCase();
+    }
+
+    function avatarColor(name) {
+        const colors = ['#e03131', '#1971c2', '#2f9e44', '#e8590c', '#9c36b5', '#0c8599'];
+        let hash = 0;
+        for (const ch of name) hash = ch.charCodeAt(0) + ((hash << 5) - hash);
+        return colors[Math.abs(hash) % colors.length];
+    }
+
+    function rankChipClass(badge) {
+        if (badge === 'Kim Cương') return 'rank-kimcuong text-white';
+        if (badge === 'Bạch Kim') return 'rank-bachkim text-white';
+        if (badge === 'Vàng') return 'rank-vang text-white';
+        return 'rank-none';
+    }
+
+    function renderStats() {
+        const counts = { 'Kim Cương': 0, 'Bạch Kim': 0, 'Vàng': 0, 'none': 0 };
+        leaders.forEach(l => counts[l.currentBadge || 'none']++);
+        const stats = [
+            { label: 'Tổng Leader', value: leaders.length, icon: 'users', color: 'text-red-600 dark:text-red-500' },
+            { label: 'Kim Cương', value: counts['Kim Cương'], icon: 'gem', color: 'text-indigo-600' },
+            { label: 'Bạch Kim', value: counts['Bạch Kim'], icon: 'medal', color: 'text-slate-500' },
+            { label: 'Vàng', value: counts['Vàng'], icon: 'award', color: 'text-amber-500' },
+            { label: 'Đang chinh phục', value: counts['none'], icon: 'flag', color: 'text-gray-400' },
+        ];
+        document.getElementById('statsRow').innerHTML = stats.map(s => `
+            <div class="theme-card border rounded-xl p-3 flex flex-col gap-1">
+                <div class="flex items-center gap-1.5 text-xs opacity-70">
+                    <i data-lucide="${s.icon}" class="w-3.5 h-3.5 ${s.color}"></i>
+                    <span>${s.label}</span>
+                </div>
+                <div class="text-xl font-bold">${s.value}</div>
+            </div>
+        `).join('');
+    }
+
+    function renderCard(leader) {
+        const target = computeTarget(leader);
+        const risk = computeMaintainRisk(leader);
+        const special = specialCaseNote(leader);
+        const review = nextQuarterlyReviewDate();
+        const days = daysUntil(review);
+
+        const badgeLabel = leader.currentBadge || 'Đang chinh phục';
+        const chipClass = rankChipClass(leader.currentBadge);
+
+        let bodyHtml = '';
+
+        if (special) {
+            bodyHtml = `
+                <div class="flex items-center gap-2 text-xs px-3 py-2 rounded-lg bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                    <i data-lucide="shield-check" class="w-4 h-4 flex-shrink-0"></i>
+                    <span>${special}</span>
+                </div>`;
+        } else if (target.isMaxTier) {
+            bodyHtml = `
+                <div class="flex items-center gap-2 text-xs px-3 py-2 rounded-lg bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">
+                    <i data-lucide="sparkles" class="w-4 h-4 flex-shrink-0"></i>
+                    <span>Đã đạt hạng cao nhất — đang ở chế độ duy trì</span>
+                </div>`;
+        } else {
+            const missingLines = target.items.filter(i => !i.met).map(i => {
+                const remain = (i.target - i.value);
+                const remainLabel = i.unit === '%' ? `${i.value}% — cần ≥${i.target}%` : `còn thiếu ${remain.toLocaleString('vi-VN')} ${i.unit}`;
+                return `<div class="text-xs">
+                    <div class="flex justify-between mb-1">
+                        <span class="opacity-80">${i.label}</span>
+                        <span class="font-medium">${remainLabel}</span>
+                    </div>
+                    <div class="progress-track"><div class="progress-fill ${chipClass.split(' ')[0]}" style="width:${i.percent}%"></div></div>
+                </div>`;
+            }).join('');
+
+            const doneCount = target.items.filter(i => i.met).length;
+            const doneNote = doneCount > 0 ? `<div class="text-xs text-green-600 dark:text-green-400 flex items-center gap-1"><i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i>${doneCount}/${target.items.length} chỉ tiêu đã đạt</div>` : '';
+
+            bodyHtml = `
+                <div class="text-xs font-medium opacity-70">Đang chinh phục: <span class="font-bold">${target.targetName}</span> · ${target.route}</div>
+                <div class="flex flex-col gap-2">${missingLines || '<div class="text-xs opacity-60">Đã đạt tất cả điều kiện — chờ chốt kỳ xét duyệt.</div>'}</div>
+                ${doneNote}
+                <div class="flex items-center gap-1.5 text-xs opacity-70 pt-1 border-t theme-divider">
+                    <i data-lucide="clock" class="w-3.5 h-3.5"></i>
+                    <span>Còn ${days} ngày đến kỳ xét duyệt tiếp theo</span>
+                </div>`;
+        }
+
+        const riskBadge = risk.atRisk ? `
+            <button type="button" class="btnRiskInfo inline-flex items-center gap-1 text-[10px] font-medium px-2 py-1 rounded-full bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300 active:scale-95 transition-transform" data-id="${leader.id}">
+                <i data-lucide="alert-triangle" class="w-3 h-3"></i> Rủi ro duy trì
+            </button>` : '';
+
+        return `
+        <div class="leader-card theme-card border rounded-xl p-4 flex flex-col gap-3" data-id="${leader.id}">
+            <div class="flex items-start gap-3">
+                <div class="avatar-circle" style="background:${avatarColor(leader.name)}">
+                    ${leader.avatarUrl ? `<img src="${leader.avatarUrl}" class="w-full h-full rounded-full object-cover">` : initials(leader.name)}
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="font-semibold text-sm truncate">${leader.name}</div>
+                    <div class="text-xs opacity-60 truncate">${leader.office}</div>
+                </div>
+                <div class="flex flex-col items-end gap-1">
+                    <span class="text-[11px] font-bold px-2.5 py-1 rounded-full ${chipClass}">${badgeLabel.toUpperCase()}</span>
+                    ${riskBadge}
+                </div>
+            </div>
+            <div class="flex flex-col gap-2">${bodyHtml}</div>
+            <button class="btnEditManual mt-1 inline-flex items-center justify-center gap-1.5 text-xs font-medium py-2.5 rounded-lg border hover:bg-gray-50 dark:hover:bg-white/5 active:scale-[0.98] transition-transform" data-id="${leader.id}">
+                <i data-lucide="pencil" class="w-3.5 h-3.5"></i> Cập nhật chỉ tiêu nhập tay
+            </button>
+        </div>`;
+    }
+
+    function renderGrid() {
+        const search = document.getElementById('searchInput').value.trim().toLowerCase();
+        const rankFilter = document.getElementById('filterRank').value;
+        const sortBy = document.getElementById('sortBy').value;
+
+        let list = leaders.filter(l => {
+            const matchSearch = !search || l.name.toLowerCase().includes(search) || l.office.toLowerCase().includes(search);
+            const matchRank = rankFilter === 'all' || (rankFilter === 'none' ? !l.currentBadge : l.currentBadge === rankFilter);
+            return matchSearch && matchRank;
+        });
+
+        list = list.map(l => ({ leader: l, target: computeTarget(l), risk: computeMaintainRisk(l) }));
+
+        if (sortBy === 'progress_desc') list.sort((a, b) => b.target.overallPercent - a.target.overallPercent);
+        else if (sortBy === 'name_asc') list.sort((a, b) => a.leader.name.localeCompare(b.leader.name, 'vi'));
+        else if (sortBy === 'risk_first') list.sort((a, b) => (b.risk.atRisk - a.risk.atRisk));
+
+        document.getElementById('leaderGrid').innerHTML = list.map(x => renderCard(x.leader)).join('') ||
+            `<div class="col-span-full text-center text-sm opacity-60 py-12">Không tìm thấy Leader phù hợp.</div>`;
+
+        if (window.lucide) lucide.createIcons();
+        attachCardEvents();
+    }
+
+    function attachCardEvents() {
+        document.querySelectorAll('.btnEditManual').forEach(btn => {
+            btn.addEventListener('click', () => openManualEditModal(Number(btn.dataset.id)));
+        });
+        document.querySelectorAll('.btnRiskInfo').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                showRiskModal(Number(btn.dataset.id));
+            });
+        });
+    }
+
+    // Thay cho tooltip hover (title=) — trên mobile không có hover, phải chạm để xem lý do
+    function showRiskModal(id) {
+        const leader = leaders.find(l => l.id === id);
+        if (!leader) return;
+        const risk = computeMaintainRisk(leader);
+        Swal.fire({
+            icon: 'warning',
+            title: `Rủi ro duy trì chức danh — ${leader.name}`,
+            html: `<ul class="text-left text-sm list-disc pl-5 space-y-1">${risk.reasons.map(r => `<li>${r}</li>`).join('')}</ul>`,
+            confirmButtonColor: '#dc2626',
+        });
+    }
+
+    /* ============================================================
+       5) NHẬP TAY: TLDTPTT, tỷ lệ duy trì hợp đồng, cờ vi phạm
+       ============================================================ */
+
+    async function openManualEditModal(id) {
+        const leader = leaders.find(l => l.id === id);
+        if (!leader) return;
+
+        const { value: formValues } = await Swal.fire({
+            title: `Cập nhật chỉ tiêu — ${leader.name}`,
+            html: `
+                <div class="text-left flex flex-col gap-3 text-sm">
+                    <label class="flex flex-col gap-1">
+                        <span>Tỷ lệ Duy trì Phí Tái tục — TLDTPTT (%)</span>
+                        <input id="swal-tldtptt" type="number" step="0.1" min="0" max="110" value="${leader.tldtptt}"
+                            class="swal2-input" style="margin:0;width:100%">
+                    </label>
+                    <label class="flex flex-col gap-1">
+                        <span>Tỷ lệ hợp đồng còn hiệu lực (%)</span>
+                        <input id="swal-tyledt" type="number" step="0.1" min="0" max="100" value="${leader.tyLeDuyTriHD}"
+                            class="swal2-input" style="margin:0;width:100%">
+                    </label>
+                    <label class="flex items-center gap-2">
+                        <input id="swal-vipham" type="checkbox" ${leader.viPhamNoiQuy ? 'checked' : ''}>
+                        <span>Có vi phạm nội quy / quy định của Công ty</span>
+                    </label>
+                </div>`,
+            showCancelButton: true,
+            confirmButtonText: 'Lưu',
+            cancelButtonText: 'Hủy',
+            confirmButtonColor: '#dc2626',
+            preConfirm: () => ({
+                tldtptt: parseFloat(document.getElementById('swal-tldtptt').value) || 0,
+                tyLeDuyTriHD: parseFloat(document.getElementById('swal-tyledt').value) || 0,
+                viPhamNoiQuy: document.getElementById('swal-vipham').checked,
+            }),
+        });
+
+        if (formValues) {
+            saveManualFields(id, formValues);
+        }
+    }
+
+    function saveManualFields(id, fields) {
+        const leader = leaders.find(l => l.id === id);
+        if (!leader) return;
+        Object.assign(leader, fields);
+        // TODO tích hợp thật: gọi API/Supabase update ở đây, ví dụ:
+        // await supabase.from('pru_champion_manual').upsert({ leader_id: id, ...fields });
+        renderStats();
+        renderGrid();
+        Swal.fire({ icon: 'success', title: 'Đã lưu', timer: 1200, showConfirmButton: false });
+    }
+
+    /* ============================================================
+       6) KHỞI TẠO
+       ============================================================ */
+
+    async function init() {
+        await loadLeaders();
+        renderStats();
+        renderGrid();
+        if (window.lucide) lucide.createIcons();
+
+        document.getElementById('searchInput').addEventListener('input', renderGrid);
+        document.getElementById('filterRank').addEventListener('change', renderGrid);
+        document.getElementById('sortBy').addEventListener('change', renderGrid);
+        document.getElementById('btnAddLeader').addEventListener('click', () => {
+            Swal.fire({
+                icon: 'info',
+                title: 'Thêm Leader',
+                text: 'Nối form thêm Leader mới vào đây khi tích hợp Supabase (bảng danh sách QLTVV).',
+            });
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
