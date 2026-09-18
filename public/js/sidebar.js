@@ -17,7 +17,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         admin: [
             { name: "Tổng quan", icon: "layout-dashboard", href: "/admin/dashboard_admin.html" },
             { name: "Báo cáo doanh số nhóm", icon: "users", href: "/admin/rpsale_team.html" },
-            { name: "Pru Champion", icon: "trophy", href: "/admin/pru_champion.html" },
             { name: "Báo cáo doanh số cá nhân", icon: "user", href: "/admin/rpsale_personal.html" },
             { name: "Báo cáo Lead nhóm", icon: "network", href: "/admin/rplead_team.html" },
             { name: "Báo cáo Lead cá nhân", icon: "headset", href: "/admin/rplead_personal.html" },
@@ -78,11 +77,14 @@ document.addEventListener("DOMContentLoaded", async () => {
         return; // Dừng luôn, không build sidebar cho tài khoản đã bị khoá
     }
 
-    // 1.3. Với agent: lọc bỏ mục "Data Lead" nếu chưa được cấp quyền xem_data_leads
+    // 1.3. Với agent: cùng 1 quyền "xem_data_leads" sẽ kiểm soát CẢ 2 trang - "Data Lead" và
+    // "Quản lý cuộc gọi/hẹn" (calls.html) - vì cuộc gọi/hẹn thực chất là hành động thao tác trên data lead,
+    // nên gộp chung theo yêu cầu, không tách thành cột quyền riêng.
+    const CAC_TRANG_CAN_QUYEN_LEADS = ['/agents/leads.html', '/agents/calls.html'];
     if (phanQuyen === 'agent') {
         const coQuyenXemLeads = !!(trangThaiKq && trangThaiKq.xem_data_leads);
         if (!coQuyenXemLeads) {
-            currentMenu = currentMenu.filter(item => item.href !== '/agents/leads.html');
+            currentMenu = currentMenu.filter(item => !CAC_TRANG_CAN_QUYEN_LEADS.includes(item.href));
         }
     }
 
