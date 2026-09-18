@@ -755,6 +755,34 @@ router.put('/data-files/:id/lock', async (req, res) => {
 });
 
 /**
+ * [MỚI] PUT /data-files/lock-bulk - Khóa (hoặc mở khóa) HÀNG LOẠT nhiều file cùng lúc.
+ * Body: { ids: [1, 2, 3], status: 'Đã khóa' }  (status mặc định 'Đã khóa' nếu không truyền)
+ * Dùng cho nút "Khóa Các File Đã Chọn" ở Tab 2.
+ */
+router.put('/data-files/lock-bulk', async (req, res) => {
+    try {
+        const { ids, status } = req.body;
+
+        if (!Array.isArray(ids) || ids.length === 0) {
+            return res.status(400).json({ success: false, message: 'Vui lòng chọn ít nhất một file để khóa.' });
+        }
+
+        const newStatus = status || 'Đã khóa';
+
+        const { data, error } = await req.supabase
+            .from('data_files')
+            .update({ status: newStatus })
+            .in('id', ids)
+            .select();
+
+        if (error) throw error;
+        res.json({ success: true, message: `Đã cập nhật trạng thái "${newStatus}" cho ${data.length} file.`, data });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+/**
  * DELETE /data-files/:fileId - Xóa sạch file và toàn bộ contracts thuộc file_id đó (Dùng req.supabase)
  */
 router.delete('/data-files/:fileId', async (req, res) => {

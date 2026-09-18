@@ -154,6 +154,11 @@
                             <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
                             <span>Làm mới</span>
                         </button>
+                        <span id="selectedCountBadgeTab2" class="text-[10px] px-2 py-0.5 rounded-full bg-slate-500/10 text-slate-500 border border-slate-500/20 hidden">Đã chọn 0 file</span>
+                        <button onclick="bulkLockSelectedFiles()" id="btnBulkLockTab2" disabled class="px-3 py-1.5 rounded-xl bg-red-500 text-white hover:bg-red-600 transition text-xs font-medium flex items-center space-x-1.5 shadow-sm opacity-40 cursor-not-allowed disabled:opacity-40">
+                            <i data-lucide="lock" class="w-3.5 h-3.5"></i>
+                            <span>Khóa Các File Đã Chọn</span>
+                        </button>
                     </div>
                 </div>
 
@@ -161,6 +166,9 @@
                     <table class="w-full text-left border-collapse text-xs">
                         <thead>
                             <tr class="border-b border-inherit opacity-75 font-semibold">
+                                <th class="p-3.5 text-center w-10">
+                                    <input type="checkbox" id="selectAllTab2" onclick="toggleSelectAllTab2(this)" class="rounded border-inherit">
+                                </th>
                                 <th class="p-3.5 text-center w-12">STT</th>
                                 <th class="p-3.5">Tên File</th>
                                 <th class="p-3.5 text-center">Tổng Lead</th>
@@ -171,7 +179,7 @@
                         </thead>
                         <tbody id="allocationTableBody" class="divide-y divide-inherit">
                             <tr>
-                                <td colspan="6" class="text-center py-8 opacity-60">Đang tải danh sách phân bổ...</td>
+                                <td colspan="7" class="text-center py-8 opacity-60">Đang tải danh sách phân bổ...</td>
                             </tr>
                         </tbody>
                     </table>
@@ -404,6 +412,7 @@
     // Khai báo biến toàn cục quản lý tên file chống trùng lặp và danh sách agent
     let existingFileNames = new Set();
     let systemAgents = [];
+    let selectedFileIdsTab2 = new Set(); // [MỚI] Theo dõi các file đang được tick chọn để khóa hàng loạt
 
     // [CHỨC NĂNG TAB 1]: Lắng nghe sự kiện gõ phím trên thanh tìm kiếm file của Tab 1
     function initSearchTab1() {
@@ -451,11 +460,11 @@
 
             const rows = tableBody.querySelectorAll('tr');
             rows.forEach(row => {
-                if (row.cells.length < 6) return;
+                if (row.cells.length < 7) return;
 
-                const fileName = row.querySelector('td:nth-child(2)').innerText.toLowerCase();
-                const statusText = row.querySelector('td:nth-child(4)').innerText.toLowerCase();
-                const agentSelect = row.querySelector('td:nth-child(5) select');
+                const fileName = row.querySelector('td:nth-child(3)').innerText.toLowerCase();
+                const statusText = row.querySelector('td:nth-child(5)').innerText.toLowerCase();
+                const agentSelect = row.querySelector('td:nth-child(6) select');
                 const selectedAgentText = agentSelect && agentSelect.options[agentSelect.selectedIndex] ? agentSelect.options[agentSelect.selectedIndex].text.toLowerCase() : '';
 
                 let matchKeyword = !keyword || fileName.includes(keyword);
@@ -464,6 +473,7 @@
 
                 if (matchKeyword && matchStatus && matchAgent) {
                     row.style.display = '';
+                    // Nếu dòng bị lọc ẩn đi mà checkbox của nó đang được chọn -> bỏ chọn luôn để tránh khóa nhầm file đang ẩn
                 } else {
                     row.style.display = 'none';
                 }
@@ -781,7 +791,10 @@
         const agentFilterSelect = document.getElementById('agentFilterTab2');
         if (!tbody) return;
 
-        tbody.innerHTML = `<tr><td colspan="6" class="text-center py-8 opacity-60">Đang tải dữ liệu...</td></tr>`;
+        selectedFileIdsTab2.clear(); // Reset lựa chọn cũ mỗi khi tải lại danh sách
+        updateBulkLockButtonTab2();
+
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center py-8 opacity-60">Đang tải dữ liệu...</td></tr>`;
 
         try {
             const [resFiles, resAgents] = await Promise.all([
@@ -804,7 +817,7 @@
             }
 
             if (files.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6" class="text-center py-8 opacity-60">Chưa có data file nào được tải lên ở Tab 1.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="7" class="text-center py-8 opacity-60">Chưa có data file nào được tải lên ở Tab 1.</td></tr>`;
                 return;
             }
 
@@ -833,6 +846,9 @@
 
                 return `
                     <tr class="hover:bg-[var(--hover-bg,rgba(0,0,0,0.03))] dark:hover:bg-[var(--hover-bg,rgba(255,255,255,0.05))] transition">
+                        <td class="p-3.5 text-center">
+                            <input type="checkbox" class="rowCheckboxTab2 rounded border-inherit" value="${fileId}" onclick="toggleRowCheckTab2(this)">
+                        </td>
                         <td class="p-3.5 text-center font-mono opacity-60">${index + 1}</td>
                         <td class="p-3.5 font-medium text-emerald-500">${fileName}</td>
                         <td class="p-3.5 text-center font-mono">${totalLeads}</td>
@@ -954,6 +970,102 @@
             } catch (error) {
                 Swal.fire({ title: 'Lỗi!', text: error.message, icon: 'error', confirmButtonText: 'Đóng' });
             }
+        }
+    };
+
+    /**
+     * [MỚI - TAB 2] Xử lý tick/bỏ tick 1 checkbox dòng -> cập nhật Set lựa chọn + nút Khóa Hàng Loạt
+     */
+    window.toggleRowCheckTab2 = function(checkbox) {
+        const fileId = checkbox.value;
+        if (checkbox.checked) {
+            selectedFileIdsTab2.add(fileId);
+        } else {
+            selectedFileIdsTab2.delete(fileId);
+            const selectAll = document.getElementById('selectAllTab2');
+            if (selectAll) selectAll.checked = false;
+        }
+        updateBulkLockButtonTab2();
+    };
+
+    /**
+     * [MỚI - TAB 2] Chọn/bỏ chọn tất cả các dòng ĐANG HIỂN THỊ trên bảng (tôn trọng bộ lọc hiện tại)
+     */
+    window.toggleSelectAllTab2 = function(selectAllCheckbox) {
+        const rows = document.querySelectorAll('#allocationTableBody tr');
+        rows.forEach(row => {
+            if (row.style.display === 'none') return; // Bỏ qua dòng đang bị ẩn bởi bộ lọc
+            const checkbox = row.querySelector('.rowCheckboxTab2');
+            if (!checkbox) return;
+            checkbox.checked = selectAllCheckbox.checked;
+            if (selectAllCheckbox.checked) {
+                selectedFileIdsTab2.add(checkbox.value);
+            } else {
+                selectedFileIdsTab2.delete(checkbox.value);
+            }
+        });
+        updateBulkLockButtonTab2();
+    };
+
+    /**
+     * [MỚI - TAB 2] Cập nhật trạng thái nút "Khóa Các File Đã Chọn" + badge số lượng đã chọn
+     */
+    function updateBulkLockButtonTab2() {
+        const btn = document.getElementById('btnBulkLockTab2');
+        const badge = document.getElementById('selectedCountBadgeTab2');
+        const count = selectedFileIdsTab2.size;
+
+        if (badge) {
+            if (count > 0) {
+                badge.textContent = `Đã chọn ${count} file`;
+                badge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+            }
+        }
+
+        if (btn) {
+            btn.disabled = count === 0;
+            btn.classList.toggle('opacity-40', count === 0);
+            btn.classList.toggle('cursor-not-allowed', count === 0);
+        }
+    }
+
+    /**
+     * [MỚI - TAB 2] Khóa hàng loạt tất cả file đang được tick chọn, gọi 1 lần API bulk thay vì lặp từng file
+     */
+    window.bulkLockSelectedFiles = async function() {
+        const ids = Array.from(selectedFileIdsTab2);
+        if (ids.length === 0) return;
+
+        const confirm = await Swal.fire({
+            title: `Khóa ${ids.length} file đã chọn?`,
+            text: 'Sau khi khóa, các Agent đang phụ trách những file này sẽ không thể tiếp tục gọi/cập nhật cho tới khi được mở khóa lại.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Khóa ngay',
+            cancelButtonText: 'Hủy',
+            confirmButtonColor: '#ef4444'
+        });
+
+        if (!confirm.isConfirmed) return;
+
+        try {
+            const res = await fetch('/api/admin/data-files/lock-bulk', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids, status: 'Đã khóa' })
+            });
+            const result = await res.json();
+
+            if (res.ok && result.success) {
+                await Swal.fire({ title: 'Thành công!', text: result.message, icon: 'success', timer: 1800, showConfirmButton: false });
+                loadDataForAllocation();
+            } else {
+                throw new Error(result.message || 'Không thể khóa các file đã chọn.');
+            }
+        } catch (error) {
+            Swal.fire({ title: 'Lỗi!', text: error.message, icon: 'error', confirmButtonText: 'Đóng' });
         }
     };
 
@@ -1400,7 +1512,7 @@
         if (!tbody) return;
 
         if (!list || list.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="8" class="text-center py-8 opacity-60">Không có lead nào bị thiếu dữ liệu.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="8" class="text-center py-8 opacity-60">Không có lead nào bị thiếu dữ liệu. 🎉</td></tr>`;
             return;
         }
 
