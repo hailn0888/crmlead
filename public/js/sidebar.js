@@ -61,9 +61,14 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
-    // Buộc đăng xuất ngay lập tức: xoá sạch localStorage và đưa về trang login.
+    // Buộc đăng xuất ngay lập tức: xoá cookie phiên (server) + localStorage, đưa về trang login.
     // Gọi khi phát hiện tài khoản đã bị admin khoá, dù đang ở bất kỳ trang nào.
-    function buocDangXuat(message) {
+    async function buocDangXuat(message) {
+        try {
+            await fetch('/api/auth/logout', { method: 'POST' });
+        } catch (err) {
+            console.error('Lỗi khi xoá cookie phiên:', err);
+        }
         localStorage.clear();
         alert(message || 'Tài khoản của bạn đã bị khoá. Vui lòng liên hệ admin.');
         window.location.href = '/login.html';

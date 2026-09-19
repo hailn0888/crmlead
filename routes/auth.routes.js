@@ -30,6 +30,16 @@ router.post('/login', async (req, res) => {
             });
         }
 
+        // Đặt cookie phiên đăng nhập (httpOnly - JS phía client không đọc/sửa được, chống giả mạo).
+        // Đây là cách DUY NHẤT để server biết "ai" đang gửi request khi họ gõ thẳng URL sau này
+        // (middleware/checkLeadsAccess.js dùng cookie này để chặn truy cập link leads.html/calls.html).
+        res.cookie('session_user', ten_dang_nhap, {
+            signed: true,
+            httpOnly: true,
+            sameSite: 'lax',
+            maxAge: 7 * 24 * 60 * 60 * 1000 // 7 ngày
+        });
+
         // Đăng nhập thành công, trả về thông tin user và phân quyền
         res.json({
             success: true,
@@ -81,6 +91,14 @@ router.get('/account-status/:ten_dang_nhap', async (req, res) => {
         // Lỗi server tạm thời -> KHÔNG ép logout (fail-open), tránh văng oan user khi mạng chập chờn
         res.status(500).json({ success: false, message: err.message });
     }
+});
+
+// API đăng xuất: xoá cookie phiên (session_user) phía server.
+// Bắt buộc phải gọi qua API này vì cookie đặt httpOnly - JS phía client (localStorage.clear())
+// KHÔNG có quyền đọc/xoá được cookie này.
+router.post('/logout', (req, res) => {
+    res.clearCookie('session_user');
+    res.json({ success: true });
 });
 
 module.exports = router;

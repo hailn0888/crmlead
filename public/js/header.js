@@ -442,7 +442,15 @@ document.addEventListener("DOMContentLoaded", () => {
     // 7. Hàm chức năng: Xử lý đăng xuất tài khoản, giữ lại cài đặt theme hiện tại
     const headerLogout = document.getElementById('headerLogout');
     if (headerLogout) {
-        headerLogout.addEventListener('click', () => {
+        headerLogout.addEventListener('click', async () => {
+            // Gọi API xoá cookie phiên phía server trước (cookie httpOnly nên JS không tự xoá được).
+            // Nếu lỗi mạng thì vẫn cứ đăng xuất phía client bình thường, không chặn người dùng.
+            try {
+                await fetch('/api/auth/logout', { method: 'POST' });
+            } catch (err) {
+                console.error('Lỗi khi xoá cookie phiên:', err);
+            }
+
             const currentTheme = localStorage.getItem('crm_theme');
             localStorage.clear();
             if (currentTheme) {

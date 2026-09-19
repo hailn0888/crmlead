@@ -343,20 +343,41 @@
             truong_nhom: document.getElementById('addTruongNhom')?.value || ''
         };
 
-            const res = await fetch('/api/admin/users', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
+            try {
+                const res = await fetch('/api/admin/users', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                // Trước đây không đọc JSON trả về nên: (1) không phát hiện được trường hợp
+                // backend trả HTTP 200 nhưng success:false (VD: trùng tên đăng nhập) — modal vẫn
+                // đóng như thành công dù chưa lưu được gì; (2) nhánh lỗi tham chiếu biến `result`
+                // chưa từng được parse, gây lỗi JS âm thầm không hiện thông báo. Sửa lại đầy đủ:
+                const result = await res.json().catch(() => ({}));
 
-            if (res.ok) {
-                userModal.classList.add('hidden');
-                fetchUsersAndGroups();
-                e.target.reset();
-            } else {
+                if (res.ok && result.success !== false) {
+                    userModal.classList.add('hidden');
+                    e.target.reset();
+                    await Swal.fire({
+                        title: 'Thành công!',
+                        text: 'Đã thêm nhân sự mới!',
+                        icon: 'success',
+                        confirmButtonText: 'OK'
+                    });
+                    fetchUsersAndGroups();
+                } else {
+                    await Swal.fire({
+                        title: 'Thất bại!',
+                        text: result.message || 'Lỗi khi thêm nhân sự mới!',
+                        icon: 'error',
+                        confirmButtonText: 'Đóng'
+                    });
+                }
+            } catch (error) {
+                console.error('Lỗi thêm user:', error);
                 await Swal.fire({
-                    title: 'Thất bại!',
-                    text: result.message || 'Lỗi khi thêm nhân sự mới!',
+                    title: 'Lỗi kết nối!',
+                    text: 'Không thể kết nối đến server: ' + error.message,
                     icon: 'error',
                     confirmButtonText: 'Đóng'
                 });
@@ -474,50 +495,9 @@
             });
         }
 
-        // Xử lý submit gán nhóm cho Trưởng nhóm và các nhân viên
-        document.getElementById('addGroupForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const selectUser = document.getElementById('modalSelectUser');
-            const selectedUserIds = Array.from(selectUser.selectedOptions).map(option => option.value);
-            const ten_nhom = document.getElementById('modalTenNhom').value;
-            const leader_id = document.getElementById('modalTruongNhom').value;
-
-            try {
-                const res = await fetch('/api/admin/groups', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ ten_nhom, leader_id, agent_ids: selectedUserIds })
-                });
-                const result = await res.json();
-
-                if (result.success) {
-                    await Swal.fire({
-                        title: 'Thành công!',
-                        text: 'Tạo và phân bổ nhóm mới thành công!',
-                        icon: 'success',
-                        confirmButtonText: 'OK'
-                    });
-                    groupModal.classList.add('hidden');
-                    fetchUsersAndGroups();
-                    e.target.reset();
-                } else {
-                    await Swal.fire({
-                        title: 'Thất bại!',
-                        text: result.message || 'Lỗi khi tạo nhóm!',
-                        icon: 'error',
-                        confirmButtonText: 'Đóng'
-                    });
-                }
-            } catch (error) {
-                console.error('Lỗi tạo nhóm:', error);
-                await Swal.fire({
-                    title: 'Lỗi kết nối!',
-                    text: 'Không thể kết nối đến server!',
-                    icon: 'error',
-                    confirmButtonText: 'Đóng'
-                });
-            }
-        });
+        // (Đã gỡ bỏ listener addGroupForm bị đăng ký trùng lặp lần 2 ở đây — trước đây form này
+        // có TỚI 2 listener submit cùng lúc (xem khối phía trên, dòng ~417), khiến mỗi lần bấm
+        // "Áp dụng nhóm" gửi 2 request POST /api/admin/groups liên tiếp. Chỉ giữ lại 1 listener.)
 
         // Hàm khóa/mở khóa tài khoản
         window.toggleLockUser = async function(id) {
