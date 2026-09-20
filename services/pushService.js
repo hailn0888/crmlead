@@ -7,7 +7,7 @@ try { webpush = require('web-push'); } catch (e) { /* chưa cài web-push */ }
 
 const PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || '';
 const PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || '';
-const SUBJECT = process.env.VAPID_SUBJECT || 'mailto:hailn.0888@gmail.com';
+const SUBJECT = process.env.VAPID_SUBJECT || 'mailto:admin@example.com';
 
 let enabled = !!(webpush && PUBLIC_KEY && PRIVATE_KEY);
 if (enabled) {
