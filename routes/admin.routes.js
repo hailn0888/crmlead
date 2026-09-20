@@ -765,7 +765,7 @@ router.post('/data-files/:fileId/assign', async (req, res) => {
  * LƯU Ý: hiện đang gom nhóm/tính toán ở tầng Node (fetch cả bảng rồi reduce trong JS) vì Supabase-js
  * không hỗ trợ GROUP BY trực tiếp qua query builder. Nếu sau này dữ liệu contracts/lead_assignments
  * phình quá lớn (hàng chục nghìn dòng+), nên chuyển sang RPC/SQL view cho nhanh hơn.
- */
+ */ 
 router.get('/dashboard-stats', async (req, res) => {
     try {
         const supabase = req.supabase;
