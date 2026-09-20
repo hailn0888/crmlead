@@ -75,5 +75,10 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Hệ thống CRM Lead đang chạy mượt mà tại port ${PORT}`);
     // Job nền nhắc lịch gọi lại khách: quét mỗi phút, gửi chuông trong app + Web Push.
     // Chỉ chạy trên 1 tiến trình (không bật nhiều instance) để khỏi gửi trùng thông báo.
-    require('./services/reminderJob').start(reminderSupabase);
+    // Bọc try/catch: nếu job nhắc lịch lỗi thì chỉ in lỗi ra log, KHÔNG làm sập cả website.
+    try {
+        require('./services/reminderJob').start(reminderSupabase);
+    } catch (err) {
+        console.error('[reminders] Không khởi động được job nhắc lịch:', err);
+    }
 });
