@@ -198,6 +198,86 @@ function updateGlobalStyles(config) {
         }
         /* ------------------------------------------------------------- */
 
+        /* --- ĐỒNG BỘ SWEETALERT2 (SWAL) THEO THEME: font, cỡ chữ, màu sắc --- */
+        /* Popup chính: nền, chữ, viền, bo góc đồng bộ theo theme-card */
+        .swal2-popup {
+            background-color: var(--bg-card) !important;
+            color: var(--text-main) !important;
+            font-family: inherit !important;
+            border: 1px solid var(--border-color) !important;
+            border-radius: 1rem !important;
+        }
+        .swal2-title {
+            color: var(--text-main) !important;
+            font-family: inherit !important;
+            font-size: 1.25rem !important;
+        }
+        .swal2-html-container {
+            color: var(--text-muted) !important;
+            font-family: inherit !important;
+            font-size: 0.925rem !important;
+        }
+        /* Backdrop mờ phía sau popup - giữ tối để nổi bật popup ở cả 2 theme */
+        .swal2-container.swal2-backdrop-show, .swal2-container.swal2-noanimation {
+            background: rgba(0, 0, 0, 0.55) !important;
+        }
+        /* Nút xác nhận (primary) - đồng bộ màu nút chính của hệ thống */
+        .swal2-styled.swal2-confirm {
+            background-color: var(--btn-primary-bg) !important;
+            color: var(--btn-primary-text) !important;
+            font-family: inherit !important;
+            font-size: 0.875rem !important;
+            box-shadow: none !important;
+        }
+        .swal2-styled.swal2-confirm:hover {
+            background-color: var(--btn-primary-hover) !important;
+        }
+        .swal2-styled.swal2-confirm:focus {
+            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.35) !important;
+        }
+        /* Nút huỷ (default) - đồng bộ màu nút phụ của hệ thống */
+        .swal2-styled.swal2-cancel {
+            background-color: var(--btn-bg) !important;
+            color: var(--btn-text) !important;
+            border: 1px solid var(--btn-border) !important;
+            font-family: inherit !important;
+            font-size: 0.875rem !important;
+            box-shadow: none !important;
+        }
+        .swal2-styled.swal2-cancel:hover {
+            background-color: var(--btn-hover) !important;
+        }
+        /* Nút từ chối/nguy hiểm (deny) - đồng bộ màu nút danger của hệ thống */
+        .swal2-styled.swal2-deny {
+            background-color: var(--btn-danger-bg) !important;
+            color: var(--btn-danger-text) !important;
+            border: 1px solid var(--btn-danger-border) !important;
+            font-family: inherit !important;
+            font-size: 0.875rem !important;
+            box-shadow: none !important;
+        }
+        /* Ô nhập liệu bên trong popup (Swal.fire({ input: ... })) */
+        .swal2-input, .swal2-textarea, .swal2-select {
+            background-color: var(--bg-page) !important;
+            color: var(--text-main) !important;
+            border: 1px solid var(--border-color) !important;
+            font-family: inherit !important;
+        }
+        .swal2-input:focus, .swal2-textarea:focus, .swal2-select:focus {
+            border-color: #10b981 !important;
+            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2) !important;
+        }
+        /* Đường kẻ phân cách phía trên vùng nút bấm */
+        .swal2-actions {
+            font-family: inherit !important;
+        }
+        /* Toast (Swal.fire hiện dạng góc màn hình) cũng đồng bộ theo theme */
+        .swal2-toast {
+            background-color: var(--bg-card) !important;
+            color: var(--text-main) !important;
+        }
+        /* ------------------------------------------------------------- */
+
         .btn-theme {
             background-color: var(--btn-bg);
             color: var(--btn-text);

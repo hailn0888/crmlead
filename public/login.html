@@ -5,6 +5,8 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Đăng nhập - CRM Lead</title>
         <script src="https://cdn.tailwindcss.com"></script>
+        <!-- SweetAlert2: dùng cho popup thông báo (Swal.fire) thay cho alert() mặc định của trình duyệt -->
+        <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
         <link rel="icon" type="image/png" href="../uploads/favicon.png">
         <link rel="apple-touch-icon" href="../uploads/icon.png">
@@ -177,7 +179,12 @@
                 const result = await res.json();
                 
                 if(result.success) {
-                    alert(result.message);
+                    await Swal.fire({
+                        icon: 'success',
+                        title: 'Thành công!',
+                        text: result.message,
+                        confirmButtonText: 'Đóng'
+                    });
                     modal.classList.add('hidden');
                     location.reload();
                 } else {

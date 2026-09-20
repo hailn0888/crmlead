@@ -16,6 +16,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     const menusByRole = {
         admin: [
             { name: "Tổng quan", icon: "layout-dashboard", href: "/admin/dashboard_admin.html" },
+            { name: "Theo dõi MDRT", icon: "award", href: "/admin/mdrt.html" },
+            { name: "Theo dõi Pru Champion", icon: "crown", href: "/admin/pru_champion.html" },
             { name: "Báo cáo doanh số nhóm", icon: "users", href: "/admin/rpsale_team.html" },
             { name: "Báo cáo doanh số cá nhân", icon: "user", href: "/admin/rpsale_personal.html" },
             { name: "Báo cáo Lead nhóm", icon: "network", href: "/admin/rplead_team.html" },
@@ -23,7 +25,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             { name: "Quản lý user", icon: "user-cog", href: "/admin/users.html" },
             { name: "Quản lý data", icon: "database", href: "/admin/quanlydata.html" },
             { name: "Quản lý dữ liệu hợp đồng", icon: "shield-check", href: "/admin/hop_dong.html" },
-            { name: "Công cụ tính FYC", icon: "calculator", href: "/admin/cal_fyc.html" }
+            { name: "Công cụ tính FYC", icon: "calculator", href: "/admin/cal_fyc.html" }            
         ],
         leader: [
             { name: "Team Overview", icon: "layout-dashboard", href: "/leader/dashboard.html" },
@@ -63,6 +65,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Buộc đăng xuất ngay lập tức: xoá cookie phiên (server) + localStorage, đưa về trang login.
     // Gọi khi phát hiện tài khoản đã bị admin khoá, dù đang ở bất kỳ trang nào.
+    // Dùng SweetAlert2 (Swal) nếu trang hiện tại đã nhúng sẵn thư viện này; nếu chưa nhúng
+    // (sidebar.js chạy trên rất nhiều trang, không phải trang nào cũng có Swal) thì tự động
+    // rớt về alert() mặc định của trình duyệt để không làm vỡ trang.
     async function buocDangXuat(message) {
         try {
             await fetch('/api/auth/logout', { method: 'POST' });
@@ -70,7 +75,13 @@ document.addEventListener("DOMContentLoaded", async () => {
             console.error('Lỗi khi xoá cookie phiên:', err);
         }
         localStorage.clear();
-        alert(message || 'Tài khoản của bạn đã bị khoá. Vui lòng liên hệ admin.');
+
+        const noiDung = message || 'Tài khoản của bạn đã bị khoá. Vui lòng liên hệ admin.';
+        if (typeof Swal !== 'undefined') {
+            await Swal.fire({ icon: 'warning', title: 'Thông báo', text: noiDung, confirmButtonText: 'Đã hiểu' });
+        } else {
+            alert(noiDung);
+        }
         window.location.href = '/login.html';
     }
 

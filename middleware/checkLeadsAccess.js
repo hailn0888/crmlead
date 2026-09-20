@@ -39,15 +39,25 @@ module.exports = async function checkLeadsAccess(req, res, next) {
     }
 };
 
-// Trang thông báo nhỏ gọn, tự alert rồi điều hướng - không cần tạo thêm file 403.html riêng
+// Trang thông báo nhỏ gọn, tự hiện Swal rồi điều hướng - không cần tạo thêm file 403.html riêng
 function renderThongBao(message, redirectTo) {
     return `<!DOCTYPE html>
 <html lang="vi">
-<head><meta charset="UTF-8"><title>Không có quyền truy cập</title></head>
+<head>
+    <meta charset="UTF-8">
+    <title>Không có quyền truy cập</title>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+</head>
 <body>
     <script>
-        alert(${JSON.stringify(message)});
-        window.location.href = ${JSON.stringify(redirectTo)};
+        Swal.fire({
+            icon: 'warning',
+            title: 'Thông báo',
+            text: ${JSON.stringify(message)},
+            confirmButtonText: 'Đã hiểu'
+        }).then(() => {
+            window.location.href = ${JSON.stringify(redirectTo)};
+        });
     </script>
 </body>
 </html>`;

@@ -1,0 +1,99 @@
+/* ==========================================================================
+   public/css/tablet.css  -  Giao diện máy tính bảng (768px - 1024px)
+   --------------------------------------------------------------------------
+   Nguyên tắc giống mobile.css: không khai báo màu/font, mọi màu do theme.js quyết định.
+   Nạp bằng: <link ... href="/css/tablet.css" media="(min-width: 768px) and (max-width: 1024px)">
+
+   Ý tưởng: sidebar luôn là thanh icon hẹp (4rem) và nội dung giữ nguyên chiều rộng.
+   Khi bấm "Mở rộng menu", sidebar 16rem đè LÊN nội dung (có lớp phủ mờ) thay vì
+   đẩy nội dung sang phải như desktop - nếu đẩy thì iPad dọc (768px) chỉ còn ~500px cho nội dung.
+   ========================================================================== */
+
+@media (min-width: 768px) and (max-width: 1024px) {
+
+    /* ---------- NỀN TẢNG ---------- */
+    html body .h-screen     { height: 100vh;     height: 100dvh; }
+    html body .min-h-screen { min-height: 100vh; min-height: 100dvh; }
+    a, button, select, label, summary { touch-action: manipulation; }
+
+    /* ---------- KHUNG NỘI DUNG: luôn chừa đúng chỗ cho thanh icon ---------- */
+    /* Ghi đè margin-left inline do sidebar.js đặt (16rem khi mở rộng) */
+    html body #mainContainer { margin-left: 4rem !important; min-width: 0; }
+    html body #mainContainer > main {
+        padding-left: 1.25rem;
+        padding-right: 1.25rem;
+        min-width: 0;
+    }
+    /* footer.js đồng bộ "left" theo margin của #mainContainer -> giữ khớp */
+    html body #app-footer { left: 4rem !important; }
+
+    /* ---------- HEADER ---------- */
+    /* Ctrl I là phím tắt bàn phím, không có ý nghĩa trên cảm ứng */
+    html body #aiAssistantBtn > span:last-child { display: none; }
+    html body #notifBtn,
+    html body #aiAssistantBtn,
+    html body #userMenuBtn { min-height: 2.5rem; }
+    html body #headerName { max-width: 16rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    html body #userDropdown { max-width: calc(100vw - 1rem); }
+    html body #notifDropdown { max-width: calc(100vw - 1rem); }
+
+    /* Khung AI Assistant: 26rem hoặc 70% màn hình, cái nào nhỏ hơn */
+    html body #aiDrawer {
+        width: min(26rem, 70vw) !important;
+        height: 100vh;
+        height: 100dvh;
+        bottom: auto;
+    }
+    html body #aiDrawer.translate-x-full { box-shadow: none; }
+
+    /* ---------- SIDEBAR: thanh icon, mở rộng thì đè lên nội dung ---------- */
+    html body #appSidebar { z-index: 45; overscroll-behavior: contain; }
+    html.crm-sb-expanded body #appSidebar { box-shadow: 0 0 2rem rgba(0, 0, 0, .3); }
+
+    html body #appSidebar a { min-height: 2.75rem; }
+    html body #appSidebar a.crm-nav-active {
+        background-color: var(--sidebar-hover) !important;
+        font-weight: 600;
+        box-shadow: inset 3px 0 0 var(--btn-primary-bg);
+    }
+
+    /* Lớp phủ chỉ xuất hiện khi menu đang mở rộng */
+    html body #crmNavOverlay {
+        display: block !important;
+        position: fixed;
+        top: 3.5rem;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 39;
+        background: rgba(0, 0, 0, .4);
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity .25s ease, visibility .25s ease;
+    }
+    html.crm-sb-expanded body #crmNavOverlay { opacity: 1; visibility: visible; }
+
+    /* ---------- BẢNG & FORM ---------- */
+    html body main .theme-card .overflow-x-auto { scrollbar-width: thin; }
+    /* Bảng nhiều cột (bảng có class rt-cards): giữ chiều rộng tối thiểu rồi cuộn ngang,
+       thay vì bóp cột Ghi chú/Địa chỉ còn vài chục px */
+    html body table.rt-cards { min-width: 56rem; }
+    /* Nút thao tác trong bảng: vùng bấm >= 40px */
+    html body main table td button,
+    html body main table td a.inline-flex { min-height: 2.25rem; }
+
+    /* Ô tìm kiếm cố định w-48/w-56 (calls.html): rộng thêm cho dễ nhập */
+    html body main input.w-48,
+    html body main input.w-56 { width: 16rem; }
+
+    /* Dashboard: bảng nhập 12 tháng giữ 6 cột nhưng ô nhập cao hơn cho ngón tay */
+    html body .month-row .month-input { padding: .5rem .5rem; }
+
+    /* ---------- THƯ VIỆN SẢN PHẨM ---------- */
+    html body #detailModal .modal-panel { max-height: 90vh; max-height: 90dvh; }
+
+    /* ---------- POPUP SWEETALERT2 ---------- */
+    html body .swal2-popup { max-width: min(38rem, calc(100vw - 2rem)); }
+    html body .swal2-html-container { max-height: 70vh; max-height: 70dvh; overflow-y: auto; }
+    html body .swal2-actions .swal2-styled { min-height: 2.5rem; }
+}

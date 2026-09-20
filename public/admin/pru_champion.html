@@ -160,19 +160,24 @@
 
     // Điều kiện xếp hạng PruChampion chuẩn — Bảng 2.3, Memo 01901/AD/2026
     // TODO xác nhận với bộ phận chính sách: cột "FYC" là 12 tháng trượt hay theo quý.
+    // LƯU Ý: các ngưỡng FYC dưới đây tính bằng ĐỒNG (VNĐ) đầy đủ, khớp cách nhập số thực tế của form
+    // (VD nhập 150.000.000 cho 150 triệu) — không còn dùng đơn vị "triệu" rút gọn như trước.
     const TIERS = [
-        { key: 'vang',     name: 'Vàng',       fyc: 150, tvvMoi: 1, tldtptt: 60 },
-        { key: 'bachkim',  name: 'Bạch Kim',   fyc: 300, tvvMoi: 2, tldtptt: 60 },
-        { key: 'kimcuong', name: 'Kim Cương',  fyc: 800, tvvMoi: 3, tldtptt: 60 },
+        { key: 'vang',     name: 'Vàng',       fyc: 150000000, tvvMoi: 1, tldtptt: 60 },
+        { key: 'bachkim',  name: 'Bạch Kim',   fyc: 300000000, tvvMoi: 2, tldtptt: 60 },
+        { key: 'kimcuong', name: 'Kim Cương',  fyc: 800000000, tvvMoi: 3, tldtptt: 60 },
     ];
 
     // Đường tắt lên Vàng — Memo 00407/AD/2026, chỉ hiệu lực 01/07/2026 – 31/12/2026
     const FAST_TRACK_VANG = [
-        { months: 9, fyc: 115 },
-        { months: 6, fyc: 75 },
-        { months: 3, fyc: 40 },
+        { months: 9, fyc: 115000000 },
+        { months: 6, fyc: 75000000 },
+        { months: 3, fyc: 40000000 },
     ];
     const FAST_TRACK_DEADLINE = new Date('2026-12-31');
+
+    // Ngưỡng duy trì chức danh QLTVV — Memo 00601 mục C (FYC thuần phòng trực tiếp 6 tháng ≥20 triệu)
+    const MAINTAIN_FYC_6M_THRESHOLD = 20000000;
 
     const QUARTERLY_REVIEW_MONTHS = [4, 7, 10, 1];
     const MAINTAIN_REVIEW_MONTHS = [1, 7];
@@ -286,7 +291,7 @@
                 const fycKey = 'fyc' + ft.months + 'm';
                 const fycVal = leader[fycKey] ?? 0;
                 const items = [
-                    { label: `FYC phòng trực tiếp (${ft.months} tháng)`, value: fycVal, target: ft.fyc, unit: 'triệu', percent: pct(fycVal, ft.fyc), met: fycVal >= ft.fyc },
+                    { label: `FYC phòng trực tiếp (${ft.months} tháng)`, value: fycVal, target: ft.fyc, unit: 'đ', percent: pct(fycVal, ft.fyc), met: fycVal >= ft.fyc },
                     { label: 'TVV mới chất lượng', value: tvvMoiTong(leader), target: 1, unit: '', percent: pct(tvvMoiTong(leader), 1), met: tvvMoiTong(leader) >= 1 },
                     { label: 'TLDTPTT', value: leader.tldtptt, target: 60, unit: '%', percent: pct(leader.tldtptt, 60), met: leader.tldtptt >= 60 },
                 ];
@@ -309,7 +314,7 @@
         const fyc = fycTong(leader);
         const tvv = tvvMoiTong(leader);
         const items = [
-            { label: 'Tổng FYC phòng trực tiếp (riêng + 50% Gen1)', value: fyc, target: tier.fyc, unit: 'triệu', percent: pct(fyc, tier.fyc), met: fyc >= tier.fyc },
+            { label: 'Tổng FYC phòng trực tiếp (riêng + 50% Gen1)', value: fyc, target: tier.fyc, unit: 'đ', percent: pct(fyc, tier.fyc), met: fyc >= tier.fyc },
             { label: 'Tổng TVV mới chất lượng (riêng + 50% Gen1)', value: tvv, target: tier.tvvMoi, unit: '', percent: pct(tvv, tier.tvvMoi), met: tvv >= tier.tvvMoi },
             { label: 'TLDTPTT', value: leader.tldtptt, target: tier.tldtptt, unit: '%', percent: pct(leader.tldtptt, tier.tldtptt), met: leader.tldtptt >= tier.tldtptt },
         ];
@@ -320,7 +325,9 @@
     function computeMaintainRisk(leader) {
         if (leader.hoSoDacBiet) return { atRisk: false, reasons: [] };
         const reasons = [];
-        if ((leader.fyc6mThuanDuyTri || 0) < 20) reasons.push(`FYC thuần phòng trực tiếp 6 tháng: ${leader.fyc6mThuanDuyTri || 0}tr (cần ≥20tr)`);
+        if ((leader.fyc6mThuanDuyTri || 0) < MAINTAIN_FYC_6M_THRESHOLD) {
+            reasons.push(`FYC thuần phòng trực tiếp 6 tháng: ${(leader.fyc6mThuanDuyTri || 0).toLocaleString('vi-VN')}đ (cần ≥${MAINTAIN_FYC_6M_THRESHOLD.toLocaleString('vi-VN')}đ)`);
+        }
         if ((leader.tvvHoatDongDuyTri || 0) < 6) reasons.push(`Lượt TVV hoạt động 6 tháng: ${leader.tvvHoatDongDuyTri || 0} (cần ≥6)`);
         if ((leader.tldtptt || 0) < 60) reasons.push(`TLDTPTT: ${leader.tldtptt || 0}% (cần ≥60% cho đợt 07/2026 & 01/2027)`);
         return { atRisk: reasons.length > 0, reasons };
@@ -542,6 +549,38 @@
         });
     }
 
+    // Định dạng số tiền đồng có dấu chấm phân cách nghìn khi hiển thị/nhập (VD: 30.000.000)
+    function formatVND(value) {
+        const digits = String(value ?? '').replace(/[^\d]/g, '');
+        if (!digits) return '';
+        return Number(digits).toLocaleString('vi-VN');
+    }
+
+    // Đọc ngược số đã định dạng dấu chấm về số nguyên thuần (VD: "30.000.000" -> 30000000)
+    function parseVND(str) {
+        return parseInt(String(str ?? '').replace(/[^\d]/g, ''), 10) || 0;
+    }
+
+    // Gắn tự động chấm phân cách nghìn khi gõ cho 1 ô input tiền — giữ đúng vị trí con trỏ khi định dạng lại
+    function attachVNDFormatting(inputEl) {
+        if (!inputEl) return;
+        inputEl.addEventListener('input', () => {
+            const digitsBeforeCursor = inputEl.value.slice(0, inputEl.selectionStart).replace(/[^\d]/g, '').length;
+            inputEl.value = formatVND(inputEl.value);
+            let pos = 0, digitsSeen = 0;
+            while (pos < inputEl.value.length && digitsSeen < digitsBeforeCursor) {
+                if (/\d/.test(inputEl.value[pos])) digitsSeen++;
+                pos++;
+            }
+            inputEl.setSelectionRange(pos, pos);
+        });
+    }
+
+    function attachAllVNDFields() {
+        ['f-fycrieng', 'f-fycgen1', 'f-fyc9m', 'f-fyc6m', 'f-fyc3m', 'f-fyc6mduy']
+            .forEach(id => attachVNDFormatting(document.getElementById(id)));
+    }
+
     async function openAvatarModal(id) {
         const leader = leaders.find(l => l.id === id);
         if (!leader) return;
@@ -603,12 +642,12 @@
                     </label>
                     <div class="grid grid-cols-2 gap-2">
                         <label>
-                            <span class="pc-label">FYC phòng trực tiếp (riêng, triệu)</span>
-                            <input id="f-fycrieng" type="number" min="0" value="${leader.fycRieng || 0}" class="pc-input">
+                            <span class="pc-label">FYC phòng trực tiếp (riêng, đ)</span>
+                            <input id="f-fycrieng" type="text" inputmode="numeric" value="${formatVND(leader.fycRieng)}" placeholder="VD: 150.000.000" class="pc-input">
                         </label>
                         <label>
-                            <span class="pc-label">50% FYC Gen1 (triệu)</span>
-                            <input id="f-fycgen1" type="number" min="0" value="${leader.fycGen1Half || 0}" class="pc-input">
+                            <span class="pc-label">50% FYC Gen1 (đ)</span>
+                            <input id="f-fycgen1" type="text" inputmode="numeric" value="${formatVND(leader.fycGen1Half)}" placeholder="0" class="pc-input">
                         </label>
                     </div>
                     <div class="grid grid-cols-2 gap-2">
@@ -628,23 +667,23 @@
                     <div class="pt-1 pb-0.5 text-[11px] font-medium opacity-60">Đường tắt Vàng — chỉ áp dụng 01/07–31/12/2026 (Memo 00407)</div>
                     <div class="grid grid-cols-3 gap-2">
                         <label>
-                            <span class="pc-label">FYC 9 tháng</span>
-                            <input id="f-fyc9m" type="number" min="0" value="${leader.fyc9m || 0}" class="pc-input">
+                            <span class="pc-label">FYC 9 tháng (đ)</span>
+                            <input id="f-fyc9m" type="text" inputmode="numeric" value="${formatVND(leader.fyc9m)}" placeholder="0" class="pc-input">
                         </label>
                         <label>
-                            <span class="pc-label">FYC 6 tháng</span>
-                            <input id="f-fyc6m" type="number" min="0" value="${leader.fyc6m || 0}" class="pc-input">
+                            <span class="pc-label">FYC 6 tháng (đ)</span>
+                            <input id="f-fyc6m" type="text" inputmode="numeric" value="${formatVND(leader.fyc6m)}" placeholder="0" class="pc-input">
                         </label>
                         <label>
-                            <span class="pc-label">FYC 3 tháng</span>
-                            <input id="f-fyc3m" type="number" min="0" value="${leader.fyc3m || 0}" class="pc-input">
+                            <span class="pc-label">FYC 3 tháng (đ)</span>
+                            <input id="f-fyc3m" type="text" inputmode="numeric" value="${formatVND(leader.fyc3m)}" placeholder="0" class="pc-input">
                         </label>
                     </div>
                     <div class="pt-1 pb-0.5 text-[11px] font-medium opacity-60">Chỉ tiêu duy trì chức danh QLTVV (Memo 00601)</div>
                     <div class="grid grid-cols-2 gap-2">
                         <label>
-                            <span class="pc-label">FYC thuần 6 tháng (duy trì)</span>
-                            <input id="f-fyc6mduy" type="number" min="0" value="${leader.fyc6mThuanDuyTri || 0}" class="pc-input">
+                            <span class="pc-label">FYC thuần 6 tháng (duy trì, đ)</span>
+                            <input id="f-fyc6mduy" type="text" inputmode="numeric" value="${formatVND(leader.fyc6mThuanDuyTri)}" placeholder="0" class="pc-input">
                         </label>
                         <label>
                             <span class="pc-label">Lượt TVV hoạt động 6 tháng</span>
@@ -663,18 +702,19 @@
             focusConfirm: false,
             didOpen: () => {
                 document.getElementById('f-badge').value = leader.currentBadge || '';
+                attachAllVNDFields();
             },
             preConfirm: () => ({
                 currentBadge: document.getElementById('f-badge').value || null,
-                fycRieng: parseFloat(document.getElementById('f-fycrieng').value) || 0,
-                fycGen1Half: parseFloat(document.getElementById('f-fycgen1').value) || 0,
+                fycRieng: parseVND(document.getElementById('f-fycrieng').value),
+                fycGen1Half: parseVND(document.getElementById('f-fycgen1').value),
                 tvvMoiRieng: parseInt(document.getElementById('f-tvvrieng').value) || 0,
                 tvvMoiGen1Half: parseInt(document.getElementById('f-tvvgen1').value) || 0,
                 tldtptt: parseFloat(document.getElementById('f-tldtptt').value) || 0,
-                fyc9m: parseFloat(document.getElementById('f-fyc9m').value) || 0,
-                fyc6m: parseFloat(document.getElementById('f-fyc6m').value) || 0,
-                fyc3m: parseFloat(document.getElementById('f-fyc3m').value) || 0,
-                fyc6mThuanDuyTri: parseFloat(document.getElementById('f-fyc6mduy').value) || 0,
+                fyc9m: parseVND(document.getElementById('f-fyc9m').value),
+                fyc6m: parseVND(document.getElementById('f-fyc6m').value),
+                fyc3m: parseVND(document.getElementById('f-fyc3m').value),
+                fyc6mThuanDuyTri: parseVND(document.getElementById('f-fyc6mduy').value),
                 tvvHoatDongDuyTri: parseInt(document.getElementById('f-tvv6mduy').value) || 0,
                 viPhamNoiQuy: document.getElementById('f-vipham').checked,
             }),

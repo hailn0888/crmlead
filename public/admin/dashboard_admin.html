@@ -1,60 +1,548 @@
+<!-- public/admin/dashboard_admin.html -->
 <!DOCTYPE html>
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Dashboard - CRM Lead</title>
-    
+    <title>Tổng quan - CRM Lead</title>
     <link rel="icon" type="image/png" href="/uploads/favicon.png">
-    <link rel="apple-touch-icon" href="/uploads/icon.png">
 
+    <!-- Meta OG/Twitter: hiển thị ảnh thumbnail + tiêu đề khi dán link chia sẻ qua Zalo/Facebook -->
+    <meta property="og:title" content="CRM Lead - Tổng quan hệ thống">
+    <meta property="og:description" content="Hệ thống quản lý chăm sóc khách hàng CRM Lead">
+    <meta property="og:image" content="https://i.ibb.co/W4SpWjYy/icon.png">
+    <meta property="og:type" content="website">
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="CRM Lead - Tổng quan hệ thống">
+    <meta name="twitter:image" content="https://i.ibb.co/W4SpWjYy/icon.png">
+
+    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="/js/lucide.min.js"></script>
-    <script src="/js/header.js"></script>
-    <script src="/js/sidebar.js"></script>
-    <script src="/js/footer.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- SweetAlert2: dùng cho toàn bộ popup/toast thông báo (Swal.fire) trong trang này -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <!-- File Theme chung -->
     <script src="/js/theme.js"></script>
 </head>
+<body class="min-h-screen flex flex-col transition-colors duration-200">
 
-<body class="font-sans antialiased transition-colors duration-200">
+    <!-- Header dùng chung -->
+    <script src="/js/header.js"></script>
 
-    <!-- Nội dung trang chính -->
-    <div class="flex h-screen overflow-hidden">
-        <!-- Main Content (Đã xóa bg-white cứng để tự động ăn theo theme.js) -->
-        <div id="mainContainer" class="flex-1 flex flex-col overflow-y-auto transition-colors duration-200 pt-16">
-            <main class="px-4 py-4 max-w-full w-full">
-                <div class="mb-4">
-                    <h1 class="text-xl font-bold tracking-tight">Tổng quan</h1>
+    <!-- Sidebar dùng chung -->
+    <script src="/js/sidebar.js"></script>
+
+    <!-- Khung nội dung chính -->
+    <div id="mainContainer" class="flex-1 flex flex-col transition-colors duration-200 pt-16 ml-0 md:ml-64 p-3 md:p-6 overflow-x-hidden">
+
+        <!-- Tiêu đề trang & Nút làm mới -->
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+            <div>
+                <h1 class="text-xl font-bold tracking-tight">Tổng quan hệ thống</h1>
+                <p class="text-xs opacity-60 mt-0.5">Số liệu thời gian thực từ toàn bộ dữ liệu hiện có</p>
+            </div>
+            <button id="btnRefresh" class="px-3.5 py-2 rounded-xl text-xs font-medium border border-inherit hover:opacity-80 transition flex items-center space-x-2 self-start md:self-auto">
+                <i data-lucide="refresh-cw" class="w-4 h-4 text-emerald-500"></i>
+                <span>Làm mới dữ liệu</span>
+            </button>
+        </div>
+
+        <!-- Khung skeleton loading khi đang tải -->
+        <div id="loadingState" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+            <!-- 6 khung skeleton, JS sẽ render lại toàn bộ sau khi có dữ liệu -->
+        </div>
+
+        <!-- Toàn bộ nội dung thật, ẩn cho tới khi tải xong -->
+        <div id="dashboardContent" class="hidden">
+
+            <!-- ===== HÀNG 1: KPI CARDS ===== -->
+            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+                <div class="p-4 rounded-2xl border border-inherit theme-dropdown">
+                    <div class="flex items-center justify-between mb-2">
+                        <i data-lucide="users" class="w-4 h-4 text-emerald-500"></i>
+                    </div>
+                    <p id="kpiTongNhanSu" class="text-xl font-bold">0</p>
+                    <p class="text-[11px] opacity-60 mt-0.5">Tổng nhân sự</p>
                 </div>
+                <div class="p-4 rounded-2xl border border-inherit theme-dropdown">
+                    <div class="flex items-center justify-between mb-2">
+                        <i data-lucide="user-check" class="w-4 h-4 text-blue-500"></i>
+                    </div>
+                    <p id="kpiTongAgent" class="text-xl font-bold">0</p>
+                    <p class="text-[11px] opacity-60 mt-0.5">Agent</p>
+                </div>
+                <div class="p-4 rounded-2xl border border-inherit theme-dropdown">
+                    <div class="flex items-center justify-between mb-2">
+                        <i data-lucide="shield" class="w-4 h-4 text-purple-500"></i>
+                    </div>
+                    <p id="kpiTongLeader" class="text-xl font-bold">0</p>
+                    <p class="text-[11px] opacity-60 mt-0.5">Leader</p>
+                </div>
+                <div class="p-4 rounded-2xl border border-inherit theme-dropdown">
+                    <div class="flex items-center justify-between mb-2">
+                        <i data-lucide="lock" class="w-4 h-4 text-red-500"></i>
+                    </div>
+                    <p id="kpiTaiKhoanBiKhoa" class="text-xl font-bold text-red-500">0</p>
+                    <p class="text-[11px] opacity-60 mt-0.5">Tài khoản bị khoá</p>
+                </div>
+                <div class="p-4 rounded-2xl border border-inherit theme-dropdown">
+                    <div class="flex items-center justify-between mb-2">
+                        <i data-lucide="file-check-2" class="w-4 h-4 text-amber-500"></i>
+                    </div>
+                    <p id="kpiTongHopDong" class="text-xl font-bold">0</p>
+                    <p class="text-[11px] opacity-60 mt-0.5">Hợp đồng đã chốt</p>
+                </div>
+                <div class="p-4 rounded-2xl border border-inherit theme-dropdown">
+                    <div class="flex items-center justify-between mb-2">
+                        <i data-lucide="banknote" class="w-4 h-4 text-emerald-500"></i>
+                    </div>
+                    <p id="kpiTongMenhGia" class="text-lg font-bold truncate">0 đ</p>
+                    <p class="text-[11px] opacity-60 mt-0.5">Tổng mệnh giá</p>
+                </div>
+            </div>
 
-                <!-- Thống kê nhanh (Cards kiểu Supabase Dashboard) -->
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                    <div class="theme-card border p-4 rounded-xl transition">
-                        <p class="text-xs opacity-65 font-medium uppercase tracking-wider">Tổng số User</p>
-                        <h3 class="text-xl font-semibold mt-1">12</h3>
-                    </div>
-                    <div class="theme-card border p-4 rounded-xl transition">
-                        <p class="text-xs opacity-65 font-medium uppercase tracking-wider">Tổng số Lead</p>
-                        <h3 class="text-xl font-semibold mt-1">148</h3>
-                    </div>
-                    <div class="theme-card border p-4 rounded-xl transition">
-                        <p class="text-xs opacity-65 font-medium uppercase tracking-wider">Hợp đồng đã chốt</p>
-                        <h3 class="text-xl font-semibold text-emerald-500 mt-1">32</h3>
-                    </div>
-                    <div class="theme-card border p-4 rounded-xl transition">
-                        <p class="text-xs opacity-65 font-medium uppercase tracking-wider">Cuộc gọi chăm sóc</p>
-                        <h3 class="text-xl font-semibold text-blue-500 mt-1">510</h3>
+            <!-- ===== HÀNG 1.5: Doanh số 12 tháng + Tỷ trọng TVV tháng này ===== -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+                <div class="lg:col-span-2 p-4 rounded-2xl border border-inherit theme-dropdown">
+                    <h2 class="text-sm font-semibold mb-1 flex items-center space-x-2">
+                        <i data-lucide="trending-up" class="w-4 h-4 text-emerald-500"></i>
+                        <span>Doanh số 12 tháng (<span id="namHienTaiLabel"></span>)</span>
+                    </h2>
+                    <p class="text-[11px] opacity-60 mb-3">Tổng mệnh giá hợp đồng đã chốt theo từng tháng</p>
+                    <div class="overflow-x-auto">
+                        <svg id="chartDoanhSo" class="w-full min-w-[560px]" viewBox="0 0 640 240" preserveAspectRatio="xMidYMid meet"></svg>
                     </div>
                 </div>
-
-                <!-- Khung thông tin chi tiết -->
-                <div class="theme-card rounded-xl border p-5 transition">
-                    <h3 class="text-sm font-semibold mb-1">Trạng thái vận hành</h3>
-                    <p class="text-xs opacity-70 leading-relaxed">Hệ thống phân quyền bảo mật và kết nối Supabase Database đang hoạt động ổn định. Mọi thông số dòng tiền và chăm sóc khách hàng được đồng bộ hóa thời gian thực.</p>
+                <div class="p-4 rounded-2xl border border-inherit theme-dropdown">
+                    <h2 class="text-sm font-semibold mb-1 flex items-center space-x-2">
+                        <i data-lucide="pie-chart" class="w-4 h-4 text-purple-500"></i>
+                        <span>Tỷ trọng TVV tháng này</span>
+                    </h2>
+                    <p class="text-[11px] opacity-60 mb-3">Theo tổng mệnh giá hợp đồng đã chốt trong tháng</p>
+                    <div class="flex flex-col items-center">
+                        <svg id="chartTyTrong" viewBox="0 0 200 200" class="w-40 h-40 shrink-0"></svg>
+                        <div id="legendTyTrong" class="w-full mt-3 space-y-1.5"></div>
+                    </div>
                 </div>
-            </main>
+            </div>
+
+            <!-- ===== HÀNG 2: Phân bổ nhóm + Phễu trạng thái Lead ===== -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+                <div class="p-4 rounded-2xl border border-inherit theme-dropdown">
+                    <h2 class="text-sm font-semibold mb-3 flex items-center space-x-2">
+                        <i data-lucide="network" class="w-4 h-4 text-emerald-500"></i>
+                        <span>Phân bổ nhân sự theo nhóm</span>
+                    </h2>
+                    <div id="chartTheoNhom" class="space-y-2.5"></div>
+                </div>
+                <div class="p-4 rounded-2xl border border-inherit theme-dropdown">
+                    <h2 class="text-sm font-semibold mb-3 flex items-center space-x-2">
+                        <i data-lucide="filter" class="w-4 h-4 text-blue-500"></i>
+                        <span>Phễu trạng thái Lead</span>
+                    </h2>
+                    <p class="text-[11px] opacity-60 mb-3">Tổng <span id="kpiTongLeadDaPhanBo" class="font-semibold">0</span> lead đã phân bổ</p>
+                    <div id="chartPheuLead" class="space-y-2.5"></div>
+                </div>
+            </div>
+
+            <!-- ===== HÀNG 3: Cảnh báo & việc cần chú ý ===== -->
+            <div class="p-4 rounded-2xl border border-inherit theme-dropdown mb-6">
+                <h2 class="text-sm font-semibold mb-3 flex items-center space-x-2">
+                    <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-500"></i>
+                    <span>Cảnh báo & việc cần chú ý</span>
+                </h2>
+                <div id="canhBaoList" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3"></div>
+            </div>
+
+            <!-- ===== HÀNG 4: Top nhân sự + Hợp đồng ký gần đây ===== -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+                <div class="p-4 rounded-2xl border border-inherit theme-dropdown">
+                    <h2 class="text-sm font-semibold mb-3 flex items-center space-x-2">
+                        <i data-lucide="trophy" class="w-4 h-4 text-amber-500"></i>
+                        <span>Top nhân sự theo hợp đồng đã chốt</span>
+                    </h2>
+                    <div id="topNhanSuList" class="space-y-2"></div>
+                </div>
+                <div class="p-4 rounded-2xl border border-inherit theme-dropdown">
+                    <h2 class="text-sm font-semibold mb-3 flex items-center space-x-2">
+                        <i data-lucide="file-signature" class="w-4 h-4 text-emerald-500"></i>
+                        <span>Hợp đồng ký gần đây</span>
+                    </h2>
+                    <div id="hopDongGanDayList" class="space-y-2"></div>
+                </div>
+            </div>
+
+            <!-- ===== HÀNG 5: Nhân viên mới gia nhập ===== -->
+            <div class="p-4 rounded-2xl border border-inherit theme-dropdown mb-6">
+                <h2 class="text-sm font-semibold mb-3 flex items-center space-x-2">
+                    <i data-lucide="user-plus" class="w-4 h-4 text-blue-500"></i>
+                    <span>Nhân viên mới gia nhập gần đây</span>
+                </h2>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse text-xs min-w-[480px]">
+                        <thead>
+                            <tr class="border-b border-inherit opacity-75 font-semibold">
+                                <th class="p-2.5">Họ và Tên</th>
+                                <th class="p-2.5">MSĐL</th>
+                                <th class="p-2.5">Nhóm</th>
+                                <th class="p-2.5 text-right">Ngày tạo</th>
+                            </tr>
+                        </thead>
+                        <tbody id="nhanVienMoiBody" class="divide-y divide-inherit"></tbody>
+                    </table>
+                </div>
+            </div>
+
         </div>
     </div>
 
+    <!-- Footer dùng chung -->
+    <script src="/js/footer.js"></script>
+
+    <script>
+        // ==========================================
+        // TÊN FILE: public/admin/dashboard_admin.html (inline script)
+        // CHỨC NĂNG: Gọi API /api/admin/dashboard-stats lấy số liệu thật, render toàn bộ widget
+        // Tổng quan. Toàn bộ màu sắc dùng biến CSS của theme.js (không set màu tĩnh) để tự đổi
+        // theo Light/Dark; toàn bộ thông báo dùng SweetAlert2 thay vì alert() mặc định.
+        // ==========================================
+
+        const formatTien = (so) => new Intl.NumberFormat('vi-VN').format(Math.round(so || 0)) + ' đ';
+        const formatNgay = (iso) => {
+            if (!iso) return '—';
+            const d = new Date(iso);
+            if (isNaN(d.getTime())) return '—';
+            return d.toLocaleDateString('vi-VN');
+        };
+        const chePhoneMotPhan = (phone) => {
+            const s = String(phone || '');
+            return s.length >= 6 ? s.slice(0, 3) + '***' + s.slice(-3) : s;
+        };
+
+        // Thanh ngang tỉ lệ - dùng cho "Phân bổ theo nhóm" và "Phễu trạng thái Lead".
+        // Màu bám theo --btn-primary-bg (biến CSS của theme.js) qua class "bg-emerald-500 dark:..."
+        // không khả thi vì theme của hệ thống không dùng class "dark:" của Tailwind mà dùng biến CSS riêng,
+        // nên dùng inline style="background-color: var(--btn-primary-bg)" để luôn khớp theme hiện tại.
+        function renderThanhTiLe(container, items, keyLabel, keyValue) {
+            container.innerHTML = '';
+            if (!items.length) {
+                container.innerHTML = '<p class="text-xs opacity-50 italic">Chưa có dữ liệu.</p>';
+                return;
+            }
+            const max = Math.max(...items.map(i => i[keyValue]), 1);
+            items.forEach(item => {
+                const percent = Math.max(4, Math.round((item[keyValue] / max) * 100));
+                const row = document.createElement('div');
+                row.innerHTML = `
+                    <div class="flex items-center justify-between text-xs mb-1">
+                        <span class="opacity-80">${item[keyLabel]}</span>
+                        <span class="font-semibold">${item[keyValue]}</span>
+                    </div>
+                    <div class="w-full h-2 rounded-full overflow-hidden" style="background-color: var(--border-color)">
+                        <div class="h-full rounded-full transition-all duration-500" style="width:${percent}%; background-color: var(--btn-primary-bg)"></div>
+                    </div>
+                `;
+                container.appendChild(row);
+            });
+        }
+
+        const formatTienGon = (so) => {
+            if (so >= 1e9) return (so / 1e9).toFixed(1) + ' tỷ';
+            if (so >= 1e6) return (so / 1e6).toFixed(0) + ' tr';
+            if (so >= 1e3) return (so / 1e3).toFixed(0) + 'k';
+            return String(Math.round(so || 0));
+        };
+
+        // Vẽ biểu đồ đường doanh số 12 tháng bằng SVG thuần (không phụ thuộc thư viện chart ngoài).
+        // Màu dùng var(--btn-primary-bg)/var(--border-color)/var(--text-muted) để tự đổi theo Light/Dark.
+        function renderLineChart(svg, points, labels) {
+            const W = 640, H = 240;
+            const padL = 46, padR = 16, padT = 16, padB = 28;
+            const innerW = W - padL - padR;
+            const innerH = H - padT - padB;
+            const maxVal = Math.max(...points, 1);
+
+            const xStep = points.length > 1 ? innerW / (points.length - 1) : 0;
+            const coords = points.map((v, i) => {
+                const x = padL + i * xStep;
+                const y = padT + innerH - (v / maxVal) * innerH;
+                return [x, y];
+            });
+
+            // Gridline ngang (4 mức) kèm nhãn giá trị
+            let gridSvg = '';
+            const soMuc = 4;
+            for (let i = 0; i <= soMuc; i++) {
+                const y = padT + (innerH / soMuc) * i;
+                const val = maxVal - (maxVal / soMuc) * i;
+                gridSvg += `
+                    <line x1="${padL}" y1="${y}" x2="${W - padR}" y2="${y}" style="stroke: var(--border-color)" stroke-width="1" stroke-dasharray="3,3"/>
+                    <text x="${padL - 6}" y="${y + 3}" text-anchor="end" font-size="9" style="fill: var(--text-muted)">${formatTienGon(val)}</text>
+                `;
+            }
+
+            // Nhãn tháng ở trục ngang
+            let labelSvg = '';
+            coords.forEach(([x], i) => {
+                labelSvg += `<text x="${x}" y="${H - 8}" text-anchor="middle" font-size="9" style="fill: var(--text-muted)">${labels[i]}</text>`;
+            });
+
+            const linePoints = coords.map(([x, y]) => `${x},${y}`).join(' ');
+            const areaPoints = `${padL},${padT + innerH} ${linePoints} ${padL + innerW},${padT + innerH}`;
+
+            const dotsSvg = coords.map(([x, y], i) => `
+                <circle cx="${x}" cy="${y}" r="3.5" style="fill: var(--btn-primary-bg)">
+                    <title>${labels[i]}: ${formatTien(points[i])}</title>
+                </circle>
+            `).join('');
+
+            svg.innerHTML = `
+                ${gridSvg}
+                <polygon points="${areaPoints}" style="fill: var(--btn-primary-bg)" fill-opacity="0.08"/>
+                <polyline points="${linePoints}" fill="none" style="stroke: var(--btn-primary-bg)" stroke-width="2"/>
+                ${dotsSvg}
+                ${labelSvg}
+            `;
+        }
+
+        // Bảng màu cố định cho biểu đồ tròn (không bám theme vì cần nhiều màu phân biệt rõ từng TVV)
+        const BANG_MAU_PIE = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
+
+        function toaDoTrenVongTron(cx, cy, r, angleDeg) {
+            const rad = (angleDeg * Math.PI) / 180;
+            return [cx + r * Math.cos(rad), cy + r * Math.sin(rad)];
+        }
+
+        // Gộp các TVV ngoài top 7 vào 1 lát "Khác" để chú giải không bị dài quá trên mobile
+        function chuanBiDuLieuPie(items, gioiHan = 7) {
+            if (items.length <= gioiHan) return items;
+            const top = items.slice(0, gioiHan);
+            const rest = items.slice(gioiHan);
+            const tongKhac = rest.reduce((s, i) => s + i.tongMenhGia, 0);
+            return [...top, { ho_va_ten: `Khác (${rest.length} người)`, tongMenhGia: tongKhac }];
+        }
+
+        function renderPieChart(svg, itemsGoc) {
+            const legend = document.getElementById('legendTyTrong');
+            const items = chuanBiDuLieuPie(itemsGoc);
+            const total = items.reduce((s, i) => s + i.tongMenhGia, 0);
+
+            if (!items.length || total <= 0) {
+                svg.innerHTML = `<circle cx="100" cy="100" r="80" style="fill: var(--border-color)"/>`;
+                legend.innerHTML = '<p class="text-xs opacity-50 italic text-center">Chưa có hợp đồng nào trong tháng này.</p>';
+                return;
+            }
+
+            const cx = 100, cy = 100, r = 80;
+            let startAngle = -90; // bắt đầu vẽ từ đỉnh 12h cho dễ nhìn
+            let pathsSvg = '';
+            let legendHtml = '';
+
+            items.forEach((item, i) => {
+                const percent = item.tongMenhGia / total;
+                const mau = BANG_MAU_PIE[i % BANG_MAU_PIE.length];
+
+                if (items.length === 1) {
+                    // Chỉ 1 người chiếm 100% -> vẽ hình tròn đầy (path arc bị lỗi khi góc = 360deg)
+                    pathsSvg = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${mau}"><title>${item.ho_va_ten}: 100%</title></circle>`;
+                } else {
+                    const angle = percent * 360;
+                    const endAngle = startAngle + angle;
+                    const largeArc = angle > 180 ? 1 : 0;
+                    const [x1, y1] = toaDoTrenVongTron(cx, cy, r, startAngle);
+                    const [x2, y2] = toaDoTrenVongTron(cx, cy, r, endAngle);
+                    pathsSvg += `<path d="M${cx},${cy} L${x1},${y1} A${r},${r} 0 ${largeArc} 1 ${x2},${y2} Z" fill="${mau}"><title>${item.ho_va_ten}: ${(percent * 100).toFixed(1)}%</title></path>`;
+                    startAngle = endAngle;
+                }
+
+                legendHtml += `
+                    <div class="flex items-center justify-between text-xs">
+                        <div class="flex items-center space-x-2 min-w-0">
+                            <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color:${mau}"></span>
+                            <span class="truncate">${item.ho_va_ten}</span>
+                        </div>
+                        <span class="font-semibold shrink-0 ml-2">${(percent * 100).toFixed(1)}%</span>
+                    </div>
+                `;
+            });
+
+            svg.innerHTML = pathsSvg;
+            legend.innerHTML = legendHtml;
+        }
+
+        function renderCanhBao(data) {
+            const list = document.getElementById('canhBaoList');
+            const items = [
+                {
+                    icon: 'lock', color: 'text-red-500', value: data.taiKhoanBiKhoa,
+                    label: 'Tài khoản đang bị khoá', href: '/admin/users.html'
+                },
+                {
+                    icon: 'user-x', color: 'text-amber-500', value: data.taiKhoanChuaCoNhom,
+                    label: 'Tài khoản chưa có nhóm', href: '/admin/users.html'
+                },
+                {
+                    icon: 'folder-x', color: 'text-orange-500', value: data.fileChuaPhanBo,
+                    label: 'File data chưa phân bổ', href: '/admin/quanlydata.html'
+                },
+                {
+                    icon: 'calendar-clock', color: 'text-purple-500', value: data.hopDongDaoHanNamNay,
+                    label: 'Hợp đồng đáo hạn năm nay', href: '/admin/hop_dong.html'
+                }
+            ];
+            list.innerHTML = items.map(item => `
+                <a href="${item.href}" class="p-3 rounded-xl border border-inherit flex items-center space-x-3 hover:opacity-80 transition">
+                    <i data-lucide="${item.icon}" class="w-5 h-5 ${item.color} shrink-0"></i>
+                    <div class="min-w-0">
+                        <p class="text-lg font-bold leading-tight">${item.value}</p>
+                        <p class="text-[11px] opacity-60 truncate">${item.label}</p>
+                    </div>
+                </a>
+            `).join('');
+        }
+
+        function renderTopNhanSu(topNhanSu) {
+            const container = document.getElementById('topNhanSuList');
+            if (!topNhanSu.length) {
+                container.innerHTML = '<p class="text-xs opacity-50 italic">Chưa có hợp đồng nào được ghi nhận theo nhân sự.</p>';
+                return;
+            }
+            const huyHieu = ['🥇', '🥈', '🥉'];
+            container.innerHTML = topNhanSu.map((ns, idx) => `
+                <div class="flex items-center justify-between p-2.5 rounded-xl border border-inherit">
+                    <div class="flex items-center space-x-2.5 min-w-0">
+                        <span class="text-base w-6 text-center shrink-0">${huyHieu[idx] || (idx + 1)}</span>
+                        <div class="min-w-0">
+                            <p class="text-xs font-medium truncate">${ns.ho_va_ten || 'Không rõ'}</p>
+                            <p class="text-[10px] opacity-50">${ns.ten_dang_nhap || ''}</p>
+                        </div>
+                    </div>
+                    <div class="text-right shrink-0 ml-2">
+                        <p class="text-xs font-semibold">${ns.soHopDong} hợp đồng</p>
+                        <p class="text-[10px] opacity-50">${formatTien(ns.tongMenhGia)}</p>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderHopDongGanDay(list) {
+            const container = document.getElementById('hopDongGanDayList');
+            if (!list.length) {
+                container.innerHTML = '<p class="text-xs opacity-50 italic">Chưa có hợp đồng nào được ký.</p>';
+                return;
+            }
+            container.innerHTML = list.map(hd => `
+                <div class="flex items-center justify-between p-2.5 rounded-xl border border-inherit">
+                    <div class="min-w-0">
+                        <p class="text-xs font-medium truncate">HĐ ${hd.so_hop_dong}</p>
+                        <p class="text-[10px] opacity-50">${chePhoneMotPhan(hd.dien_thoai)}</p>
+                    </div>
+                    <div class="text-right shrink-0 ml-2">
+                        <p class="text-xs font-semibold">${formatTien(hd.menh_gia)}</p>
+                        <p class="text-[10px] opacity-50">${formatNgay(hd.ngay_tham_gia)}</p>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderNhanVienMoi(list) {
+            const tbody = document.getElementById('nhanVienMoiBody');
+            if (!list.length) {
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center py-6 opacity-50 italic">Chưa có nhân viên nào.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = list.map(u => `
+                <tr>
+                    <td class="p-2.5 font-medium">${u.ho_va_ten || '—'}</td>
+                    <td class="p-2.5 opacity-70">${u.ten_dang_nhap || '—'}</td>
+                    <td class="p-2.5 opacity-70">${u.ten_nhom || 'Chưa có nhóm'}</td>
+                    <td class="p-2.5 text-right opacity-70">${formatNgay(u.ngay_tao)}</td>
+                </tr>
+            `).join('');
+        }
+
+        function renderSkeleton() {
+            const loading = document.getElementById('loadingState');
+            loading.innerHTML = Array.from({ length: 6 }).map(() => `
+                <div class="p-4 rounded-2xl border border-inherit theme-dropdown animate-pulse">
+                    <div class="w-4 h-4 rounded mb-3" style="background-color: var(--border-color)"></div>
+                    <div class="h-5 w-12 rounded mb-2" style="background-color: var(--border-color)"></div>
+                    <div class="h-3 w-20 rounded" style="background-color: var(--border-color)"></div>
+                </div>
+            `).join('');
+        }
+
+        async function taiDuLieuDashboard() {
+            const loading = document.getElementById('loadingState');
+            const content = document.getElementById('dashboardContent');
+            loading.classList.remove('hidden');
+            content.classList.add('hidden');
+            renderSkeleton();
+
+            try {
+                const res = await fetch('/api/admin/dashboard-stats');
+                const result = await res.json();
+
+                if (!result.success) {
+                    throw new Error(result.message || 'Không thể tải dữ liệu tổng quan');
+                }
+
+                const data = result.data;
+
+                document.getElementById('kpiTongNhanSu').textContent = data.tongNhanSu;
+                document.getElementById('kpiTongAgent').textContent = data.tongAgent;
+                document.getElementById('kpiTongLeader').textContent = data.tongLeader;
+                document.getElementById('kpiTaiKhoanBiKhoa').textContent = data.taiKhoanBiKhoa;
+                document.getElementById('kpiTongHopDong').textContent = data.tongHopDong;
+                document.getElementById('kpiTongMenhGia').textContent = formatTien(data.tongMenhGia);
+                document.getElementById('kpiTongLeadDaPhanBo').textContent = data.tongLeadDaPhanBo;
+
+                renderThanhTiLe(document.getElementById('chartTheoNhom'), data.theoNhom, 'ten_nhom', 'soLuong');
+                renderThanhTiLe(document.getElementById('chartPheuLead'), data.pheuLead, 'trang_thai', 'soLuong');
+
+                document.getElementById('namHienTaiLabel').textContent = data.namHienTai;
+                renderLineChart(
+                    document.getElementById('chartDoanhSo'),
+                    data.doanhSoTheoThang.map(t => t.tongMenhGia),
+                    data.doanhSoTheoThang.map(t => 'T' + t.thang)
+                );
+                renderPieChart(document.getElementById('chartTyTrong'), data.tyTrongTvvThangNay);
+
+                renderCanhBao(data);
+                renderTopNhanSu(data.topNhanSu);
+                renderHopDongGanDay(data.hopDongGanDay);
+                renderNhanVienMoi(data.nhanVienMoi);
+
+                loading.classList.add('hidden');
+                content.classList.remove('hidden');
+
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+            } catch (err) {
+                console.error('Lỗi tải dashboard admin:', err);
+                loading.classList.add('hidden');
+                await Swal.fire({
+                    icon: 'error',
+                    title: 'Lỗi tải dữ liệu',
+                    text: err.message || 'Không thể kết nối đến server!',
+                    confirmButtonText: 'Đóng'
+                });
+            }
+        }
+
+        document.getElementById('btnRefresh').addEventListener('click', async () => {
+            await taiDuLieuDashboard();
+            const Toast = Swal.mixin({
+                toast: true,
+                position: 'top-end',
+                showConfirmButton: false,
+                timer: 2000,
+                timerProgressBar: true
+            });
+            Toast.fire({ icon: 'success', title: 'Đã cập nhật dữ liệu mới nhất' });
+        });
+
+        document.addEventListener('DOMContentLoaded', taiDuLieuDashboard);
+    </script>
 </body>
 </html>

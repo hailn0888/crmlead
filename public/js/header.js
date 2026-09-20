@@ -68,8 +68,8 @@ document.addEventListener("DOMContentLoaded", () => {
                     <div class="px-4 py-2 border-b border-inherit">
                         <p class="text-[10px] uppercase tracking-wider opacity-60 mb-1 font-semibold">Giao diện (Theme)</p>
                         <div class="grid grid-cols-2 gap-1 p-1 rounded-lg border border-inherit">
-                            <button id="themeDark" class="py-1.5 px-2 rounded text-center transition font-medium">Dark</button>
-                            <button id="themeLight" class="py-1.5 px-2 rounded text-center transition font-medium">Light</button>
+                            <button id="themeDark" class="py-1.5 px-2 rounded text-center transition font-medium">Tối</button>
+                            <button id="themeLight" class="py-1.5 px-2 rounded text-center transition font-medium">Sáng</button>
                         </div>
                     </div>
                     <div class="py-1">

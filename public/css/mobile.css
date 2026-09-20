@@ -1,0 +1,305 @@
+/* ==========================================================================
+   public/css/mobile.css  -  Giao diện điện thoại (< 768px)
+   --------------------------------------------------------------------------
+   Nguyên tắc:
+   - KHÔNG khai báo màu nền / màu chữ / font-family: tất cả vẫn do theme.js quyết định.
+     Khi cần màu (viền, nền hover) chỉ dùng biến CSS theme.js đã gán: --border-color,
+     --sidebar-hover, --btn-primary-bg...
+   - Chỉ nạp trên điện thoại: <link ... href="/css/mobile.css" media="(max-width: 767.98px)">
+   - Đi cùng /js/responsive.js (hamburger, lớp phủ, gắn nhãn bảng dạng thẻ).
+   - Tailwind CDN chèn <style> SAU file này nên các luật ghi đè tiện ích Tailwind
+     dùng tiền tố "html body" hoặc !important có chủ đích.
+   ========================================================================== */
+
+@media (max-width: 767.98px) {
+
+    /* ---------- 1. NỀN TẢNG ---------- */
+    html { -webkit-text-size-adjust: 100%; }
+    html, body { max-width: 100%; overflow-x: hidden; }
+    a, button, select, label, summary { touch-action: manipulation; }
+    button, a { -webkit-tap-highlight-color: transparent; }
+
+    /* 100vh trên iPhone/Android bao gồm cả thanh địa chỉ nên đáy trang bị che.
+       100dvh = chiều cao thật đang nhìn thấy. */
+    html body .h-screen    { height: 100vh;     height: 100dvh; }
+    html body .min-h-screen { min-height: 100vh; min-height: 100dvh; }
+
+    /* Ô nhập >= 16px: iOS Safari không tự phóng to màn hình khi chạm vào ô nhập
+       (nhờ vậy không cần khoá zoom bằng maximum-scale nữa). */
+    html body input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+    html body select,
+    html body textarea { font-size: 16px !important; }
+
+    /* Footer câu truyền động lực: bỏ trên điện thoại để dành chỗ cho nội dung */
+    html body #app-footer { display: none !important; }
+
+    /* ---------- 2. KHUNG NỘI DUNG ---------- */
+    html body #mainContainer {
+        margin-left: 0 !important;         /* sidebar là ngăn kéo, không chiếm chỗ */
+        padding-bottom: 0 !important;      /* footer.js từng chừa chỗ cho footer */
+        min-width: 0;
+        overflow-x: hidden;
+    }
+    html body #mainContainer > main {
+        padding-left: .75rem !important;
+        padding-right: .75rem !important;
+        padding-bottom: 1.5rem;
+        min-width: 0;
+    }
+
+    /* ---------- 3. HEADER (header.js) ---------- */
+    html body #appHeader { padding-left: .5rem; padding-right: .5rem; }
+
+    html body #appHeader > div:first-child { min-width: 0; flex: 1 1 auto; }
+    html body #appHeader > div:first-child > * + * { margin-left: .5rem !important; }
+    html body #appHeader > div:last-child { flex: 0 0 auto; }
+    html body #appHeader > div:last-child > * + * { margin-left: .25rem !important; }
+
+    html body #appHeader img { width: 2.25rem; height: 2.25rem; }
+    html body #dividerText { display: none; }
+    html body #headerName {
+        display: block;
+        max-width: 30vw;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    html body #appHeader > div:first-child > div { min-width: 0; }
+
+    /* Nút ☰ (responsive.js chèn, mặc định display:none) */
+    html body #crmNavToggle {
+        display: inline-flex !important;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 auto;
+        width: 2.5rem;
+        height: 2.5rem;
+        margin-left: 0 !important;
+        border-radius: .5rem;
+        color: inherit;
+        background: transparent;
+        border: 1px solid transparent;
+    }
+    html body #crmNavToggle:active { background: rgba(255, 255, 255, .15); }
+
+    /* AI Assistant chỉ còn icon (bỏ chữ + gợi ý phím tắt Ctrl I vô nghĩa trên cảm ứng) */
+    html body #aiAssistantBtn > span { display: none; }
+    html body #aiAssistantBtn,
+    html body #notifBtn { min-width: 2.5rem; min-height: 2.5rem; justify-content: center; }
+    html body #userMenuBtn { min-width: 2.5rem; min-height: 2.5rem; justify-content: center; }
+
+    /* Danh sách thông báo: rộng gần hết màn hình thay vì w-80 cố định (bị tràn trái) */
+    html body #notifDropdown {
+        position: fixed !important;
+        top: 3.5rem;
+        left: .5rem;
+        right: .5rem;
+        width: auto !important;
+        max-height: calc(100vh - 5rem);
+        max-height: calc(100dvh - 5rem);
+    }
+    html body #userDropdown { max-width: calc(100vw - 1rem); }
+
+    /* Khung AI Assistant: toàn màn hình */
+    html body #aiDrawer {
+        width: 100vw !important;
+        max-width: 100vw;
+        top: 0;
+        bottom: auto;
+        height: 100vh;
+        height: 100dvh;
+    }
+    /* Khi đóng, bóng đổ (shadow-2xl) của khung AI lọt vào mép phải màn hình -> tắt đi */
+    html body #aiDrawer.translate-x-full { box-shadow: none; }
+
+    /* ---------- 4. SIDEBAR DẠNG NGĂN KÉO ---------- */
+    html body #appSidebar {
+        width: min(18rem, 86vw) !important;   /* ghi đè w-12 / w-64 do sidebar.js đổi */
+        transform: translateX(-105%);
+        transition: transform .28s ease, box-shadow .28s ease, visibility .28s !important;
+        z-index: 45;                          /* trên lớp phủ, dưới header (z-50) */
+        overscroll-behavior: contain;
+        visibility: hidden;                   /* không cho Tab/đọc màn hình vào menu đang đóng */
+    }
+    html.crm-nav-open body #appSidebar {
+        transform: none;
+        visibility: visible;
+        box-shadow: 0 0 2rem rgba(0, 0, 0, .35);
+    }
+
+    /* Luôn hiện chữ menu (sidebar.js ẩn chữ khi ở trạng thái thu gọn) */
+    html body #appSidebar .sidebar-text {
+        display: inline !important;
+        opacity: 1 !important;
+        pointer-events: auto !important;
+        font-size: .9375rem;
+    }
+    /* Nút "Thu gọn menu" không cần trên điện thoại (đã có ☰ + lớp phủ) */
+    html body #appSidebar > div:last-child { display: none; }
+    html body #appSidebar > div:first-child { padding-bottom: 1rem; }
+
+    html body #appSidebar a {
+        min-height: 2.75rem;
+        padding-left: .75rem;
+        padding-right: .75rem;
+    }
+    html body #appSidebar a > * + * { margin-left: .75rem !important; }
+    html body #appSidebar a svg { width: 1.25rem; height: 1.25rem; }
+    html body #appSidebar a.crm-nav-active {
+        background-color: var(--sidebar-hover) !important;
+        font-weight: 600;
+        box-shadow: inset 3px 0 0 var(--btn-primary-bg);
+    }
+
+    /* Lớp phủ mờ phía sau ngăn kéo */
+    html body #crmNavOverlay {
+        display: block !important;
+        position: fixed;
+        top: 3.5rem;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 39;
+        background: rgba(0, 0, 0, .45);
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity .25s ease, visibility .25s ease;
+    }
+    html.crm-nav-open body #crmNavOverlay { opacity: 1; visibility: visible; }
+
+    /* ---------- 5. THANH CÔNG CỤ / TAB / FORM ---------- */
+    /* Thanh tab cuộn ngang: ẩn thanh cuộn cho gọn, vẫn vuốt được */
+    html body main .overflow-x-auto { scrollbar-width: none; }
+    html body main .overflow-x-auto::-webkit-scrollbar { display: none; }
+    /* ... nhưng bảng dữ liệu (nằm trong khung theme-card) vẫn giữ thanh cuộn mảnh */
+    html body main .theme-card .overflow-x-auto { scrollbar-width: thin; }
+    html body main .theme-card .overflow-x-auto::-webkit-scrollbar { display: block; height: 6px; }
+
+    /* Ô tìm kiếm cố định w-48 (calls.html): cho giãn hết chiều ngang */
+    html body main input.w-48,
+    html body main input.w-56 { width: 100% !important; }
+    html body main div:has(> input.w-48),
+    html body main div:has(> input.w-56) { flex: 1 1 100%; }
+
+    /* Cụm bộ lọc của calls.html (không có flex-wrap nên tràn ngang) */
+    html body main div:has(> #btn-tat-ca) { flex-wrap: wrap; width: 100%; }
+    html body #filter-container-nguoi-nhan,
+    html body #filter-container-trang-thai,
+    html body main div:has(> #filter-ngay) { flex: 1 1 calc(50% - .5rem); min-width: 8rem; }
+    html body #filter-container-nguoi-nhan select,
+    html body #filter-container-trang-thai select,
+    html body #filter-ngay { width: 100%; }
+
+    /* Vùng bấm đủ lớn cho ngón tay */
+    html body main button.tab-btn,
+    html body main [id^="tab-btn-"] { min-height: 2.5rem; }
+
+    /* ---------- 6. BẢNG DẠNG THẺ  (table.rt-cards, nhãn do responsive.js gắn) ---------- */
+    html body table.rt-cards,
+    html body table.rt-cards tbody { display: block; width: 100%; }
+    html body table.rt-cards thead {   /* ẩn bằng mắt nhưng vẫn cho trình đọc màn hình */
+        position: absolute;
+        width: 1px; height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+    }
+    /* :not(.hidden):not([hidden]) để bộ lọc tìm kiếm (searchHelper.js) vẫn ẩn được dòng */
+    html body table.rt-cards tbody tr:not(.hidden):not([hidden]) {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: .5rem .75rem;
+        padding: .75rem;
+        border-bottom: 1px solid var(--border-color);
+    }
+    html body table.rt-cards tbody tr:not(.hidden):not([hidden]):last-child { border-bottom: 0; }
+    html body table.rt-cards td {
+        display: block;
+        min-width: 0;
+        padding: 0 !important;
+        border: 0 !important;
+        text-align: left !important;
+        overflow-wrap: anywhere;
+    }
+    html body table.rt-cards td[data-label]::before {
+        content: attr(data-label);
+        display: block;
+        margin-bottom: .125rem;
+        font-size: .6875rem;
+        line-height: 1.2;
+        opacity: .6;
+    }
+    html body table.rt-cards td[data-rt="hide"] { display: none; }
+    html body table.rt-cards td[data-rt="title"],
+    html body table.rt-cards td[data-rt="wide"],
+    html body table.rt-cards td[data-rt="actions"],
+    html body table.rt-cards td[colspan] { grid-column: 1 / -1; }
+    html body table.rt-cards td[data-rt="title"]::before,
+    html body table.rt-cards td[data-rt="actions"]::before { display: none; }
+    html body table.rt-cards td[data-rt="title"] { font-size: .875rem; }
+    html body table.rt-cards td[data-rt="actions"] { padding-top: .25rem !important; }
+    html body table.rt-cards td[data-rt="actions"] button,
+    html body table.rt-cards td[data-rt="actions"] a { min-width: 2.5rem; min-height: 2.5rem; }
+    html body table.rt-cards td[colspan] { padding: 1rem .5rem !important; text-align: center !important; }
+    html body table.rt-cards td .justify-center { justify-content: flex-start; }
+    html body table.rt-cards td[data-rt="actions"] .justify-center { justify-content: flex-end; }
+
+    /* ---------- 7. TRANG TỔNG QUAN (dashboard_agents.html): bảng nhập 12 tháng ---------- */
+    /* Mỗi tháng thành 1 thẻ 2 hàng:  [T1] [FYP] [FYC]  /  [SYC] [RYP] [RYC] */
+    html body #monthColA > div:not(.month-row),
+    html body #monthColB > div:not(.month-row) { display: none; }   /* hàng tiêu đề 6 cột không còn khớp */
+    html body #monthColA::before {
+        content: "Hàng trên: FYP, FYC (tự động). Hàng dưới: SYC, RYP, RYC (nhập tay).";
+        padding: 0 .25rem .25rem;
+        font-size: .6875rem;
+        opacity: .65;
+    }
+    html body .month-row {
+        grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+        gap: .375rem !important;
+        padding: .5rem !important;
+        border: 1px solid var(--border-color);
+        border-radius: .75rem;
+    }
+    html body .month-row > span:first-child { font-size: .875rem; font-weight: 700; align-self: center; }
+    html body .month-row .month-auto-cell {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: .25rem;
+        min-width: 0;
+        padding: .5rem !important;
+    }
+    html body .month-row > .month-auto-cell:nth-child(2)::before { content: "FYP"; }
+    html body .month-row > .month-auto-cell:nth-child(3)::before { content: "FYC"; }
+    html body .month-row .month-auto-cell::before { font-size: .625rem; font-weight: 700; opacity: .6; }
+    html body .month-row .month-input { min-width: 0; padding: .5rem !important; }
+
+    /* ---------- 8. THƯ VIỆN SẢN PHẨM (products.html) ---------- */
+    html body #detailModal { padding: .5rem; }
+    html body #detailModal .modal-panel { max-height: 92vh; max-height: 92dvh; border-radius: 1rem; }
+
+    /* ---------- 9. POPUP SWEETALERT2 ---------- */
+    html body .swal2-container { padding: .5rem; }
+    html body .swal2-popup {
+        width: calc(100vw - 1rem) !important;
+        max-width: 34rem;
+        padding: 1rem .75rem;
+    }
+    html body .swal2-html-container {
+        max-height: 65vh;
+        max-height: 65dvh;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        margin-left: .25rem;
+        margin-right: .25rem;
+    }
+    html body .swal2-actions { flex-wrap: wrap; gap: .5rem; }
+    html body .swal2-actions .swal2-styled { margin: 0; min-height: 2.75rem; }
+}
+
+/* Màn hình rất hẹp (iPhone SE, Android nhỏ) */
+@media (max-width: 440px) {
+    html body #headerRole { display: none; }             /* nhường chỗ cho tên + các nút */
+    html body #headerName { max-width: 26vw; }
+}

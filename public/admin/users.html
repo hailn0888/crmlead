@@ -18,26 +18,20 @@
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="/js/lucide.min.js"></script>
     <!-- SweetAlert2: dùng cho toàn bộ popup thông báo (Swal.fire) trong trang này -->
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <!-- File Theme chung -->
-    <script src="/js/theme.js"></script>
 
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="/js/lucide.min.js"></script>
+    <!-- Các script dùng chung hệ thống — trước đây mỗi file này bị nạp 2 LẦN (1 lần ở đây, 1 lần lặp lại
+    ngay dưới, riêng header.js/sidebar.js còn bị nạp thêm lần 3 ở đầu <body>). Script chạy trùng nhiều lần
+    có thể khiến các phần tử DOM (header, sidebar) bị chèn lặp hoặc ghi đè lẫn nhau, gây lệch layout khó lường
+    — đã dọn về đúng 1 lần mỗi script, khớp với cách pru_champion.html đang nạp. -->
     <script src="/js/header.js"></script>
     <script src="/js/sidebar.js"></script>
     <script src="/js/footer.js"></script>
     <script src="/js/theme.js"></script>
 </head>
 <body class="min-h-screen flex flex-col transition-colors duration-200">
-
-    <!-- Header dùng chung -->
-    <script src="/js/header.js"></script>
-    
-    <!-- Sidebar dùng chung -->
-    <script src="/js/sidebar.js"></script>
 
     <!-- Khung nội dung chính -->
     <div id="mainContainer" class="flex-1 flex flex-col transition-colors duration-200 pt-16 ml-0 md:ml-64 p-3 md:p-6 overflow-x-hidden">

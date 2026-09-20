@@ -359,60 +359,6 @@ router.get('/data-files/stats', async (req, res) => {
 });
 
 /**
- * [MỚI] GET /invalid-leads - Lấy danh sách lead bị loại do thiếu dữ liệu (hiện tại: thiếu SĐT).
- * Query optional: ?file_id=xxx để lọc theo 1 file cụ thể (dùng cho Tab 5).
- */
-router.get('/invalid-leads', async (req, res) => {
-    try {
-        const { file_id } = req.query;
-        let query = req.supabase.from('invalid_leads').select('*').order('created_at', { ascending: false });
-        if (file_id) query = query.eq('file_id', file_id);
-
-        const { data, error } = await query;
-        if (error) throw error;
-
-        res.json({ success: true, data: data || [] });
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
-    }
-});
-
-/**
- * [MỚI] DELETE /invalid-leads - Xóa TẤT CẢ lead thiếu dữ liệu, hoặc chỉ những lead
- * thuộc 1 file cụ thể nếu có truyền ?file_id=xxx (dùng cho nút "Xóa tất cả" ở Tab 5,
- * khớp với bộ lọc file đang chọn trên giao diện).
- */
-router.delete('/invalid-leads', async (req, res) => {
-    try {
-        const { file_id } = req.query;
-        let query = req.supabase.from('invalid_leads').delete();
-        query = file_id ? query.eq('file_id', file_id) : query.gte('id', 0); // gte('id', 0) = xóa toàn bộ (Supabase yêu cầu điều kiện WHERE tường minh)
-
-        const { error } = await query;
-        if (error) throw error;
-
-        res.json({ success: true, message: file_id ? 'Đã xóa toàn bộ lead thiếu dữ liệu của file này.' : 'Đã xóa toàn bộ danh sách leads thiếu dữ liệu.' });
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
-    }
-});
-
-/**
- * [MỚI] DELETE /invalid-leads/:id - Xóa 1 bản ghi lead thiếu dữ liệu sau khi Admin đã xử lý
- * xong thủ công (ví dụ: đã bổ sung SĐT và re-upload).
- */
-router.delete('/invalid-leads/:id', async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { error } = await req.supabase.from('invalid_leads').delete().eq('id', id);
-        if (error) throw error;
-        res.json({ success: true, message: 'Đã xóa bản ghi khỏi danh sách leads thiếu dữ liệu.' });
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
-    }
-});
-
-/**
  * POST /upload-data - Tải lên file Excel và tự động gán file_id cho từng dòng contracts
  */
 router.post('/upload-data', upload.array('files'), async (req, res) => {
@@ -423,8 +369,6 @@ router.post('/upload-data', upload.array('files'), async (req, res) => {
             return res.status(400).json({ success: false, message: 'Vui lòng chọn file tải lên.' });
         }
 
-        const summary = []; // Thống kê valid/invalid từng file để trả về cho frontend hiển thị
-
         for (const file of uploadedFiles) {
             const fileName = file.originalname;
             const workbook = XLSX.read(file.buffer, { type: 'buffer' });
@@ -433,8 +377,7 @@ router.post('/upload-data', upload.array('files'), async (req, res) => {
             const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
             const totalRecords = rows.length > 1 ? rows.length - 1 : 0;
 
-            // Bước 1: Lưu thông tin file vào bảng data_files (total_records/untouched_count
-            // sẽ được cập nhật lại chính xác ở Bước 6, sau khi tách xong lead thiếu SĐT)
+            // Bước 1: Lưu thông tin file vào bảng data_files
             const { data: fileRecord, error: fileErr } = await req.supabase
                 .from('data_files')
                 .insert([{
@@ -452,28 +395,21 @@ router.post('/upload-data', upload.array('files'), async (req, res) => {
             if (fileErr) throw fileErr;
             const fileId = fileRecord.id; // Lấy ID file vừa tạo
 
-            let validCount = 0;
-            let invalidCount = 0;
-
             // Bước 2: Đọc dữ liệu Excel và chuẩn bị dữ liệu
             if (rows.length > 1) {
                 const headers = rows[0];
                 let customerMap = new Map();
                 let contractRows = [];
-                let invalidRows = []; // [MỚI] Lead thiếu Số điện thoại -> tách riêng, không ghi vào customers/contracts
 
                 rows.slice(1).forEach(row => {
                     let cRow = { file_id: fileId, so_hop_dong: '', dien_thoai: '' };
                     let cusRow = { dien_thoai: '' };
-                    let rawRowObj = {}; // [MỚI] Giữ nguyên dữ liệu gốc theo đúng tên cột Excel, dùng để lưu/xuất lại invalid_leads
 
                     headers.forEach((h, index) => {
                         if (h) {
                             const keyClean = h.toString().trim().toLowerCase();
                             let rawVal = row[index];
                             const val = rawVal !== undefined && rawVal !== null ? String(rawVal).trim() : '';
-
-                            rawRowObj[h.toString().trim()] = (rawVal !== undefined && rawVal !== null) ? rawVal : '';
 
                             if (keyClean.includes('hop_dong') || keyClean.includes('hợp đồng') || keyClean.includes('so_hd')) cRow.so_hop_dong = val;
                             if (keyClean.includes('dien_thoai') || keyClean.includes('điện thoại') || keyClean.includes('phone') || keyClean.includes('sdt') || keyClean.includes('so_dt')) {
@@ -515,29 +451,17 @@ router.post('/upload-data', upload.array('files'), async (req, res) => {
                         }
                     });
 
-                    // [MỚI] Nếu dòng này KHÔNG có Số điện thoại -> tách riêng, không ghi customers/contracts,
-                    // để không làm fail cả batch upsert (dien_thoai là cột unique/khoá liên kết chính).
-                    if (!cRow.dien_thoai) {
-                        invalidRows.push({
-                            file_id: fileId,
-                            raw_data: rawRowObj,
-                            reason: 'Thiếu số điện thoại'
-                        });
-                        return; // Bỏ qua, không xử lý tiếp dòng này
-                    }
-
                     if (!cRow.so_hop_dong) cRow.so_hop_dong = 'HD_' + (cRow.dien_thoai || Math.random().toString(36).substring(7));
 
-                    customerMap.set(cusRow.dien_thoai, {
-                        ...cusRow,
-                        ngay_tao: new Date().toISOString()
-                    });
+                    if (cusRow.dien_thoai) {
+                        customerMap.set(cusRow.dien_thoai, {
+                            ...cusRow,
+                            ngay_tao: new Date().toISOString()
+                        });
+                    }
 
                     contractRows.push(cRow);
                 });
-
-                validCount = contractRows.length;
-                invalidCount = invalidRows.length;
 
                 // Bước 3: Insert bảng customers
                 if (customerMap.size > 0) {
@@ -561,37 +485,10 @@ router.post('/upload-data', upload.array('files'), async (req, res) => {
                         throw insertErr;
                     }
                 }
-
-                // Bước 5: [MỚI] Insert các lead thiếu SĐT vào bảng invalid_leads (nếu có)
-                if (invalidRows.length > 0) {
-                    const { error: invalidErr } = await req.supabase
-                        .from('invalid_leads')
-                        .insert(invalidRows);
-
-                    if (invalidErr) throw invalidErr;
-                }
             }
-
-            // Bước 6: [MỚI] Cập nhật lại total_records/untouched_count cho ĐÚNG số lead hợp lệ
-            // đã thực sự lưu vào DB, và ghi nhận invalid_count để hiển thị ở Tab 1/5.
-            await req.supabase
-                .from('data_files')
-                .update({
-                    total_records: validCount,
-                    untouched_count: validCount,
-                    invalid_count: invalidCount
-                })
-                .eq('id', fileId);
-
-            summary.push({ file_id: fileId, file_name: fileName, total: totalRecords, valid: validCount, invalid: invalidCount });
         }
 
-        const totalInvalid = summary.reduce((sum, s) => sum + s.invalid, 0);
-        const messageSuffix = totalInvalid > 0
-            ? ` (${totalInvalid} lead thiếu số điện thoại đã được tách sang mục "Leads Thiếu Dữ Liệu")`
-            : '';
-
-        res.json({ success: true, message: `Upload và xử lý dữ liệu thành công!${messageSuffix}`, summary });
+        res.json({ success: true, message: 'Upload và xử lý dữ liệu thành công!' });
     } catch (error) {
         console.error("Upload error:", error.message);
         res.status(500).json({ success: false, message: error.message });
@@ -755,34 +652,6 @@ router.put('/data-files/:id/lock', async (req, res) => {
 });
 
 /**
- * [MỚI] PUT /data-files/lock-bulk - Khóa (hoặc mở khóa) HÀNG LOẠT nhiều file cùng lúc.
- * Body: { ids: [1, 2, 3], status: 'Đã khóa' }  (status mặc định 'Đã khóa' nếu không truyền)
- * Dùng cho nút "Khóa Các File Đã Chọn" ở Tab 2.
- */
-router.put('/data-files/lock-bulk', async (req, res) => {
-    try {
-        const { ids, status } = req.body;
-
-        if (!Array.isArray(ids) || ids.length === 0) {
-            return res.status(400).json({ success: false, message: 'Vui lòng chọn ít nhất một file để khóa.' });
-        }
-
-        const newStatus = status || 'Đã khóa';
-
-        const { data, error } = await req.supabase
-            .from('data_files')
-            .update({ status: newStatus })
-            .in('id', ids)
-            .select();
-
-        if (error) throw error;
-        res.json({ success: true, message: `Đã cập nhật trạng thái "${newStatus}" cho ${data.length} file.`, data });
-    } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
-    }
-});
-
-/**
  * DELETE /data-files/:fileId - Xóa sạch file và toàn bộ contracts thuộc file_id đó (Dùng req.supabase)
  */
 router.delete('/data-files/:fileId', async (req, res) => {
@@ -886,6 +755,178 @@ router.post('/data-files/:fileId/assign', async (req, res) => {
     } catch (error) {
         console.error('API Assignment Error:', error.message);
         return res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+/**
+ * GET /dashboard-stats - Tổng hợp số liệu cho trang Tổng quan (dashboard_admin.html).
+ * Toàn bộ số liệu lấy TRỰC TIẾP từ dữ liệu thật (users, contracts, lead_assignments, data_files),
+ * không có số liệu giả/hardcode.
+ * LƯU Ý: hiện đang gom nhóm/tính toán ở tầng Node (fetch cả bảng rồi reduce trong JS) vì Supabase-js
+ * không hỗ trợ GROUP BY trực tiếp qua query builder. Nếu sau này dữ liệu contracts/lead_assignments
+ * phình quá lớn (hàng chục nghìn dòng+), nên chuyển sang RPC/SQL view cho nhanh hơn.
+ */
+router.get('/dashboard-stats', async (req, res) => {
+    try {
+        const supabase = req.supabase;
+        const namNay = new Date().getFullYear();
+
+        const [
+            { data: users, error: usersErr },
+            { data: contracts, error: contractsErr },
+            { data: assignments, error: assignErr },
+            { data: dataFiles, error: filesErr }
+        ] = await Promise.all([
+            supabase.from('users').select('id, ho_va_ten, ten_dang_nhap, phan_quyen, trang_thai, ten_nhom, ngay_tao'),
+            supabase.from('contracts').select('dien_thoai, so_hop_dong, menh_gia, nam_dao_han, ngay_tham_gia'),
+            supabase.from('lead_assignments').select('dien_thoai, agent_id, trang_thai_lead'),
+            supabase.from('data_files').select('id, status, agent_id')
+        ]);
+
+        if (usersErr) throw usersErr;
+        if (contractsErr) throw contractsErr;
+        if (assignErr) throw assignErr;
+        if (filesErr) throw filesErr;
+
+        const usersList = users || [];
+        const contractsList = contracts || [];
+        const assignList = assignments || [];
+        const filesList = dataFiles || [];
+
+        // ===== KPI nhân sự =====
+        const tongNhanSu = usersList.length;
+        const tongAgent = usersList.filter(u => u.phan_quyen === 'agent').length;
+        const tongLeader = usersList.filter(u => u.phan_quyen === 'leader').length;
+        const taiKhoanBiKhoa = usersList.filter(u => u.trang_thai === 'Tạm khoá').length;
+        const taiKhoanChuaCoNhom = usersList.filter(u => !u.ten_nhom).length;
+
+        // ===== Phân bổ nhân sự theo nhóm =====
+        const nhomMap = {};
+        usersList.forEach(u => {
+            const ten = u.ten_nhom || 'Chưa có nhóm';
+            nhomMap[ten] = (nhomMap[ten] || 0) + 1;
+        });
+        const theoNhom = Object.entries(nhomMap)
+            .map(([ten_nhom, soLuong]) => ({ ten_nhom, soLuong }))
+            .sort((a, b) => b.soLuong - a.soLuong);
+
+        // ===== KPI hợp đồng (so_hop_dong khác null = đã chốt thành hợp đồng thật) =====
+        const hopDongDaKy = contractsList.filter(c => c.so_hop_dong);
+        const tongHopDong = hopDongDaKy.length;
+        const tongMenhGia = hopDongDaKy.reduce((sum, c) => sum + (Number(c.menh_gia) || 0), 0);
+        const hopDongDaoHanNamNay = contractsList.filter(c => Number(c.nam_dao_han) === namNay).length;
+
+        // ===== Phễu trạng thái Lead (gom theo lead_assignments.trang_thai_lead) =====
+        const pheuMap = {};
+        assignList.forEach(a => {
+            const trangThai = a.trang_thai_lead || 'Chưa gọi';
+            pheuMap[trangThai] = (pheuMap[trangThai] || 0) + 1;
+        });
+        const pheuLead = Object.entries(pheuMap)
+            .map(([trang_thai, soLuong]) => ({ trang_thai, soLuong }))
+            .sort((a, b) => b.soLuong - a.soLuong);
+        const tongLeadDaPhanBo = assignList.length;
+
+        // ===== Data file chưa phân bổ agent nào =====
+        const fileChuaPhanBo = filesList.filter(f => !f.agent_id).length;
+
+        // ===== Top nhân sự theo số hợp đồng đã chốt =====
+        // Map dien_thoai -> agent_id (từ lần được phân bổ), đối chiếu sang các hợp đồng ĐÃ có
+        // so_hop_dong (đã chốt) để tính đúng nhân sự nào phụ trách hợp đồng đó.
+        const phoneToAgent = new Map();
+        assignList.forEach(a => {
+            const phone = String(a.dien_thoai || '').trim();
+            if (phone) phoneToAgent.set(phone, a.agent_id);
+        });
+
+        const agentStatMap = {}; // agent_id -> { soHopDong, tongMenhGia }
+        hopDongDaKy.forEach(c => {
+            const phone = String(c.dien_thoai || '').trim();
+            const agentId = phoneToAgent.get(phone);
+            if (!agentId) return;
+            if (!agentStatMap[agentId]) agentStatMap[agentId] = { soHopDong: 0, tongMenhGia: 0 };
+            agentStatMap[agentId].soHopDong++;
+            agentStatMap[agentId].tongMenhGia += Number(c.menh_gia) || 0;
+        });
+
+        const userMap = new Map(usersList.map(u => [String(u.id), u]));
+        const topNhanSu = Object.entries(agentStatMap)
+            .map(([agentId, stat]) => {
+                const u = userMap.get(String(agentId));
+                return {
+                    ho_va_ten: u ? u.ho_va_ten : `ID ${agentId}`,
+                    ten_dang_nhap: u ? u.ten_dang_nhap : '',
+                    soHopDong: stat.soHopDong,
+                    tongMenhGia: stat.tongMenhGia
+                };
+            })
+            .sort((a, b) => b.soHopDong - a.soHopDong)
+            .slice(0, 5);
+
+        // ===== Nhân viên mới gia nhập gần đây =====
+        const nhanVienMoi = [...usersList]
+            .filter(u => u.ngay_tao)
+            .sort((a, b) => new Date(b.ngay_tao) - new Date(a.ngay_tao))
+            .slice(0, 5)
+            .map(u => ({ ho_va_ten: u.ho_va_ten, ten_dang_nhap: u.ten_dang_nhap, ten_nhom: u.ten_nhom, ngay_tao: u.ngay_tao }));
+
+        // ===== Hợp đồng ký gần đây =====
+        const hopDongGanDay = [...hopDongDaKy]
+            .filter(c => c.ngay_tham_gia)
+            .sort((a, b) => new Date(b.ngay_tham_gia) - new Date(a.ngay_tham_gia))
+            .slice(0, 5)
+            .map(c => ({ so_hop_dong: c.so_hop_dong, dien_thoai: c.dien_thoai, menh_gia: c.menh_gia, ngay_tham_gia: c.ngay_tham_gia }));
+
+        // ===== Doanh số 12 tháng trong năm hiện tại (cho biểu đồ đường) =====
+        // Gom theo tháng của ngay_tham_gia, CHỈ tính các hợp đồng ký trong năm nay.
+        const doanhSoTheoThang = Array.from({ length: 12 }, (_, i) => ({ thang: i + 1, tongMenhGia: 0, soHopDong: 0 }));
+        hopDongDaKy.forEach(c => {
+            if (!c.ngay_tham_gia) return;
+            const d = new Date(c.ngay_tham_gia);
+            if (isNaN(d.getTime()) || d.getFullYear() !== namNay) return;
+            const idx = d.getMonth(); // 0-11
+            doanhSoTheoThang[idx].tongMenhGia += Number(c.menh_gia) || 0;
+            doanhSoTheoThang[idx].soHopDong += 1;
+        });
+
+        // ===== Tỷ trọng doanh số theo TVV (agent) trong THÁNG HIỆN TẠI (cho biểu đồ tròn) =====
+        const thangHienTai = new Date().getMonth(); // 0-11
+        const tvvThangMap = {}; // agent_id -> tongMenhGia
+        hopDongDaKy.forEach(c => {
+            if (!c.ngay_tham_gia) return;
+            const d = new Date(c.ngay_tham_gia);
+            if (isNaN(d.getTime()) || d.getFullYear() !== namNay || d.getMonth() !== thangHienTai) return;
+            const phone = String(c.dien_thoai || '').trim();
+            const agentId = phoneToAgent.get(phone);
+            if (!agentId) return;
+            tvvThangMap[agentId] = (tvvThangMap[agentId] || 0) + (Number(c.menh_gia) || 0);
+        });
+        const tyTrongTvvThangNay = Object.entries(tvvThangMap)
+            .map(([agentId, tongMenhGia]) => {
+                const u = userMap.get(String(agentId));
+                return { ho_va_ten: u ? u.ho_va_ten : `ID ${agentId}`, tongMenhGia };
+            })
+            .sort((a, b) => b.tongMenhGia - a.tongMenhGia);
+
+        res.json({
+            success: true,
+            data: {
+                tongNhanSu, tongAgent, tongLeader, taiKhoanBiKhoa, taiKhoanChuaCoNhom,
+                theoNhom,
+                tongHopDong, tongMenhGia, hopDongDaoHanNamNay,
+                pheuLead, tongLeadDaPhanBo,
+                fileChuaPhanBo,
+                topNhanSu,
+                nhanVienMoi,
+                hopDongGanDay,
+                doanhSoTheoThang,
+                tyTrongTvvThangNay,
+                namHienTai: namNay
+            }
+        });
+    } catch (error) {
+        console.error('Lỗi lấy thống kê dashboard admin:', error.message);
+        res.status(500).json({ success: false, message: error.message });
     }
 });
 

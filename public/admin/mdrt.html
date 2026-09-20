@@ -1,0 +1,757 @@
+<!--
+  Tên file: public/admin/mdrt.html
+  Chức năng: Theo dõi tiến độ chinh phục danh hiệu MDRT / COT / TOT 2027 (dựa trên kết quả kinh doanh 2026)
+  cho toàn bộ TVV, hiển thị bảng vinh danh, bảng xếp hạng, và ước tính thưởng tiến độ theo quý.
+  Vị trí: public/admin/mdrt.html (đã thêm vào menu phân quyền admin trong sidebar.js, mục "Theo dõi MDRT").
+  Nghiệp vụ tham chiếu: Memo 01701/AD/2026 (Chỉ tiêu thành viên MDRT 2027 — hạn mức FYP/FYC/Thu nhập theo 3 danh
+  hiệu, chương trình chinh phục theo tiến độ quý, chương trình tài trợ phí đăng ký thành viên MDRT 2027).
+
+  NGUỒN LOGIC CÔNG THỨC (đã đổi từ bản trước sau khi có file mẫu thật MDRT_13_09.xlsx, sheet "Export"):
+  - Bản trước đoán dữ liệu thực tế là báo cáo "Doanh Thu IP" (IP Sub/IP Issue/IP Issue_YTD) — KHÔNG đúng.
+    File thật do hệ thống xuất ra riêng cho việc xét MDRT, cột gồm: Vùng, SH, ZH, ADM, Mã GA, Mã Văn phòng,
+    Ban, Nhóm, Mã TVV, Tên TVV, Ngày tốt nghiệp, Kênh, Chức danh, FYP, FYC, TLDTPTT, MDRT_On_track.
+  - FYP và FYC trong file này đã là SỐ LŨY KẾ từ đầu năm (không phải số phát sinh riêng tháng đó), đơn vị VND
+    đầy đủ (không phải triệu đồng) — đối chiếu vài dòng có cờ MDRT_On_track = 'ü' thì khớp chính xác 100% với
+    ngưỡng FYP/FYC trong memo (vd FYP 1.619 tỷ ≥ 1.073.645.200 → lên MDRT, đúng như cờ hệ thống đã đánh dấu).
+  - TLDTPTT trong file là SỐ THẬP PHÂN (0.947 nghĩa là 94.7%), có thể rỗng (None) với TVV mới chưa đủ thời
+    gian tính tỷ lệ duy trì — trang này nhân 100 để ra %, và vẫn cho phép admin sửa tay nếu cần.
+  - Cột "YM is 202609" ở dòng chân trang cuối file ("Applied filters: ...") cho biết đây là số liệu lũy kế
+    tính đến hết tháng 09/2026 — trang này tự dò dòng này để gán đúng tháng cho snapshot, không bắt admin
+    phải tự chọn (vẫn có ô chọn tháng để admin sửa lại nếu file không có dòng filter này).
+  - MDRT_On_track là cờ do HỆ THỐNG NGUỒN tự tính (không phải trang này tính) — trang này vẫn tự tính lại
+    danh hiệu từ FYP/FYC theo đúng công thức trong memo để không phụ thuộc 100% vào cờ có sẵn, nhưng vẫn hiển
+    thị cờ gốc như một cách đối chiếu nhanh trong khung chi tiết từng TVV.
+
+  GHI CHÚ TÍCH HỢP:
+  - Nhận file trực tiếp bằng thư viện SheetJS (đọc .xlsx ngay trên trình duyệt, không cần gửi lên server) — xem
+    hàm handleFile()/parseWorkbook(). Vẫn giữ thêm lối "dán dữ liệu thủ công" (textarea) làm phương án dự phòng
+    nếu admin chỉ có sẵn phần dữ liệu dạng bảng copy từ nơi khác, không phải file .xlsx gốc.
+  - Vì FYP/FYC trong file đã lũy kế sẵn, cumulativeAt() KHÔNG cộng dồn qua các tháng nữa (khác bản trước) — chỉ
+    lấy đúng giá trị của tháng gần nhất có dữ liệu trước mốc quý cần xét. Nếu thiếu 1 tháng giữa chừng, số của
+    quý đó sẽ tạm lấy theo tháng gần nhất trước đó (xem TODO (2)).
+  - Toàn bộ snapshot theo tháng đang lưu ở trình duyệt admin (localStorage, key mdrt_excel_snapshots). Khi cần
+    dùng chung nhiều admin, thay loadSnapshots()/saveSnapshots() bằng 1 bảng Supabase (khuyến nghị:
+    `mdrt_snapshots`: id, thang, ma_tvv, ten_tvv, ban, nhom, chuc_danh, fyp, fyc, tldtptt, on_track, created_at).
+  - Trang bắt theme/header/sidebar/footer qua đúng 4 script dùng chung: theme.js, header.js, sidebar.js, footer.js.
+
+  TODO nghiệp vụ chưa chốt:
+  (1) Tiêu chí xét theo Thu Nhập (*) — chỉ áp dụng cho TVV đã từng là thành viên MDRT chính thức từ 2026 trở
+      về trước — file Export hiện tại không có cột này nên chưa tính tự động.
+  (2) Nếu thiếu snapshot đúng tháng cuối quý (ví dụ không có file YM=202603 cho mốc 31/03), trang tạm lấy theo
+      tháng gần nhất có sẵn trước đó — cần thống nhất có chấp nhận cách xấp xỉ này không.
+  (3) Chương trình tài trợ phí đăng ký thành viên MDRT 2027 (mốc 30/06, 30/09, 30/11, 31/12) và khoản thưởng
+      hàng năm cho TVV đã đạt danh hiệu từ năm trước (Mục 1 trong memo) chưa đưa vào trang này, hiện chỉ mới
+      tính thưởng tiến độ theo quý (Chương trình chinh phục MDRT 2027 theo tiến độ quý).
+-->
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Theo dõi MDRT 2027 | Admin</title>
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/lucide@latest/dist/umd/lucide.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+<style>
+  html, body { background: var(--bg-page); color: var(--text-main); }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
+  #mainContainer { padding-top: 3.5rem; min-height: 100vh; }
+  .page-wrap { max-width: 1400px; margin: 0 auto; padding: 1rem; }
+  @media (min-width: 768px) { .page-wrap { padding: 1.5rem 2rem; } }
+
+  .scroll-x { overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; }
+  .scroll-x::-webkit-scrollbar { height: 6px; }
+  .scroll-x::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 4px; }
+  table.mdrt-table { min-width: 860px; width: 100%; border-collapse: collapse; white-space: nowrap; }
+  .modal-scroll { max-height: 82vh; overflow-y: auto; }
+  .qrow-scroll { display: flex; gap: .6rem; overflow-x: auto; padding-bottom: 6px; }
+  .qrow-scroll .qcard { flex: 0 0 220px; }
+
+  .theme-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: .6rem; }
+
+  th.mdrt-th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .03em;
+    color: var(--text-muted); padding: 10px 12px; border-bottom: 2px solid var(--border-color); position: sticky; top: 0; background: var(--bg-card); z-index: 1; }
+  td.mdrt-td { padding: 10px 12px; border-bottom: 1px solid var(--border-color); font-size: 13.5px; vertical-align: middle; }
+  tr.mdrt-row:hover td { background: var(--dropdown-hover); }
+  tr.mdrt-row { cursor: pointer; }
+  td.mdrt-td.stt { color: var(--text-muted); font-size:12px; width:36px; }
+
+  input.inline-input { width: 72px; padding: 4px 6px; border-radius: 5px; border: 1px solid var(--border-color);
+    background: var(--bg-page); color: var(--text-main); font-size: 12.5px; }
+
+  .bar-outer { width: 110px; height: 7px; border-radius: 4px; background: var(--border-color); overflow: hidden; }
+  .bar-inner { height: 100%; }
+
+  .badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 999px;
+    font-size: 11.5px; font-weight: 700; }
+  .badge i { width: 12px; height: 12px; }
+  .tier-tot   { color: #fff; background: linear-gradient(135deg,#ed1b24,#b3121a); box-shadow: 0 0 12px rgba(237,27,36,.55); }
+  .tier-cot   { color: #4a3200; background: linear-gradient(135deg,#f5c451,#d4a017); box-shadow: 0 0 10px rgba(212,160,23,.45); }
+  .tier-mdrt  { color: #fff; background: linear-gradient(135deg,#10b981,#047857); box-shadow: 0 0 10px rgba(16,185,129,.4); }
+  .tier-none  { color: var(--text-muted); background: var(--dropdown-hover); }
+
+  tr.row-tot  td:first-child { box-shadow: inset 3px 0 0 #ed1b24; }
+  tr.row-cot  td:first-child { box-shadow: inset 3px 0 0 #d4a017; }
+  tr.row-mdrt td:first-child { box-shadow: inset 3px 0 0 #10b981; }
+
+  .bar-inner.tot  { background: #ed1b24; }
+  .bar-inner.cot  { background: #d4a017; }
+  .bar-inner.mdrt { background: #10b981; }
+  .bar-inner.none { background: var(--text-muted); }
+
+  .ach-row { display:flex; gap:.85rem; overflow-x:auto; padding:4px 4px 10px; }
+  .ach-card { flex:0 0 252px; display:flex; align-items:center; gap:12px;
+    padding:12px; border-radius:.85rem; background:var(--bg-card); border:1px solid var(--border-color); }
+  .ach-card.ach-tot  { box-shadow:0 0 0 1px rgba(237,27,36,.5), 0 10px 24px rgba(237,27,36,.25); }
+  .ach-card.ach-cot  { box-shadow:0 0 0 1px rgba(212,160,23,.5), 0 10px 24px rgba(212,160,23,.22); }
+  .ach-card.ach-mdrt { box-shadow:0 0 0 1px rgba(16,185,129,.5), 0 10px 24px rgba(16,185,129,.2); }
+  .avatar-portrait { flex:0 0 auto; width:54px; height:70px; border-radius:12px; display:flex; align-items:center;
+    justify-content:center; color:#fff; font-weight:800; font-size:19px; letter-spacing:.02em; }
+  .avatar-tot  { background:linear-gradient(160deg,#f0464d,#8c0d13); }
+  .avatar-cot  { background:linear-gradient(160deg,#f6cd6f,#b5810f); color:#4a3200; }
+  .avatar-mdrt { background:linear-gradient(160deg,#34d399,#047857); }
+  .ach-name { font-weight:700; font-size:13.5px; line-height:1.2; }
+  .ach-user { font-size:11px; color:var(--text-muted); margin-top:1px; }
+  .early-tag { display:inline-flex; align-items:center; gap:3px; font-size:10.5px; font-weight:700; color:#b5810f;
+    background:rgba(212,160,23,.15); padding:1px 7px; border-radius:999px; margin-top:5px; }
+
+  .pill-btn { padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border-color);
+    background: var(--bg-card); color: var(--text-main); font-size: 12.5px; cursor: pointer; }
+  .pill-btn:hover { background: var(--dropdown-hover); }
+  .pill-btn.primary { background:#10b981; border-color:#10b981; color:#fff; font-weight:600; }
+  .pill-btn.primary:hover { background:#059669; }
+  select.pill-select { padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color);
+    background: var(--bg-card); color: var(--text-main); font-size: 12.5px; }
+
+  .month-chip { display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px;
+    border:1px solid var(--border-color); background:var(--bg-card); font-size:11.5px; }
+  .month-chip button { color:var(--text-muted); background:none; border:none; cursor:pointer; font-size:12px; }
+
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.5); display: none; align-items: flex-start;
+    justify-content: center; padding: 5vh 14px; z-index: 60; overflow-y: auto; }
+  .overlay.show { display: flex; }
+  .modal { width: 100%; max-width: 760px; }
+
+  .banner { border: 1px solid var(--border-color); background: var(--bg-card); border-radius: .6rem; padding: 12px 14px; font-size: 13px; }
+
+  textarea#pasteArea { width:100%; min-height:130px; border:1px dashed var(--border-color); border-radius:.6rem;
+    background: var(--bg-page); color: var(--text-main); padding:12px; font-family:"IBM Plex Mono",monospace;
+    font-size:11.5px; resize:vertical; }
+  textarea#pasteArea:focus { outline:none; border-color:#10b981; }
+
+  .dropzone { border:2px dashed var(--border-color); border-radius:.7rem; padding:26px 16px; text-align:center;
+    cursor:pointer; transition:border-color .15s, background .15s; }
+  .dropzone:hover, .dropzone.drag { border-color:#10b981; background: var(--dropdown-hover); }
+  .dropzone i { width:28px; height:28px; color: var(--text-muted); margin-bottom:6px; }
+
+  details.manual-paste summary { cursor:pointer; font-size:12px; color: var(--text-muted); margin-top:10px; }
+</style>
+</head>
+<body>
+
+<div id="mainContainer">
+  <div class="page-wrap">
+
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+      <div>
+        <h1 class="text-lg md:text-xl font-bold">Theo dõi tiến độ MDRT 2027</h1>
+        <p class="text-xs" style="color:var(--text-muted)">Tải file Export (Mã TVV, FYP, FYC, TLDTPTT, MDRT_On_track) — hệ thống tự tính danh hiệu và tiến độ · Memo 01701/AD/2026</p>
+      </div>
+      <button id="importBtn" class="pill-btn primary flex items-center gap-1.5"><i data-lucide="upload" class="w-3.5 h-3.5"></i>Nhập dữ liệu</button>
+    </div>
+
+    <div id="configBanner" class="banner mb-4" style="display:none;"></div>
+
+    <div class="flex flex-wrap items-center gap-2 mb-4" id="monthChips"></div>
+
+    <!-- ===== Khối nhập dữ liệu ===== -->
+    <div id="importPanel" class="theme-card p-4 mb-5" style="display:none;">
+      <div class="flex flex-wrap items-center gap-3 mb-3">
+        <label class="text-xs font-semibold">Tháng chốt số liệu (tự dò từ file, có thể sửa lại)</label>
+        <select id="monthSelect" class="pill-select"></select>
+      </div>
+
+      <label class="dropzone" id="dropzone">
+        <input type="file" id="fileInput" accept=".xlsx,.xls" class="hidden">
+        <i data-lucide="file-spreadsheet"></i>
+        <div class="text-sm font-medium">Bấm để chọn file Excel (.xlsx) hoặc kéo-thả vào đây</div>
+        <div class="text-[11px] mt-1" style="color:var(--text-muted)">File export gốc — không cần chỉnh sửa gì trước khi tải lên.</div>
+      </label>
+      <div id="fileStatus" class="text-xs mt-2" style="color:var(--text-muted)"></div>
+
+      <details class="manual-paste">
+        <summary>Không có file .xlsx? Dán dữ liệu dạng bảng thủ công</summary>
+        <textarea id="pasteArea" class="mt-2" placeholder="Dán dữ liệu (bao gồm dòng tiêu đề cột) vào đây..."></textarea>
+        <div class="flex flex-wrap gap-2 mt-2">
+          <button id="buildFromPasteBtn" class="pill-btn">Nhập từ dữ liệu đã dán</button>
+          <button id="sampleImportBtn" class="pill-btn"><i data-lucide="flask-conical" class="w-3.5 h-3.5"></i> Dùng dữ liệu mẫu</button>
+        </div>
+      </details>
+
+      <div class="flex justify-end mt-3">
+        <button id="cancelImportBtn" class="pill-btn">Đóng</button>
+      </div>
+    </div>
+
+    <div class="mb-1 text-sm font-semibold" id="achTitle" style="display:none;">Vinh danh danh hiệu</div>
+    <div class="ach-row mb-4" id="achRow"></div>
+
+    <div class="theme-card p-3 mb-4 flex flex-wrap items-center gap-2">
+      <input id="searchBox" placeholder="Tìm theo tên hoặc mã TVV..." class="pill-btn" style="min-width:200px; cursor:text;">
+      <select id="tierFilter" class="pill-select">
+        <option value="">Tất cả danh hiệu</option>
+        <option value="tot">TOT</option>
+        <option value="cot">COT</option>
+        <option value="mdrt">MDRT</option>
+        <option value="none">Chưa đạt</option>
+      </select>
+    </div>
+
+    <div class="theme-card">
+      <div class="scroll-x">
+        <table class="mdrt-table" id="mainTable">
+          <thead>
+            <tr>
+              <th class="mdrt-th">#</th>
+              <th class="mdrt-th">TVV</th>
+              <th class="mdrt-th">FYP lũy kế 2026</th>
+              <th class="mdrt-th">FYC lũy kế 2026</th>
+              <th class="mdrt-th">TLDTPTT</th>
+              <th class="mdrt-th">Tiến độ</th>
+              <th class="mdrt-th">Danh hiệu</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody">
+            <tr><td class="mdrt-td" colspan="7" style="text-align:center; color:var(--text-muted); padding:32px;">Chưa có dữ liệu — bấm "Nhập dữ liệu" để bắt đầu.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <p class="text-xs mt-4 leading-relaxed" style="color:var(--text-muted)">
+      Chỉ tiêu năm: MDRT — FYP 1.073.645.200đ / FYC 536.822.600đ · COT — FYP 3.220.935.600đ / FYC 1.610.467.800đ ·
+      TOT — FYP 6.441.871.200đ / FYC 3.220.935.600đ. Đạt FYP <b>hoặc</b> FYC là đủ điều kiện xét danh hiệu. Nhấn vào
+      một dòng để xem chi tiết theo quý. FYP/FYC lấy trực tiếp từ file Export (đã là số lũy kế từ đầu năm — không
+      cộng dồn thêm). TLDTPTT lấy từ file (nếu có), vẫn cho sửa tay khi cần.
+    </p>
+  </div>
+</div>
+
+<div class="overlay" id="overlay"><div class="modal theme-card" id="modalBody"></div></div>
+
+<script src="/js/theme.js"></script>
+<script src="/js/header.js"></script>
+<script src="/js/sidebar.js"></script>
+<script src="/js/footer.js"></script>
+
+<script>
+/* ======================================================================
+   CHỈ TIÊU MDRT 2027 (theo Memo 01701/AD/2026)
+   ====================================================================== */
+const TIERS = [
+  {key:'tot',  label:'TOT',  fyp:6441871200, fyc:3220935600},
+  {key:'cot',  label:'COT',  fyp:3220935600, fyc:1610467800},
+  {key:'mdrt', label:'MDRT', fyp:1073645200, fyc:536822600},
+];
+const QUARTERS = [
+  {key:'q1', label:'Q1 · 31/03', month:3,  fyp:250000000,   fyc:120000000, bonus:5000000},
+  {key:'q2', label:'Q2 · 30/06', month:6,  fyp:500000000,   fyc:240000000, bonus:10000000},
+  {key:'q3', label:'Q3 · 30/09', month:9,  fyp:750000000,   fyc:380000000, bonus:15000000},
+  {key:'q4', label:'Q4 · 31/12', month:12, fyp:1073645200,  fyc:536822600, bonus:20000000},
+];
+
+function fmt(n){ return Math.round(n||0).toLocaleString('vi-VN'); }
+function payoutRate(ret){
+  if(ret>=90) return 1.10;
+  if(ret>=80) return 1.00;
+  if(ret>=70) return 0.80;
+  if(ret>=65) return 0.60;
+  return 0;
+}
+function tierOf(fyp,fyc){
+  for(const t of TIERS){ if(fyp>=t.fyp || fyc>=t.fyc) return t; }
+  return null;
+}
+function nextTier(fyp,fyc){
+  for(const t of [...TIERS].reverse()){ if(!(fyp>=t.fyp || fyc>=t.fyc)) return t; }
+  return null;
+}
+function tierRank(t){ return t ? ({tot:3,cot:2,mdrt:1}[t.key]||0) : 0; }
+
+/* TLDTPTT sửa tay (khi file không có hoặc admin muốn điều chỉnh) — lưu theo mã TVV + quý */
+function loadRetentionOverride(){ try{ return JSON.parse(localStorage.getItem('mdrt_retention_override')||'{}'); }catch(e){ return {}; } }
+function saveRetentionOverride(obj){ try{ localStorage.setItem('mdrt_retention_override', JSON.stringify(obj)); }catch(e){} }
+let retentionOverride = loadRetentionOverride();
+function setRetOverride(userId, qkey, val){
+  if(!retentionOverride[userId]) retentionOverride[userId] = {};
+  retentionOverride[userId][qkey] = val;
+  saveRetentionOverride(retentionOverride);
+}
+
+/* ======================================================================
+   NHẬP DỮ LIỆU — mỗi lần nhập là số liệu lũy kế của 1 tháng (theo YM trong file).
+   snapshots[month] = { pastedAt, rows: [{ma_tvv, ten_tvv, ban, nhom, chuc_danh, fyp, fyc, tldtptt, on_track}] }
+   ====================================================================== */
+function loadSnapshots(){ try{ return JSON.parse(localStorage.getItem('mdrt_excel_snapshots')||'{}'); }catch(e){ return {}; } }
+function saveSnapshots(obj){ try{ localStorage.setItem('mdrt_excel_snapshots', JSON.stringify(obj)); }catch(e){} }
+let snapshots = loadSnapshots();
+
+function normalize(s){
+  return (s||'').toString().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/đ/gi,'d').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+}
+function mapHeader(raw){
+  const n = normalize(raw);
+  if(!n) return null;
+  if(n.includes('ma') && n.includes('tvv')) return 'ma_tvv';
+  if(n.includes('ten') && n.includes('tvv')) return 'ten_tvv';
+  if(n === 'ban') return 'ban';
+  if(n === 'nhom') return 'nhom';
+  if(n.includes('chuc') && n.includes('danh')) return 'chuc_danh';
+  if(n.includes('ngay') && n.includes('nghiep')) return 'ngay_tot_nghiep';
+  if(n === 'fyp') return 'fyp';
+  if(n === 'fyc') return 'fyc';
+  if(n.includes('tldtptt')) return 'tldtptt';
+  if(n.includes('mdrt') && n.includes('track')) return 'on_track';
+  return null;
+}
+function parseNum(v){
+  if(v==null) return null;
+  if(typeof v === 'number') return v;
+  const s = String(v).replace(/[^\d.,-]/g,'').replace(/,/g,'');
+  if(s==='' || s==='-') return null;
+  const n = parseFloat(s);
+  return isNaN(n) ? null : n;
+}
+function looksLikeCheck(v){
+  const s = (v==null?'':v).toString().trim().toLowerCase();
+  return s.length>0 && !['0','false','no','khong','không'].includes(s);
+}
+function detectHeaderRow2D(rows){
+  const KEY = ['ma','ten','ban','nhom','fyp','fyc','tldtptt','mdrt','chuc','ngay'];
+  let bestIdx = 0, bestScore = -1;
+  for(let i=0;i<Math.min(rows.length,15);i++){
+    const cells = rows[i]||[];
+    if(cells.length < 3) continue;
+    let score = 0;
+    cells.forEach(c=>{ const n = normalize(c); if(n && KEY.some(k=>n.includes(k))) score++; });
+    if(score > bestScore){ bestScore = score; bestIdx = i; }
+  }
+  return bestScore >= 2 ? bestIdx : 0;
+}
+function detectYearMonth(rows){
+  for(const row of rows){
+    for(const cell of (row||[])){
+      const s = (cell||'').toString();
+      const m = s.match(/YM\s+is\s+(\d{4})(\d{2})/i);
+      if(m) return { year: parseInt(m[1],10), month: parseInt(m[2],10) };
+    }
+  }
+  return null;
+}
+
+function rowsFrom2D(rows2D){
+  const headerIdx = detectHeaderRow2D(rows2D);
+  const rawHeaders = (rows2D[headerIdx]||[]).map(h=>h==null?'':h);
+  const canon = rawHeaders.map(mapHeader);
+  const ym = detectYearMonth(rows2D);
+
+  const out = [];
+  for(let i=headerIdx+1;i<rows2D.length;i++){
+    const cells = rows2D[i]||[];
+    if(cells.every(c=>c==null || c==='')) continue;
+    const row = {};
+    rawHeaders.forEach((h,ci)=>{ const key = canon[ci]; if(key) row[key] = cells[ci]; });
+    if(!row.ma_tvv && !row.ten_tvv) continue; // bỏ dòng chân trang "Applied filters..."
+    out.push({
+      ma_tvv: (row.ma_tvv||'').toString().trim(),
+      ten_tvv: (row.ten_tvv||'').toString().trim(),
+      ban: (row.ban||'').toString().trim(),
+      nhom: (row.nhom||'').toString().trim(),
+      chuc_danh: (row.chuc_danh||'').toString().trim(),
+      fyp: parseNum(row.fyp) || 0,
+      fyc: parseNum(row.fyc) || 0,
+      tldtptt: parseNum(row.tldtptt), // có thể null nếu TVV mới chưa có tỷ lệ
+      on_track: looksLikeCheck(row.on_track)
+    });
+  }
+  if(out.length===0) throw new Error('Không đọc được dòng dữ liệu nào — kiểm tra lại file (cần có cột Mã TVV hoặc Tên TVV).');
+  return { rows: out, ym };
+}
+
+function parsePastedText(text){
+  const lines = text.replace(/\r/g,'').split('\n').filter(l=>l.trim()!=='');
+  const rows2D = lines.map(l=>l.split('\t'));
+  return rowsFrom2D(rows2D);
+}
+
+function populateMonthSelect(selected){
+  const sel = document.getElementById('monthSelect');
+  sel.innerHTML = Array.from({length:12},(_,i)=>i+1).map(m=>`<option value="${m}" ${m===selected?'selected':''}>Tháng ${m}</option>`).join('');
+}
+
+function renderMonthChips(){
+  const el = document.getElementById('monthChips');
+  const months = Object.keys(snapshots).map(Number).sort((a,b)=>a-b);
+  if(months.length===0){ el.innerHTML = `<span class="text-xs" style="color:var(--text-muted)">Chưa có tháng nào được nhập.</span>`; return; }
+  el.innerHTML = `<span class="text-xs mr-1" style="color:var(--text-muted)">Đã nhập:</span>` + months.map(m=>`
+    <span class="month-chip">Tháng ${m} <button onclick="removeMonth(${m})" title="Xoá tháng này">✕</button></span>
+  `).join('');
+}
+function removeMonth(m){
+  delete snapshots[m];
+  saveSnapshots(snapshots);
+  renderMonthChips();
+  buildAgentsAndRender();
+}
+
+function saveParsedResult(parsed){
+  const month = parseInt(document.getElementById('monthSelect').value,10);
+  snapshots[month] = { pastedAt: Date.now(), rows: parsed.rows };
+  saveSnapshots(snapshots);
+  document.getElementById('importPanel').style.display = 'none';
+  hideConfigBanner();
+  renderMonthChips();
+  buildAgentsAndRender();
+}
+
+/* ---- Mở/đóng khối nhập ---- */
+document.getElementById('importBtn').addEventListener('click', ()=>{
+  populateMonthSelect(new Date().getMonth()+1);
+  document.getElementById('fileStatus').textContent = '';
+  document.getElementById('pasteArea').value = '';
+  document.getElementById('importPanel').style.display = 'block';
+});
+document.getElementById('cancelImportBtn').addEventListener('click', ()=>{
+  document.getElementById('importPanel').style.display = 'none';
+});
+
+/* ---- Tải file .xlsx bằng SheetJS ---- */
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+dropzone.addEventListener('click', ()=> fileInput.click());
+dropzone.addEventListener('dragover', e=>{ e.preventDefault(); dropzone.classList.add('drag'); });
+dropzone.addEventListener('dragleave', ()=> dropzone.classList.remove('drag'));
+dropzone.addEventListener('drop', e=>{
+  e.preventDefault(); dropzone.classList.remove('drag');
+  if(e.dataTransfer.files && e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', e=>{ if(e.target.files[0]) handleFile(e.target.files[0]); });
+
+function handleFile(file){
+  const status = document.getElementById('fileStatus');
+  status.textContent = 'Đang đọc file...';
+  const reader = new FileReader();
+  reader.onload = (e)=>{
+    try{
+      const data = new Uint8Array(e.target.result);
+      const wb = XLSX.read(data, { type:'array', cellDates:true });
+      const sheetName = wb.SheetNames.find(n=>n.toLowerCase().includes('export')) || wb.SheetNames[0];
+      const sheet = wb.Sheets[sheetName];
+      const rows2D = XLSX.utils.sheet_to_json(sheet, { header:1, raw:true, defval:null });
+      const parsed = rowsFrom2D(rows2D);
+      if(parsed.ym){
+        document.getElementById('monthSelect').value = String(parsed.ym.month);
+        status.textContent = `Đã đọc ${parsed.rows.length} dòng · phát hiện số liệu tính đến tháng ${parsed.ym.month}/${parsed.ym.year} (từ dòng "Applied filters").`;
+        if(parsed.ym.year !== 2026){
+          status.textContent += ' ⚠️ Năm khác 2026 — kiểm tra lại vì chỉ tiêu MDRT 2027 tính theo kết quả kinh doanh 2026.';
+        }
+      } else {
+        status.textContent = `Đã đọc ${parsed.rows.length} dòng · không thấy dòng "Applied filters" để tự dò tháng, hãy kiểm tra lại mục chọn tháng.`;
+      }
+      saveParsedResult(parsed);
+    }catch(err){
+      console.error(err);
+      status.textContent = '';
+      Swal.fire('Không đọc được file', err.message || String(err), 'error');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+/* ---- Dán thủ công (dự phòng) ---- */
+document.getElementById('buildFromPasteBtn').addEventListener('click', ()=>{
+  const text = document.getElementById('pasteArea').value;
+  if(!text.trim()){ Swal.fire('Thiếu dữ liệu','Vui lòng dán dữ liệu vào ô bên trên.','warning'); return; }
+  let parsed;
+  try{ parsed = parsePastedText(text); }
+  catch(e){ Swal.fire('Không đọc được dữ liệu', e.message, 'error'); return; }
+  saveParsedResult(parsed);
+});
+document.getElementById('sampleImportBtn').addEventListener('click', ()=>{
+  document.getElementById('pasteArea').value = SAMPLE_TSV;
+});
+
+/* ======================================================================
+   GHÉP DỮ LIỆU CÁC THÁNG THÀNH DANH SÁCH TVV
+   ====================================================================== */
+let agents = []; // [{id, name, username, ban, nhom, chuc_danh, monthly:{month:{fyp, fyc, tldtptt, on_track}}}]
+
+function buildAgentsAndRender(){
+  const byId = {};
+  Object.keys(snapshots).map(Number).sort((a,b)=>a-b).forEach(month=>{
+    (snapshots[month].rows||[]).forEach(r=>{
+      const id = r.ma_tvv || ('name:'+normalize(r.ten_tvv));
+      if(!byId[id]) byId[id] = { id, name: r.ten_tvv || id, username: r.ma_tvv || '', ban:'', nhom:'', chuc_danh:'', monthly:{} };
+      const a = byId[id];
+      a.name = r.ten_tvv || a.name;
+      a.username = r.ma_tvv || a.username;
+      a.ban = r.ban || a.ban;
+      a.nhom = r.nhom || a.nhom;
+      a.chuc_danh = r.chuc_danh || a.chuc_danh;
+      a.monthly[month] = { fyp: r.fyp||0, fyc: r.fyc||0, tldtptt: r.tldtptt, on_track: !!r.on_track };
+    });
+  });
+  agents = Object.values(byId);
+  renderAll();
+}
+
+/* FYP/FYC trong file đã là lũy kế -> chỉ lấy đúng tháng gần nhất trước mốc quý, KHÔNG cộng dồn thêm */
+function cumulativeAt(a, qIndex){
+  const targetMonth = QUARTERS[qIndex].month;
+  const months = Object.keys(a.monthly).map(Number).filter(m=>m<=targetMonth).sort((x,y)=>x-y);
+  if(months.length===0) return {fyp:0, fyc:0, tldtptt:null, on_track:false, month:null};
+  const m = months[months.length-1];
+  return { ...a.monthly[m], month: m };
+}
+function finalCumulative(a){ return cumulativeAt(a, 3); }
+
+function getRet(a, qIndex){
+  const override = retentionOverride[a.id] && retentionOverride[a.id][QUARTERS[qIndex].key];
+  if(override != null) return override;
+  const cum = cumulativeAt(a, qIndex);
+  if(cum.tldtptt != null) return Math.round(cum.tldtptt*100);
+  return 80; // mặc định khi file không có TLDTPTT (TVV mới)
+}
+
+function showConfigBanner(msg, kind){
+  const el = document.getElementById('configBanner');
+  el.style.display = 'block';
+  const color = kind==='error' ? '#ef7b7b' : (kind==='info' ? '#d4a017' : 'var(--text-muted)');
+  el.innerHTML = `<span style="color:${color}">${msg}</span>`;
+}
+function hideConfigBanner(){ document.getElementById('configBanner').style.display = 'none'; }
+
+/* ======================================================================
+   HIỂN THỊ
+   ====================================================================== */
+function earliestQuarterIdx(a, tierObj){
+  for(let i=0;i<QUARTERS.length;i++){
+    const cum = cumulativeAt(a, i);
+    if(cum.fyp>=tierObj.fyp || cum.fyc>=tierObj.fyc) return i;
+  }
+  return null;
+}
+
+function renderAchievers(rows){
+  const achievers = rows
+    .map(r=>({ ...r, tier: tierOf(r.fyp,r.fyc) }))
+    .filter(r=>r.tier)
+    .map(r=>({ ...r, earlyIdx: earliestQuarterIdx(r.a, r.tier) }))
+    .sort((x,y)=> tierRank(y.tier)-tierRank(x.tier) || (x.earlyIdx-y.earlyIdx) || (y.fyp-x.fyp));
+
+  const el = document.getElementById('achRow');
+  const title = document.getElementById('achTitle');
+  if(achievers.length===0){ el.innerHTML=''; title.style.display='none'; return; }
+  title.style.display = 'block';
+
+  el.innerHTML = achievers.map(r=>{
+    const initials = r.a.name.split(' ').slice(-2).map(w=>w[0]).join('').toUpperCase();
+    const early = r.earlyIdx !== null && r.earlyIdx <= 1;
+    return `
+    <div class="ach-card ach-${r.tier.key}">
+      <div class="avatar-portrait avatar-${r.tier.key}">${initials}</div>
+      <div>
+        <div class="ach-name">${r.a.name}</div>
+        <div class="ach-user">${r.a.username ? '@'+r.a.username : ''}</div>
+        <span class="badge tier-${r.tier.key}" style="margin-top:6px;"><i data-lucide="award"></i>${r.tier.label}</span>
+        ${early ? `<div class="early-tag">⚡ Đạt sớm · ${QUARTERS[r.earlyIdx].label}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+  if(typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function rowsForDisplay(){
+  const rows = agents.map(a=>{
+    const cum = finalCumulative(a);
+    return {a, fyp: cum.fyp, fyc: cum.fyc};
+  });
+  return rows.sort((x,y)=> tierRank(tierOf(y.fyp,y.fyc)) - tierRank(tierOf(x.fyp,x.fyc)) || (y.fyp-x.fyp));
+}
+
+function applyFilters(rows){
+  const q = document.getElementById('searchBox').value.trim().toLowerCase();
+  const tier = document.getElementById('tierFilter').value;
+  return rows.filter(r=>{
+    if(q && !(r.a.name.toLowerCase().includes(q) || (r.a.username||'').toLowerCase().includes(q))) return false;
+    if(tier){
+      const t = tierOf(r.fyp, r.fyc);
+      if(tier==='none' && t) return false;
+      if(tier!=='none' && (!t || t.key!==tier)) return false;
+    }
+    return true;
+  });
+}
+
+function renderTable(){
+  const all = rowsForDisplay();
+  renderAchievers(all);
+  const rows = applyFilters(all);
+  const tbody = document.getElementById('tableBody');
+
+  if(agents.length===0){
+    tbody.innerHTML = `<tr><td class="mdrt-td" colspan="7" style="text-align:center;color:var(--text-muted);padding:32px;">Chưa có dữ liệu — bấm "Nhập dữ liệu" để bắt đầu.</td></tr>`;
+    return;
+  }
+  if(rows.length===0){
+    tbody.innerHTML = `<tr><td class="mdrt-td" colspan="7" style="text-align:center;color:var(--text-muted);padding:32px;">Không tìm thấy TVV phù hợp bộ lọc.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = rows.map((r,idx)=>{
+    const t = tierOf(r.fyp, r.fyc);
+    const nt = nextTier(r.fyp, r.fyc);
+    const tierKey = t ? t.key : 'none';
+    const badge = t
+      ? `<span class="badge tier-${t.key}"><i data-lucide="award"></i>${t.label}</span>`
+      : `<span class="badge tier-none">Chưa đạt</span>`;
+    let progress = `<span class="text-xs" style="color:#10b981;font-weight:700;">Đã đạt mức cao nhất</span>`;
+    if(nt){
+      const p = Math.max(Math.min(1, r.fyp/nt.fyp), Math.min(1, r.fyc/nt.fyc));
+      progress = `<div class="bar-outer"><div class="bar-inner ${tierKey}" style="width:${(p*100).toFixed(0)}%"></div></div>
+        <div class="text-[10.5px] mt-1" style="color:var(--text-muted)">${(p*100).toFixed(0)}% tới ${nt.label}</div>`;
+    }
+    const ret = getRet(r.a, 3);
+    return `<tr class="mdrt-row row-${tierKey}" onclick="openDetail('${r.a.id}')">
+      <td class="mdrt-td stt">${idx+1}</td>
+      <td class="mdrt-td">
+        <div class="font-medium">${r.a.name}</div>
+        <div class="text-[11px]" style="color:var(--text-muted)">${r.a.username ? '@'+r.a.username : ''}${r.a.chuc_danh ? ' · '+r.a.chuc_danh : ''}</div>
+      </td>
+      <td class="mdrt-td">${fmt(r.fyp)}</td>
+      <td class="mdrt-td">${fmt(r.fyc)}</td>
+      <td class="mdrt-td" onclick="event.stopPropagation()"><input class="inline-input" type="number" min="0" max="150" value="${ret}"
+            onchange="setRetOverride('${r.a.id}','q4',parseFloat(this.value)||0); renderTable();"> %</td>
+      <td class="mdrt-td">${progress}</td>
+      <td class="mdrt-td">${badge}</td>
+    </tr>`;
+  }).join('');
+
+  if(typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function renderAll(){ renderTable(); }
+
+function openDetail(userId){
+  const a = agents.find(x=>x.id===userId);
+  if(!a) return;
+  document.getElementById('modalBody').innerHTML = detailHtml(a);
+  document.getElementById('overlay').classList.add('show');
+  if(typeof lucide !== 'undefined') lucide.createIcons();
+}
+function closeDetail(){ document.getElementById('overlay').classList.remove('show'); }
+document.getElementById('overlay').addEventListener('click', e=>{ if(e.target.id==='overlay') closeDetail(); });
+
+function detailHtml(a){
+  const qData = QUARTERS.map((q,i)=>{
+    const cum = cumulativeAt(a, i);
+    const ret = getRet(a, i);
+    const achieved = cum.fyp >= q.fyp || cum.fyc >= q.fyc;
+    return {...q, fyp_cum: cum.fyp, fyc_cum: cum.fyc, ret, achieved, on_track: cum.on_track, srcMonth: cum.month};
+  });
+
+  let paidUpTo = -1, total = 0, lines = [];
+  qData.forEach((q,i)=>{
+    if(q.achieved && i>paidUpTo){
+      for(let k=paidUpTo+1;k<=i;k++){
+        const rate = payoutRate(qData[k].ret);
+        const amt = qData[k].bonus * rate;
+        total += amt;
+        lines.push(`${qData[k].label}: ${fmt(qData[k].bonus)}đ × ${(rate*100).toFixed(0)}% = <b>${fmt(amt)}đ</b>${k!==i?' <span style="color:var(--text-muted)">(bù, chi cùng đợt '+q.label+')</span>':''}`);
+      }
+      paidUpTo = i;
+    }
+  });
+
+  const qCards = qData.map(q=>`
+    <div class="theme-card qcard p-3">
+      <div class="text-[11px] font-semibold mb-2" style="color:var(--text-muted)">${q.label}${q.srcMonth ? ' <span style=\"font-weight:400\">(số liệu T'+q.srcMonth+')</span>' : ''}</div>
+      <div class="text-[11px]" style="color:var(--text-muted)">FYP lũy kế</div>
+      <div class="text-sm font-medium mb-1">${fmt(q.fyp_cum)}</div>
+      <div class="text-[11px]" style="color:var(--text-muted)">FYC lũy kế</div>
+      <div class="text-sm font-medium mb-2">${fmt(q.fyc_cum)}</div>
+      <div class="text-[11px] mb-1" style="color:var(--text-muted)">TLDTPTT tại mốc (%)</div>
+      <input class="inline-input" style="width:100%" type="number" min="0" max="150" value="${q.ret}"
+        onchange="setRetOverride('${a.id}','${q.key}',parseFloat(this.value)||0); openDetail('${a.id}');">
+      <div class="mt-2 text-[11px] font-semibold" style="color:${q.achieved?'#10b981':'var(--text-muted)'}">
+        ${q.achieved ? '✓ Đạt tiến độ quý' : 'Chưa đạt tiến độ quý'}${q.on_track ? ' · <span style=\"color:#10b981\">Hệ thống: on-track</span>' : ''}
+      </div>
+    </div>
+  `).join('');
+
+  const tierRows = TIERS.slice().reverse().map(t=>{
+    const cum = finalCumulative(a);
+    const done = cum.fyp>=t.fyp || cum.fyc>=t.fyc;
+    return `<tr>
+      <td class="mdrt-td">${t.label}</td>
+      <td class="mdrt-td">${fmt(t.fyp)}</td>
+      <td class="mdrt-td">${fmt(t.fyc)}</td>
+      <td class="mdrt-td">${done ? '<span style="color:#10b981;font-weight:700">Đạt</span>' : 'Chưa đạt'}</td>
+    </tr>`;
+  }).join('');
+
+  return `
+    <div class="modal-scroll p-5">
+      <div class="flex items-center justify-between mb-1">
+        <h3 class="text-base font-bold">${a.name}</h3>
+        <button class="pill-btn" onclick="closeDetail()"><i data-lucide="x" class="w-3.5 h-3.5"></i></button>
+      </div>
+      <div class="text-xs mb-4" style="color:var(--text-muted)">${a.username ? '@'+a.username : ''}${a.ban ? ' · '+a.ban : ''}${a.nhom ? ' · '+a.nhom : ''}${a.chuc_danh ? ' · '+a.chuc_danh : ''}</div>
+
+      <div class="scroll-x mb-4">
+        <table style="min-width:520px; width:100%; border-collapse:collapse;">
+          <thead><tr>
+            <th class="mdrt-th">Danh hiệu</th><th class="mdrt-th">FYP mục tiêu</th><th class="mdrt-th">FYC mục tiêu</th><th class="mdrt-th">Trạng thái</th>
+          </tr></thead>
+          <tbody>${tierRows}</tbody>
+        </table>
+      </div>
+
+      <div class="text-sm font-semibold mb-2">Tiến độ theo quý (từ dữ liệu đã nhập)</div>
+      <div class="qrow-scroll mb-4">${qCards}</div>
+
+      <div class="theme-card p-3">
+        <div class="font-semibold text-sm mb-2">Ước tính thưởng tiến độ quý</div>
+        ${lines.length ? lines.map(l=>`<div class="text-xs mb-1">${l}</div>`).join('') : `<div class="text-xs" style="color:var(--text-muted)">Chưa đạt tiến độ ở mốc nào.</div>`}
+        <div class="mt-2 pt-2 text-sm font-bold" style="border-top:1px solid var(--border-color)">Tổng cộng: ${fmt(total)}đ</div>
+      </div>
+    </div>
+  `;
+}
+
+document.getElementById('searchBox').addEventListener('input', renderTable);
+document.getElementById('tierFilter').addEventListener('change', renderTable);
+
+/* Mẫu rút gọn từ đúng cấu trúc file Export thật */
+const SAMPLE_TSV =
+`Mã TVV\tTên TVV\tBan\tNhóm\tChức danh\tFYP\tFYC\tTLDTPTT\tMDRT_On_track
+60746849\tNguyễn Thị Mỹ Linh\tRJX\t9CE\tUM\t1619819000\t411383880\t1\tü
+60732898\tNguyễn Thị Thu Thanh\tRJX\tQ0P\tAG\t1167395300\t303519482\t0.926\tü
+60730128\tVũ Thị Hường\tRJX\tRJX\tAG\t567295800\t144209380\t0.941\t
+60172834\tTrần Hiền Hòa\tEE3\tTUM\tAG\t300862650\t78080211\t0.946\t
+60638998\tNguyễn Thị Thế Nghĩa\tUWN\tUWN\tAG\t229571850\t56962658\t0.674\t
+60807824\tTrương Minh Tứ\tRJX\t9CE\tAG\t126091000\t26436500\t1\t
+60156225\tĐặng Tú Anh\tI60\tASE\tUM\t166524150\t42227500\t0.845\t
+60729088\tBùi Đăng Chụ\tRJX\tQ0P\tAG\t476190000\t116546191\t0.941\t`;
+
+/* ---- Khởi tạo ---- */
+renderMonthChips();
+buildAgentsAndRender();
+</script>
+</body>
+</html>
