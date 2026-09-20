@@ -5,6 +5,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { generateAiInsight } = require('../services/groqService');
+const reminderService = require('../services/reminderService');
 
 // ==========================================================================
 // CẤU HÌNH UPLOAD FILE ĐÍNH KÈM CUỘC HẸN
@@ -74,13 +75,8 @@ async function revertExpiredAppointments(supabase) {
 // Hàm phụ: tra ho_va_ten -> user.id (dùng để xác định người NHẬN thông báo)
 async function resolveUserId(supabase, hoVaTen) {
     if (!hoVaTen) return null;
-    const { data, error } = await supabase
-        .from('users')
-        .select('id')
-        .or(`ho_va_ten.eq.${hoVaTen},ten_dang_nhap.eq.${hoVaTen}`)
-        .single();
-    if (error || !data) return null;
-    return data.id;
+    const user = await reminderService.resolveUser(supabase, hoVaTen);
+    return user ? user.id : null;
 }
 
 // Hàm phụ: tạo 1 thông báo mới cho user_id chỉ định
@@ -109,13 +105,8 @@ async function getCustomerNameByPhone(supabase, phone) {
 // Hàm phụ: tra ten_dang_nhap từ ho_va_ten (vì client chỉ lưu ho_va_ten ở localStorage,
 // trong khi cột nguoi_nhan_username trong DB lưu ten_dang_nhap)
 async function resolveUsername(supabase, agentDisplayName) {
-    const { data, error } = await supabase
-        .from('users')
-        .select('ten_dang_nhap')
-        .or(`ho_va_ten.eq.${agentDisplayName},ten_dang_nhap.eq.${agentDisplayName}`)
-        .single();
-    if (error || !data) return null;
-    return data.ten_dang_nhap;
+    const user = await reminderService.resolveUser(supabase, agentDisplayName);
+    return user ? user.ten_dang_nhap : null;
 }
 
 // ==========================================================================
@@ -798,14 +789,18 @@ router.post('/ai-insights/:id/save-insight', async (req, res) => {
 });
 
 // API: Lưu nhắc hẹn gọi lại (bấm chuông ở cột "Thao tác")
+// - Chặn giờ ở quá khứ
+// - Mỗi khách chỉ có 1 nhắc hẹn đang chờ: đặt lại sẽ CẬP NHẬT nhắc hẹn cũ (không tạo trùng)
+// - Lưu user_id + call_history_id để job nền biết gửi thông báo cho ai
 router.post('/ai-insights/:id/remind', async (req, res) => {
     try {
         const supabase = req.supabase;
         const { id } = req.params;
         const { thoi_gian_nhac, ghi_chu } = req.body;
 
-        if (!thoi_gian_nhac) {
-            return res.status(400).json({ success: false, message: 'Thiếu thời gian nhắc hẹn!' });
+        const check = reminderService.validateRemindTime(thoi_gian_nhac);
+        if (!check.ok) {
+            return res.status(400).json({ success: false, message: check.message });
         }
 
         const { data: anchorRow, error: anchorErr } = await supabase
@@ -815,16 +810,20 @@ router.post('/ai-insights/:id/remind', async (req, res) => {
             .single();
         if (anchorErr) throw anchorErr;
 
-        const { error } = await supabase.from('nhac_hen_lai').insert([{
+        const user = await reminderService.resolveUser(supabase, anchorRow.ten_agent);
+        const result = await reminderService.upsertReminder(supabase, {
             dien_thoai: anchorRow.dien_thoai,
             ten_agent: anchorRow.ten_agent,
-            thoi_gian_nhac,
-            ghi_chu: ghi_chu || null,
-            da_nhac: false
-        }]);
-        if (error) throw error;
+            user_id: user ? user.id : null,
+            thoi_gian_nhac: check.iso,
+            ghi_chu: ghi_chu ? String(ghi_chu).trim() : null,
+            call_history_id: Number(id)
+        });
 
-        res.json({ success: true, message: 'Đã lưu nhắc hẹn gọi lại.' });
+        res.json({
+            success: true,
+            message: result.updated ? 'Đã cập nhật nhắc hẹn gọi lại hiện có của khách này.' : 'Đã lưu nhắc hẹn gọi lại.'
+        });
     } catch (error) {
         console.error("Lỗi lưu nhắc hẹn gọi lại:", error);
         res.status(500).json({ success: false, message: 'Lỗi server nội bộ', error: error.message });

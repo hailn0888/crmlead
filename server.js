@@ -25,6 +25,17 @@ const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+// Client RIÊNG cho module Nhắc lịch (job nền + bảng push_subscriptions đã khóa RLS).
+// Dùng service_role key: CHỈ để trong .env của server, tuyệt đối không đưa ra frontend.
+// Chưa khai báo SUPABASE_SERVICE_ROLE_KEY thì tạm dùng lại client anon ở trên:
+// nhắc hẹn + chuông vẫn chạy, nhưng chưa lưu được thiết bị nhận Web Push.
+const reminderSupabase = process.env.SUPABASE_SERVICE_ROLE_KEY
+    ? createClient(supabaseUrl, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } })
+    : supabase;
+if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    console.warn('[reminders] Chưa có SUPABASE_SERVICE_ROLE_KEY trong .env -> chưa lưu được thiết bị nhận Web Push.');
+}
+
 app.use((req, res, next) => {
     req.supabase = supabase;
     next();
@@ -48,6 +59,12 @@ app.use('/api/agent', require('./routes/agent.routes'));
 // phòng trường hợp gọi thẳng API mà không qua giao diện (Postman/devtools/script...).
 const requireLeadsApiAccess = require('./middleware/requireLeadsApiAccess');
 app.use('/api/calls', requireLeadsApiAccess, require('./routes/calls.routes'));
+// Nhắc lịch chăm sóc khách hàng (Tab 4 của calls.html): cùng quyền xem_data_leads như /api/calls.
+// Middleware giữa ghi đè req.supabase bằng client service_role để lưu thiết bị nhận push.
+app.use('/api/reminders', requireLeadsApiAccess, (req, res, next) => {
+    req.supabase = reminderSupabase;
+    next();
+}, require('./routes/reminders.routes'));
 app.use('/api/ai', require('./routes/ai.routes'));
 
 app.get('/', (req, res) => {
@@ -56,8 +73,7 @@ app.get('/', (req, res) => {
 
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Hệ thống CRM Lead đang chạy mượt mà tại port ${PORT}`);
-});
-
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 Hệ thống CRM Lead đang chạy mượt mà tại port ${PORT}`);
+    // Job nền nhắc lịch gọi lại khách: quét mỗi phút, gửi chuông trong app + Web Push.
+    // Chỉ chạy trên 1 tiến trình (không bật nhiều instance) để khỏi gửi trùng thông báo.
+    require('./services/reminderJob').start(reminderSupabase);
 });
