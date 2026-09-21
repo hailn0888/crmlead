@@ -56,7 +56,8 @@ router.post('/push/unsubscribe', async (req, res) => {
     }
 });
 
-// Gửi thử 1 thông báo tới mọi thiết bị của chính agent này (nút "Gửi thử" ở Tab 4)
+// Gửi thử 1 thông báo tới mọi thiết bị của chính agent này (nút "Gửi thử" ở Tab 4).
+// body.delay (0-30 giây): gửi sau X giây để kịp thoát ra màn hình chính / khóa máy rồi xem thông báo có tới không.
 router.post('/push/test', async (req, res) => {
     try {
         const agent = agentOf(req);
@@ -64,14 +65,25 @@ router.post('/push/test', async (req, res) => {
         const user = await svc.resolveUser(req.supabase, agent);
         if (!user) return res.status(404).json({ success: false, message: 'Không tìm thấy người dùng!' });
 
-        const r = await push.sendToUser(req.supabase, user.id, {
+        const payload = {
             title: 'Thông báo thử', body: 'Thiết bị này đã nhận được thông báo nhắc lịch.',
             url: '/agents/calls.html?tab=4', tag: 'push-test', phase: 'test'
-        });
+        };
+        const delay = Math.min(Math.max(Number((req.body || {}).delay) || 0, 0), 30);
+        if (delay > 0) {
+            setTimeout(() => { push.sendToUser(req.supabase, user.id, payload).catch(() => {}); }, delay * 1000);
+            return res.json({ success: true, enabled: push.isEnabled(), scheduled: true, delay });
+        }
+        const r = await push.sendToUser(req.supabase, user.id, payload);
         res.json({ success: true, enabled: push.isEnabled(), ...r });
     } catch (err) {
         fail(res, err, 'push/test');
     }
+});
+
+// Danh sách "kết quả cuộc gọi" cho popup "Đã gọi" (nguồn duy nhất: services/reminderService.js)
+router.get('/results', (req, res) => {
+    res.json({ success: true, results: svc.CALL_RESULTS });
 });
 
 // ==========================================================================
@@ -174,6 +186,8 @@ router.get('/', async (req, res) => {
             so_lan_hoan: r.so_lan_hoan || 0,
             call_history_id: r.call_history_id,
             da_goi_luc: r.da_goi_luc,
+            ket_qua_goi: r.ket_qua_goi || null,
+            ghi_chu_goi: r.ghi_chu_goi || null,
             phase: r.trang_thai === 'cho' ? svc.phaseOf(r, now) : 'da_goi',
             last_call: lastCall[r.dien_thoai] || null,
             ai_insight: insight[r.dien_thoai] || ''
@@ -186,8 +200,11 @@ router.get('/', async (req, res) => {
 });
 
 // ==========================================================================
-// ĐÃ GỌI  (tuỳ chọn: kèm hẹn gọi lại lần tiếp theo -> tạo nhắc hẹn mới)
-// body: { agent, next_thoi_gian_nhac?, next_ghi_chu? }
+// ĐÃ GỌI: ghi KẾT QUẢ cuộc gọi
+//   body: { agent, ket_qua, ghi_chu?, next_thoi_gian_nhac?, next_ghi_chu? }
+//   1) đóng nhắc hẹn hiện tại (lưu kết quả + ghi chú lên chính nhắc hẹn)
+//   2) tạo 1 dòng call_history (nếu LOG_TO_CALL_HISTORY) -> lịch sử cuộc gọi / Tab 1 / Tab 5 / AI Insights thấy được
+//   3) đặt nhắc hẹn gọi lại tiếp theo nếu có
 // ==========================================================================
 router.post('/:id/done', async (req, res) => {
     try {
@@ -195,27 +212,61 @@ router.post('/:id/done', async (req, res) => {
         const agent = agentOf(req);
         const row = await loadOwned(supabase, req.params.id, agent);
         if (!row) return res.status(404).json({ success: false, message: 'Không tìm thấy nhắc hẹn!' });
+        if (row.trang_thai !== 'cho') return res.status(409).json({ success: false, message: 'Nhắc hẹn này đã được xử lý rồi.' });
 
-        const { next_thoi_gian_nhac, next_ghi_chu } = req.body || {};
+        const { ket_qua, ghi_chu, next_thoi_gian_nhac, next_ghi_chu } = req.body || {};
+        const opt = svc.findResult(ket_qua);
+        if (!opt) return res.status(400).json({ success: false, message: 'Vui lòng chọn kết quả cuộc gọi!' });
+
         let next = null;
         if (next_thoi_gian_nhac) {
             next = svc.validateRemindTime(next_thoi_gian_nhac);
             if (!next.ok) return res.status(400).json({ success: false, message: next.message });
+        } else if (opt.next === 'bat_buoc') {
+            return res.status(400).json({ success: false, message: `Kết quả "${opt.value}" cần đặt thời gian gọi lại!` });
         }
 
+        const note = String(ghi_chu || '').trim().slice(0, 2000) || null;
         const now = new Date().toISOString();
-        const { error } = await supabase.from('nhac_hen_lai')
-            .update({ trang_thai: 'da_goi', da_goi_luc: now, da_nhac: true, updated_at: now })
-            .eq('id', row.id);
-        if (error) throw error;
+
+        // Giữ chỗ: chỉ 1 request "thắng" (bấm đúp / 2 thiết bị cùng bấm sẽ không tạo trùng)
+        const { data: claimed, error: claimErr } = await supabase.from('nhac_hen_lai')
+            .update({ trang_thai: 'da_goi', da_goi_luc: now, da_nhac: true, ket_qua_goi: opt.value, ghi_chu_goi: note, updated_at: now })
+            .eq('id', row.id).eq('trang_thai', 'cho').select('id');
+        if (claimErr) throw claimErr;
+        if (!claimed || !claimed.length) return res.status(409).json({ success: false, message: 'Nhắc hẹn này đã được xử lý rồi.' });
+
+        let callId = null;
+        if (svc.LOG_TO_CALL_HISTORY) {
+            try {
+                // thoi_gian_goi là timestamp không múi giờ, giao diện hiểu là UTC -> ghi ISO/UTC giống các nơi khác
+                const callRow = {
+                    dien_thoai: row.dien_thoai, ten_agent: row.ten_agent,
+                    ket_qua_cuoc_goi: opt.value, ghi_chu: note, thoi_gian_goi: now
+                };
+                if (opt.logAsAppointment) callRow.trang_thai_gui = 'Chưa gửi';
+                const { data: ins, error: insErr } = await supabase.from('call_history').insert([callRow]).select('id').single();
+                if (insErr) throw insErr;
+                callId = ins.id;
+                await supabase.from('nhac_hen_lai').update({ ket_qua_call_history_id: callId }).eq('id', row.id);
+            } catch (e) {
+                // Không ghi được lịch sử cuộc gọi -> trả nhắc hẹn về trạng thái chờ để không mất dữ liệu
+                await supabase.from('nhac_hen_lai').update({ trang_thai: 'cho', da_goi_luc: null, ket_qua_goi: null, ghi_chu_goi: null, updated_at: now }).eq('id', row.id);
+                throw e;
+            }
+        }
 
         if (next) {
             await svc.upsertReminder(supabase, {
                 dien_thoai: row.dien_thoai, ten_agent: row.ten_agent, user_id: row.user_id,
-                thoi_gian_nhac: next.iso, ghi_chu: next_ghi_chu, call_history_id: row.call_history_id
+                thoi_gian_nhac: next.iso, ghi_chu: next_ghi_chu, call_history_id: callId || row.call_history_id
             });
         }
-        res.json({ success: true, message: next ? 'Đã ghi nhận cuộc gọi và đặt nhắc hẹn mới.' : 'Đã ghi nhận cuộc gọi.' });
+
+        let message = `Đã ghi nhận kết quả: ${opt.value}.`;
+        if (opt.logAsAppointment && callId) message += ' Khách đã được đưa vào "Danh sách hẹn gặp thành công".';
+        if (next) message += ' Đã đặt nhắc hẹn gọi lại.';
+        res.json({ success: true, message, call_history_id: callId });
     } catch (err) {
         fail(res, err, 'done');
     }

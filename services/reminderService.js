@@ -102,6 +102,33 @@ function buildMessage(phase, row, name) {
     return { title: 'Quá hạn gọi lại khách', body: `${who} - hẹn lúc ${hhmm}, chưa xử lý.${note}` };
 }
 
+// ---------------------------------------------------------------- Kết quả cuộc gọi khi bấm "Đã gọi"
+// `value` được lưu NGUYÊN VĂN vào call_history.ket_qua_cuoc_goi nên PHẢI trùng với các giá trị hệ thống
+// đang dùng ở nơi ghi nhận cuộc gọi. Trong code hiện có chỉ 'Hẹn gặp thành công' là giá trị đã xác nhận;
+// các giá trị còn lại là đề xuất mặc định - đối chiếu bằng câu SQL ở cuối sql/02_ket_qua_cuoc_goi.sql rồi sửa ở đây.
+//   next   : 'bat_buoc' (phải đặt giờ gọi lại) | 'goi_y' (gợi ý, có thể bỏ) | 'khong' (kết thúc, không nhắc nữa)
+//   suggest: giờ gọi lại gợi ý: '2h' | 'tomorrow9' | '2d9' | 'week9'
+//   logAsAppointment: ghi cuộc gọi như một "Hẹn gặp thành công" (sẽ hiện ở Tab 1, gửi hẹn ở đó như bình thường)
+const CALL_RESULTS = [
+    { value: 'Hẹn gặp thành công', tone: 'green', next: 'khong', logAsAppointment: true,
+      hint: 'Cuộc gọi được ghi vào "Danh sách hẹn gặp thành công" (Tab 1). Bạn gửi hẹn cho TMR/DMO tại đó như bình thường.' },
+    { value: 'Hẹn gọi lại', tone: 'amber', next: 'bat_buoc', suggest: null,
+      hint: 'Khách bận hoặc hẹn giờ khác: bắt buộc chọn giờ gọi lại.' },
+    { value: 'Đang cân nhắc', tone: 'sky', next: 'goi_y', suggest: '2d9',
+      hint: 'Khách chưa quyết định: nên đặt lịch chăm sóc tiếp.' },
+    { value: 'Không nghe máy', tone: 'gray', next: 'goi_y', suggest: '2h',
+      hint: 'Không liên lạc được: nên gọi lại sau vài giờ.' },
+    { value: 'Khách từ chối', tone: 'red', next: 'khong',
+      hint: 'Khách không có nhu cầu: kết thúc, không nhắc nữa.' },
+    { value: 'Sai số / Không liên lạc được', tone: 'gray', next: 'khong',
+      hint: 'Số sai hoặc thuê bao không tồn tại: kết thúc, không nhắc nữa.' }
+];
+// true: mỗi lần bấm "Đã gọi" tạo thêm 1 dòng call_history (lịch sử cuộc gọi + Tab 5 + AI Insights thấy được).
+// false: chỉ lưu kết quả trên chính nhắc hẹn (bảng nhac_hen_lai), không đụng call_history.
+const LOG_TO_CALL_HISTORY = true;
+
+function findResult(value) { return CALL_RESULTS.find(r => r.value === value) || null; }
+
 // ---------------------------------------------------------------- Ghi DB
 async function createNotification(supabase, userId, loai, noiDung, callHistoryId) {
     if (!userId) return;
@@ -159,5 +186,6 @@ module.exports = {
     validateRemindTime, phaseOf,
     resolveUser, customerNames,
     snippet, buildMessage,
+    CALL_RESULTS, LOG_TO_CALL_HISTORY, findResult,
     createNotification, upsertReminder
 };

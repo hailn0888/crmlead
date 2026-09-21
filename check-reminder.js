@@ -6,10 +6,10 @@ const vm = require('vm');
 
 // [đường dẫn, số dòng tham chiếu (bản gốc), có module.exports?]
 const FILES = [
-    ['services/reminderService.js', 163, true],
+    ['services/reminderService.js', 191, true],
     ['services/pushService.js', 79, true],
     ['services/reminderJob.js', 176, true],
-    ['routes/reminders.routes.js', 300, true],
+    ['routes/reminders.routes.js', 351, true],
     ['routes/calls.routes.js', 0, true],
     ['server.js', 0, false],
     ['public/js/reminderNotifier.js', 0, false],
@@ -41,7 +41,7 @@ for (const [rel, refLines, hasExports] of FILES) {
 const htmlFile = path.join(__dirname, 'public/agents/calls.html');
 if (fs.existsSync(htmlFile)) {
     const html = fs.readFileSync(htmlFile, 'utf8');
-    for (const marker of ['id="tab-content-4"', 'function renderTab4(', 'function rmInitOnLoad(', 'src="/js/reminderNotifier.js"']) {
+    for (const marker of ['id="tab-content-4"', 'function renderTab4(', 'function rmInitOnLoad(', 'async function rmDone(', 'src="/js/reminderNotifier.js"']) {
         const n = html.split(marker).length - 1;
         say(n === 1, `public/agents/calls.html: "${marker}" xuất hiện ${n} lần${n === 1 ? '' : ' (phải đúng 1)'}`);
     }

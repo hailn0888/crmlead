@@ -14,6 +14,10 @@ const PORT = process.env.PORT || 3000;
 // sẽ luôn chặn sai hoặc không chặn được gì cả.
 app.set('trust proxy', true);
 
+// Endpoint "còn sống" cho dịch vụ ping (UptimeRobot / cron-job.org): giữ server Render gói Free không bị "ngủ",
+// để job nhắc lịch vẫn chạy và gửi thông báo đẩy khi không ai đang mở web. Không trả dữ liệu gì.
+app.get('/healthz', (req, res) => res.status(200).send('ok'));
+
 app.use(cors());
 app.use(express.json());
 // cookie-parser với "chữ ký" (COOKIE_SECRET) để đọc/ghi cookie phiên đăng nhập (session_user)

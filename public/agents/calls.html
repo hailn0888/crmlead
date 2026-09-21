@@ -212,8 +212,11 @@
                             <i data-lucide="bell-ring" class="w-4 h-4 text-amber-600 mt-0.5 shrink-0"></i>
                             <span id="rm-push-text" class="leading-relaxed">Đang kiểm tra trạng thái thông báo...</span>
                         </div>
-                        <div class="flex items-center gap-2">
-                            <button id="rm-push-test" onclick="rmTestPush()" class="hidden theme-card border px-3 py-1 rounded-lg font-medium hover:opacity-80 transition">Gửi thử</button>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <button id="rm-sound-btn" onclick="rmToggleSound()" class="theme-card border px-3 py-1 rounded-lg font-medium hover:opacity-80 transition">Âm báo: Bật</button>
+                            <button onclick="rmTestSound()" class="theme-card border px-3 py-1 rounded-lg font-medium hover:opacity-80 transition">Thử âm thanh</button>
+                            <button id="rm-push-test" onclick="rmTestPush(0)" class="hidden theme-card border px-3 py-1 rounded-lg font-medium hover:opacity-80 transition">Gửi thử</button>
+                            <button id="rm-push-test10" onclick="rmTestPush(10)" class="hidden theme-card border px-3 py-1 rounded-lg font-medium hover:opacity-80 transition">Thử sau 10 giây</button>
                             <button id="rm-push-btn" onclick="rmTogglePush()" class="hidden px-3 py-1 rounded-lg font-semibold bg-red-600 text-white hover:bg-red-700 transition">Bật thông báo</button>
                         </div>
                     </div>
@@ -1525,7 +1528,9 @@
                 let actionHtml;
                 if (g === 'Đã gọi') {
                     const dp = getVNDateParts(it.da_goi_luc ? new Date(it.da_goi_luc).toISOString() : null);
-                    actionHtml = `<span class="opacity-70">Đã gọi lúc ${dp ? dp.hh24 + ':' + dp.mm + ' ' + dp.dd + '/' + dp.mo : '-'}</span>`;
+                    actionHtml = `<div class="opacity-70">Đã gọi lúc ${dp ? dp.hh24 + ':' + dp.mm + ' ' + dp.dd + '/' + dp.mo : '-'}</div>
+                        ${it.ket_qua_goi ? `<div class="mt-1 font-semibold ${it.ket_qua_goi === 'Hẹn gặp thành công' ? 'text-emerald-600 dark:text-emerald-400' : ''}">${rmEsc(it.ket_qua_goi)}</div>` : ''}
+                        ${it.ghi_chu_goi ? `<div class="mt-0.5 opacity-70">${rmEsc(rmSnip(it.ghi_chu_goi, 80))}</div>` : ''}`;
                 } else {
                     const btn = 'p-2 rounded-lg transition';
                     actionHtml = `
@@ -1589,35 +1594,120 @@
             });
         }
 
+        // ---------- Kết quả cuộc gọi khi bấm "Đã gọi" ----------
+        let RM_RESULTS = null;
+        const RM_TONE = { green: '#059669', amber: '#d97706', sky: '#0284c7', gray: '#6b7280', red: '#dc2626' };
+
+        async function rmLoadResults() {
+            if (RM_RESULTS) return RM_RESULTS;
+            const res = await fetch('/api/reminders/results');
+            const j = await res.json();
+            if (!j.success) throw new Error(j.message || 'Không tải được danh sách kết quả');
+            RM_RESULTS = j.results;
+            return RM_RESULTS;
+        }
+
+        // Giờ gợi ý (theo giờ VN): '2h' | 'tomorrow9' | '2d9' | 'week9'
+        function rmSuggestIso(kind) {
+            const now = Date.now();
+            const p = getVNDateParts(new Date(now).toISOString());
+            const at9 = (addDays) => new Date(Date.UTC(p.yy, Number(p.mo) - 1, Number(p.dd) + addDays, 2, 0, 0)).toISOString(); // 09:00 VN
+            if (kind === '2h') {
+                const t = now + 2 * 3600000;
+                const h = Number(getVNDateParts(new Date(t).toISOString()).hh24);
+                if (h >= 20 || h < 7) return at9(Number(p.hh24) >= 7 ? 1 : 0); // ngoài giờ làm việc -> 9h sáng
+                return new Date(t).toISOString();
+            }
+            if (kind === 'tomorrow9') return at9(1);
+            if (kind === '2d9') return at9(2);
+            if (kind === 'week9') return at9(7);
+            return null;
+        }
+
         async function rmDone(id) {
             const it = rmFind(id);
             if (!it) return;
+            let results;
+            try { results = await rmLoadResults(); }
+            catch (err) { return Swal.fire('Lỗi', err.message, 'error'); }
+
+            const btns = results.map(r => `<button type="button" class="rm-res-btn" data-v="${rmEsc(r.value)}" data-tone="${r.tone}"
+                style="border:2px solid ${RM_TONE[r.tone] || '#6b7280'};border-radius:10px;padding:10px 8px;font-weight:600;font-size:13px;cursor:pointer;background:transparent;color:inherit;line-height:1.25">${rmEsc(r.value)}</button>`).join('');
+            const chip = 'border:1px solid rgba(127,127,127,.5);border-radius:999px;padding:4px 10px;font-size:12px;cursor:pointer;background:transparent;color:inherit';
+
+            let chosen = null;
             const r = await Swal.fire({
-                title: '<div class="text-sm md:text-base font-bold">Đã gọi xong?</div>',
+                width: 'min(620px, 94vw)',
+                title: '<div class="text-base md:text-lg font-bold">Kết quả cuộc gọi</div>',
                 html: `
-                    <div class="text-left text-xs">
-                        <div class="mb-2">Khách hàng: <span class="font-semibold">${rmEsc(it.ho_ten || it.dien_thoai)}</span></div>
-                        <label class="flex items-center gap-2 mb-2 cursor-pointer"><input type="checkbox" id="rm-next-chk"> Hẹn gọi lại lần nữa</label>
-                        <div id="rm-next-box" style="display:none">
-                            <input type="datetime-local" id="rm-next-time" class="theme-card border rounded-lg p-2 w-full outline-none bg-transparent text-xs" style="margin:0;width:100%">
-                            <textarea id="rm-next-note" class="theme-card border rounded-lg p-2 w-full outline-none bg-transparent text-xs mt-2" style="margin:8px 0 0;width:100%" rows="2" placeholder="Lưu ý cho lần gọi sau (nếu có)..."></textarea>
+                    <div class="text-left" style="font-size:14px">
+                        <div class="mb-3">Khách hàng: <span class="font-bold">${rmEsc(it.ho_ten || 'Chưa có tên')}</span> &middot; ${rmEsc(it.dien_thoai)}</div>
+                        <div class="font-semibold mb-2">Khách phản hồi thế nào? <span style="color:#dc2626">*</span></div>
+                        <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px">${btns}</div>
+                        <div id="rm-res-hint" class="mt-2 text-xs" style="min-height:18px;opacity:.8"></div>
+
+                        <label class="font-semibold block mt-3 mb-1">Ghi chú cuộc gọi</label>
+                        <textarea id="rm-res-note" rows="3" class="theme-card border rounded-lg p-2 w-full outline-none bg-transparent leading-relaxed" style="margin:0;width:100%;font-size:13px" placeholder="Khách nói gì, quan tâm gì, cần chuẩn bị gì cho lần sau..."></textarea>
+
+                        <div id="rm-next-wrap" style="display:none;margin-top:14px;padding:12px;border:1px dashed rgba(127,127,127,.5);border-radius:10px">
+                            <label id="rm-next-toggle-row" class="flex items-center gap-2 font-semibold cursor-pointer" style="margin-bottom:8px">
+                                <input type="checkbox" id="rm-next-chk" checked> <span id="rm-next-title">Đặt nhắc gọi lại</span>
+                            </label>
+                            <div id="rm-next-box">
+                                <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">
+                                    <button type="button" class="rm-chip" data-k="2h" style="${chip}">+2 giờ</button>
+                                    <button type="button" class="rm-chip" data-k="tomorrow9" style="${chip}">9h sáng mai</button>
+                                    <button type="button" class="rm-chip" data-k="2d9" style="${chip}">9h sau 2 ngày</button>
+                                    <button type="button" class="rm-chip" data-k="week9" style="${chip}">9h tuần sau</button>
+                                </div>
+                                <input type="datetime-local" id="rm-next-time" class="theme-card border rounded-lg p-2 w-full outline-none bg-transparent" style="margin:0;width:100%;font-size:13px">
+                                <input type="text" id="rm-next-note" class="theme-card border rounded-lg p-2 w-full outline-none bg-transparent" style="margin:8px 0 0;width:100%;font-size:13px" placeholder="Lưu ý cho lần gọi sau (nếu có)...">
+                            </div>
                         </div>
                     </div>`,
                 showCancelButton: true,
-                confirmButtonText: 'Xác nhận đã gọi',
+                confirmButtonText: 'Lưu kết quả',
                 cancelButtonText: 'Hủy',
                 confirmButtonColor: '#059669',
                 didOpen: () => {
-                    const chk = document.getElementById('rm-next-chk');
-                    chk.onchange = () => { document.getElementById('rm-next-box').style.display = chk.checked ? 'block' : 'none'; };
+                    const $ = (x) => document.getElementById(x);
+                    const buttons = Array.from(document.querySelectorAll('.rm-res-btn'));
+                    const setNext = (opt) => {
+                        const wrap = $('rm-next-wrap');
+                        if (opt.next === 'khong') { wrap.style.display = 'none'; return; }
+                        wrap.style.display = 'block';
+                        const required = opt.next === 'bat_buoc';
+                        $('rm-next-toggle-row').style.display = required ? 'none' : 'flex';
+                        $('rm-next-chk').checked = true;
+                        $('rm-next-box').style.display = 'block';
+                        $('rm-next-title').textContent = required ? 'Hẹn gọi lại lúc:' : 'Đặt nhắc gọi lại';
+                        const sug = rmSuggestIso(opt.suggest);
+                        $('rm-next-time').value = sug ? rmIsoToLocalInput(sug) : '';
+                    };
+                    buttons.forEach(b => b.onclick = () => {
+                        chosen = results.find(x => x.value === b.dataset.v);
+                        buttons.forEach(x => { x.style.background = 'transparent'; x.style.color = 'inherit'; });
+                        b.style.background = RM_TONE[chosen.tone] || '#6b7280'; b.style.color = '#fff';
+                        $('rm-res-hint').textContent = chosen.hint || '';
+                        setNext(chosen);
+                    });
+                    $('rm-next-chk').onchange = (e) => { $('rm-next-box').style.display = e.target.checked ? 'block' : 'none'; };
+                    document.querySelectorAll('.rm-chip').forEach(c => c.onclick = () => { $('rm-next-time').value = rmIsoToLocalInput(rmSuggestIso(c.dataset.k)); });
                 },
                 preConfirm: () => {
-                    if (!document.getElementById('rm-next-chk').checked) return {};
-                    const v = document.getElementById('rm-next-time').value;
-                    if (!v) { Swal.showValidationMessage('Vui lòng chọn thời gian gọi lại!'); return false; }
-                    const iso = rmLocalToIso(v);
-                    if (new Date(iso).getTime() < Date.now()) { Swal.showValidationMessage('Thời gian gọi lại phải ở tương lai!'); return false; }
-                    return { next_thoi_gian_nhac: iso, next_ghi_chu: document.getElementById('rm-next-note').value };
+                    const $ = (x) => document.getElementById(x);
+                    if (!chosen) { Swal.showValidationMessage('Vui lòng chọn kết quả cuộc gọi!'); return false; }
+                    const body = { ket_qua: chosen.value, ghi_chu: $('rm-res-note').value };
+                    const wantNext = chosen.next !== 'khong' && (chosen.next === 'bat_buoc' || $('rm-next-chk').checked);
+                    if (wantNext) {
+                        const v = $('rm-next-time').value;
+                        if (!v) { Swal.showValidationMessage('Vui lòng chọn thời gian gọi lại!'); return false; }
+                        const iso = rmLocalToIso(v);
+                        if (new Date(iso).getTime() < Date.now()) { Swal.showValidationMessage('Thời gian gọi lại phải ở tương lai!'); return false; }
+                        body.next_thoi_gian_nhac = iso;
+                        body.next_ghi_chu = $('rm-next-note').value;
+                    }
+                    return body;
                 }
             });
             if (r.isConfirmed) await rmPost(`/${id}/done`, r.value);
@@ -1708,6 +1798,7 @@
             const st = await ReminderNotifier.pushState();
             btn.classList.add('hidden');
             test.classList.add('hidden');
+            const t10off = document.getElementById('rm-push-test10'); if (t10off) t10off.classList.add('hidden');
             const red = 'px-3 py-1 rounded-lg font-semibold bg-red-600 text-white hover:bg-red-700 transition';
             const neutral = 'theme-card border px-3 py-1 rounded-lg font-medium hover:opacity-80 transition';
 
@@ -1723,6 +1814,7 @@
                 txt.textContent = 'Thông báo nhắc lịch đang BẬT trên thiết bị này (nhận được cả khi đã đóng trang).';
                 btn.textContent = 'Tắt thông báo'; btn.className = neutral; btn.classList.remove('hidden');
                 test.classList.remove('hidden');
+                const t10 = document.getElementById('rm-push-test10'); if (t10) t10.classList.remove('hidden');
             } else {
                 txt.textContent = 'Bật thông báo để được nhắc gọi lại khách ngay cả khi không mở trang này.';
                 btn.textContent = 'Bật thông báo'; btn.className = red; btn.classList.remove('hidden');
@@ -1751,14 +1843,33 @@
             rmRefreshPushUi();
         }
 
-        async function rmTestPush() {
+        async function rmTestPush(delaySec) {
             try {
-                const r = await ReminderNotifier.testPush();
-                if (r.success && r.sent > 0) rmToast('Đã gửi thử, kiểm tra thông báo trên thiết bị');
+                const r = await ReminderNotifier.testPush(delaySec || 0);
+                if (r.success && r.scheduled) {
+                    Swal.fire({ icon: 'info', title: `Thông báo sẽ đến sau ${r.delay} giây`, text: 'Bây giờ hãy thoát ra màn hình chính hoặc khóa máy để kiểm tra thiết bị có nhận được thông báo khi không mở trang.', confirmButtonText: 'Đã hiểu' });
+                } else if (r.success && r.sent > 0) rmToast('Đã gửi thử, kiểm tra thông báo trên thiết bị');
                 else Swal.fire({ icon: 'info', title: 'Chưa gửi được', text: r.enabled === false ? 'Máy chủ chưa bật Web Push.' : 'Chưa có thiết bị nào nhận được. Hãy bật thông báo trên thiết bị này trước.' });
             } catch (e) {
                 Swal.fire('Lỗi', 'Không thể gửi thông báo thử!', 'error');
             }
+        }
+
+        // ---------- Âm báo ----------
+        function rmSoundUi() {
+            const b = document.getElementById('rm-sound-btn');
+            if (b && window.ReminderNotifier) b.textContent = 'Âm báo: ' + (ReminderNotifier.soundEnabled() ? 'Bật' : 'Tắt');
+        }
+        function rmToggleSound() {
+            ReminderNotifier.setSound(!ReminderNotifier.soundEnabled());
+            rmSoundUi();
+            rmToast(ReminderNotifier.soundEnabled() ? 'Đã bật âm báo' : 'Đã tắt âm báo');
+        }
+        async function rmTestSound() {
+            const st = await ReminderNotifier.testSound();
+            if (!st.supported) Swal.fire({ icon: 'info', title: 'Không hỗ trợ âm thanh', text: 'Trình duyệt này không hỗ trợ phát âm báo.' });
+            else if (!st.ok) Swal.fire({ icon: 'warning', title: 'Chưa phát được âm thanh', text: 'Trình duyệt đang chặn âm. Hãy kiểm tra biểu tượng loa ở tab / loa của máy có đang tắt tiếng không rồi bấm "Thử âm thanh" lại.' });
+            else if (!st.on) rmToast('Đã phát thử (âm báo hiện đang TẮT)');
         }
 
         // ---------- Khởi động (thay cho fetchData() trực tiếp lúc tải trang) ----------
@@ -1776,6 +1887,7 @@
                 });
             }
             rmRefreshPushUi();
+            rmSoundUi();
             // Cập nhật nhãn "Còn x phút / Trễ x phút" và nhóm mà không cần gọi lại API
             setInterval(() => { if (currentActiveTab === 4 && !document.hidden) renderTab4(); }, 30000);
         }
