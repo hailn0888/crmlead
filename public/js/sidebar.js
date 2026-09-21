@@ -114,7 +114,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     }, 20000);
     // Đổi lại logic: Nếu trong localStorage chưa có giá trị (null) thì mặc định là 'true' (mở rộng). 
     // Nếu người dùng đã từng bấm thu gọn thì mới nhận giá trị 'false'.
-    const isMobileScreen = window.innerWidth < 768;
+    // Điện thoại (<768px) và máy tính bảng (<=1024px) đều mặc định THU GỌN sidebar (lần đầu vào, chưa từng bấm).
+    // Khớp với /css/mobile.css và /css/tablet.css.
+    const isMobileScreen = window.innerWidth <= 1024;
     const savedSidebarState = localStorage.getItem('sidebar_expanded');
     // Trên điện thoại, nếu người dùng chưa từng bấm chọn trạng thái, mặc định THU GỌN
     // để dành tối đa không gian cho nội dung chính (bảng, form...) thay vì bị sidebar che mất.

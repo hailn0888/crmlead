@@ -224,6 +224,9 @@
     html body table.rt-cards td[data-label]::before {
         content: attr(data-label);
         display: block;
+        font-family: ui-sans-serif, system-ui, sans-serif;   /* nhãn luôn font thường dù ô dùng font-mono/italic */
+        font-style: normal;
+        font-weight: 400;
         margin-bottom: .125rem;
         font-size: .6875rem;
         line-height: 1.2;
