@@ -29,10 +29,49 @@
   - Vì FYP/FYC trong file đã lũy kế sẵn, cumulativeAt() KHÔNG cộng dồn qua các tháng nữa (khác bản trước) — chỉ
     lấy đúng giá trị của tháng gần nhất có dữ liệu trước mốc quý cần xét. Nếu thiếu 1 tháng giữa chừng, số của
     quý đó sẽ tạm lấy theo tháng gần nhất trước đó (xem TODO (2)).
-  - Toàn bộ snapshot theo tháng đang lưu ở trình duyệt admin (localStorage, key mdrt_excel_snapshots). Khi cần
-    dùng chung nhiều admin, thay loadSnapshots()/saveSnapshots() bằng 1 bảng Supabase (khuyến nghị:
-    `mdrt_snapshots`: id, thang, ma_tvv, ten_tvv, ban, nhom, chuc_danh, fyp, fyc, tldtptt, on_track, created_at).
   - Trang bắt theme/header/sidebar/footer qua đúng 4 script dùng chung: theme.js, header.js, sidebar.js, footer.js.
+
+  LƯU TRỮ — ĐÃ CHUYỂN SANG SUPABASE (không còn localStorage-only như bản trước):
+  - Nguyên tắc: MỖI LẦN NHẬP (tải file / dán dữ liệu) là 1 "lượt import" MỚI, ghi thêm (INSERT), KHÔNG BAO GIỜ
+    UPDATE/OVERWRITE dữ liệu cũ. Nhờ vậy tự nhiên có toàn bộ lịch sử thay đổi trong năm mà không cần thiết kế
+    gì thêm — muốn xem lại lịch sử thì query lại bảng mdrt_imports, muốn xem hiện tại thì chỉ lấy lượt import
+    MỚI NHẤT của mỗi tháng (xem loadActiveSnapshotsAndRender()).
+  - 2 bảng cần tạo trước trong Supabase (chạy trong SQL Editor):
+
+      create table mdrt_imports (
+        id uuid primary key default gen_random_uuid(),
+        snapshot_year int not null,
+        snapshot_month int not null,
+        file_name text,
+        row_count int not null default 0,
+        imported_at timestamptz not null default now()
+      );
+
+      create table mdrt_snapshot_rows (
+        id bigint generated always as identity primary key,
+        import_id uuid not null references mdrt_imports(id) on delete cascade,
+        ma_tvv text not null,
+        ten_tvv text,
+        ban text,
+        nhom text,
+        chuc_danh text,
+        fyp numeric not null default 0,
+        fyc numeric not null default 0,
+        tldtptt numeric,
+        on_track boolean default false
+      );
+
+      create index on mdrt_snapshot_rows (import_id);
+      create index on mdrt_imports (snapshot_year, snapshot_month, imported_at desc);
+
+    Nhớ bật Row Level Security + policy cho phép SELECT/INSERT/DELETE với role mà anon key đang dùng, nếu
+    không API sẽ báo lỗi quyền truy cập.
+  - Điền SUPABASE_URL và SUPABASE_ANON_KEY ở đầu thẻ <script> bên dưới. Nếu để trống (giữ nguyên placeholder),
+    trang tự rớt về lưu tạm trên localStorage (dbSaveImport/dbLoadAllImports/... có nhánh fallback riêng) để
+    vẫn dùng thử được khi chưa kịp cấu hình, nhưng sẽ KHÔNG có lịch sử dùng chung nhiều admin trong trường hợp đó.
+  - Nút "Lịch sử nhập liệu" liệt kê toàn bộ các lượt import từ trước đến giờ (bảng mdrt_imports), xem chi tiết
+    từng lượt (bảng mdrt_snapshot_rows theo import_id), và cho xoá 1 lượt nhập bị sai (xoá xong, lượt gần nhất
+    còn lại của tháng đó tự động trở thành "đang dùng").
 
   TODO nghiệp vụ chưa chốt:
   (1) Tiêu chí xét theo Thu Nhập (*) — chỉ áp dụng cho TVV đã từng là thành viên MDRT chính thức từ 2026 trở
@@ -54,6 +93,7 @@
 <script src="https://cdn.jsdelivr.net/npm/lucide@latest/dist/umd/lucide.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <style>
   html, body { background: var(--bg-page); color: var(--text-main); }
@@ -143,7 +183,8 @@
     font-size:11.5px; resize:vertical; }
   textarea#pasteArea:focus { outline:none; border-color:#10b981; }
 
-  .dropzone { border:2px dashed var(--border-color); border-radius:.7rem; padding:26px 16px; text-align:center;
+  .dropzone { display:flex; flex-direction:column; align-items:center; justify-content:center; width:100%;
+    border:2px dashed var(--border-color); border-radius:.7rem; padding:26px 16px; text-align:center;
     cursor:pointer; transition:border-color .15s, background .15s; }
   .dropzone:hover, .dropzone.drag { border-color:#10b981; background: var(--dropdown-hover); }
   .dropzone i { width:28px; height:28px; color: var(--text-muted); margin-bottom:6px; }
@@ -161,7 +202,10 @@
         <h1 class="text-lg md:text-xl font-bold">Theo dõi tiến độ MDRT 2027</h1>
         <p class="text-xs" style="color:var(--text-muted)">Tải file Export (Mã TVV, FYP, FYC, TLDTPTT, MDRT_On_track) — hệ thống tự tính danh hiệu và tiến độ · Memo 01701/AD/2026</p>
       </div>
-      <button id="importBtn" class="pill-btn primary flex items-center gap-1.5"><i data-lucide="upload" class="w-3.5 h-3.5"></i>Nhập dữ liệu</button>
+      <div class="flex items-center gap-2">
+        <button id="historyBtn" class="pill-btn flex items-center gap-1.5"><i data-lucide="history" class="w-3.5 h-3.5"></i>Lịch sử nhập liệu</button>
+        <button id="importBtn" class="pill-btn primary flex items-center gap-1.5"><i data-lucide="upload" class="w-3.5 h-3.5"></i>Nhập dữ liệu</button>
+      </div>
     </div>
 
     <div id="configBanner" class="banner mb-4" style="display:none;"></div>
@@ -171,6 +215,8 @@
     <!-- ===== Khối nhập dữ liệu ===== -->
     <div id="importPanel" class="theme-card p-4 mb-5" style="display:none;">
       <div class="flex flex-wrap items-center gap-3 mb-3">
+        <label class="text-xs font-semibold">Năm</label>
+        <select id="yearSelect" class="pill-select"></select>
         <label class="text-xs font-semibold">Tháng chốt số liệu (tự dò từ file, có thể sửa lại)</label>
         <select id="monthSelect" class="pill-select"></select>
       </div>
@@ -188,7 +234,6 @@
         <textarea id="pasteArea" class="mt-2" placeholder="Dán dữ liệu (bao gồm dòng tiêu đề cột) vào đây..."></textarea>
         <div class="flex flex-wrap gap-2 mt-2">
           <button id="buildFromPasteBtn" class="pill-btn">Nhập từ dữ liệu đã dán</button>
-          <button id="sampleImportBtn" class="pill-btn"><i data-lucide="flask-conical" class="w-3.5 h-3.5"></i> Dùng dữ liệu mẫu</button>
         </div>
       </details>
 
@@ -281,6 +326,21 @@ function nextTier(fyp,fyc){
   return null;
 }
 function tierRank(t){ return t ? ({tot:3,cot:2,mdrt:1}[t.key]||0) : 0; }
+const TARGET_YEAR = 2026;
+
+/* ======================================================================
+   KẾT NỐI SUPABASE — điền URL + anon key của dự án bạn vào đây.
+   Nếu để nguyên placeholder, trang tự rớt về lưu tạm trên localStorage (xem các hàm db* bên dưới)
+   để vẫn dùng thử được, nhưng KHÔNG có lịch sử dùng chung nhiều admin trong trường hợp đó.
+   ====================================================================== */
+const SUPABASE_URL = "https://YOUR-PROJECT-REF.supabase.co";
+const SUPABASE_ANON_KEY = "YOUR-ANON-PUBLIC-KEY";
+let sb = null;
+try{
+  if(window.supabase && SUPABASE_URL.startsWith('https://') && !SUPABASE_URL.includes('YOUR-PROJECT-REF')){
+    sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  }
+}catch(e){ console.error('Supabase init error', e); }
 
 /* TLDTPTT sửa tay (khi file không có hoặc admin muốn điều chỉnh) — lưu theo mã TVV + quý */
 function loadRetentionOverride(){ try{ return JSON.parse(localStorage.getItem('mdrt_retention_override')||'{}'); }catch(e){ return {}; } }
@@ -293,12 +353,71 @@ function setRetOverride(userId, qkey, val){
 }
 
 /* ======================================================================
-   NHẬP DỮ LIỆU — mỗi lần nhập là số liệu lũy kế của 1 tháng (theo YM trong file).
-   snapshots[month] = { pastedAt, rows: [{ma_tvv, ten_tvv, ban, nhom, chuc_danh, fyp, fyc, tldtptt, on_track}] }
+   NHẬP DỮ LIỆU — mỗi lần nhập là số liệu lũy kế của 1 tháng (theo YM trong file),
+   lưu thành 1 "lượt import" MỚI trong Supabase — không đè lên lượt cũ, nên tự nhiên
+   giữ toàn bộ lịch sử. Xem loadActiveSnapshotsAndRender() cho cách chỉ lấy bản mới nhất.
    ====================================================================== */
-function loadSnapshots(){ try{ return JSON.parse(localStorage.getItem('mdrt_excel_snapshots')||'{}'); }catch(e){ return {}; } }
-function saveSnapshots(obj){ try{ localStorage.setItem('mdrt_excel_snapshots', JSON.stringify(obj)); }catch(e){} }
-let snapshots = loadSnapshots();
+
+/* ---- Fallback localStorage (khi chưa cấu hình Supabase) ---- */
+function localDbLoad(){ try{ return JSON.parse(localStorage.getItem('mdrt_local_db')||'{"imports":[],"rows":{}}'); }catch(e){ return {imports:[],rows:{}}; } }
+function localDbSave(db){ try{ localStorage.setItem('mdrt_local_db', JSON.stringify(db)); }catch(e){} }
+
+async function dbSaveImport(year, month, fileName, rows){
+  if(sb){
+    const { data: imp, error: e1 } = await sb.from('mdrt_imports')
+      .insert({ snapshot_year:year, snapshot_month:month, file_name:fileName, row_count: rows.length })
+      .select().single();
+    if(e1) throw e1;
+    const payload = rows.map(r=>({
+      import_id: imp.id, ma_tvv:r.ma_tvv, ten_tvv:r.ten_tvv, ban:r.ban, nhom:r.nhom,
+      chuc_danh:r.chuc_danh, fyp:r.fyp, fyc:r.fyc, tldtptt:r.tldtptt, on_track:r.on_track
+    }));
+    const { error: e2 } = await sb.from('mdrt_snapshot_rows').insert(payload);
+    if(e2) throw e2;
+    return imp.id;
+  } else {
+    const db = localDbLoad();
+    const id = 'local_'+Date.now();
+    db.imports.push({ id, snapshot_year:year, snapshot_month:month, file_name:fileName, row_count: rows.length, imported_at: new Date().toISOString() });
+    db.rows[id] = rows;
+    localDbSave(db);
+    return id;
+  }
+}
+async function dbLoadAllImports(){
+  if(sb){
+    const { data, error } = await sb.from('mdrt_imports').select('*').order('imported_at', { ascending:false });
+    if(error) throw error;
+    return data || [];
+  } else {
+    const db = localDbLoad();
+    return db.imports.slice().sort((a,b)=> new Date(b.imported_at) - new Date(a.imported_at));
+  }
+}
+async function dbLoadRows(importIds){
+  if(importIds.length===0) return [];
+  if(sb){
+    const { data, error } = await sb.from('mdrt_snapshot_rows').select('*').in('import_id', importIds);
+    if(error) throw error;
+    return data || [];
+  } else {
+    const db = localDbLoad();
+    let out = [];
+    importIds.forEach(id=>{ out = out.concat((db.rows[id]||[]).map(r=>({ ...r, import_id:id }))); });
+    return out;
+  }
+}
+async function dbDeleteImport(id){
+  if(sb){
+    const { error } = await sb.from('mdrt_imports').delete().eq('id', id);
+    if(error) throw error;
+  } else {
+    const db = localDbLoad();
+    db.imports = db.imports.filter(i=>i.id!==id);
+    delete db.rows[id];
+    localDbSave(db);
+  }
+}
 
 function normalize(s){
   return (s||'').toString().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
@@ -393,34 +512,88 @@ function populateMonthSelect(selected){
   const sel = document.getElementById('monthSelect');
   sel.innerHTML = Array.from({length:12},(_,i)=>i+1).map(m=>`<option value="${m}" ${m===selected?'selected':''}>Tháng ${m}</option>`).join('');
 }
+function populateYearSelect(selected){
+  const sel = document.getElementById('yearSelect');
+  const years = [TARGET_YEAR-1, TARGET_YEAR, TARGET_YEAR+1];
+  sel.innerHTML = years.map(y=>`<option value="${y}" ${y===selected?'selected':''}>${y}</option>`).join('');
+}
+
+let allImportsCache = [];      // toàn bộ lượt import (dùng cho khung Lịch sử)
+let activeImportsCache = [];   // lượt import MỚI NHẤT của mỗi (năm, tháng) — dùng để hiển thị hiện tại
+let snapshots = {};            // { month: { rows:[...] } } — build lại mỗi lần loadActiveSnapshotsAndRender()
+
+async function loadActiveSnapshotsAndRender(){
+  const tbody = document.getElementById('tableBody');
+  if(tbody) tbody.innerHTML = `<tr><td class="mdrt-td" colspan="7" style="text-align:center;color:var(--text-muted);padding:32px;">Đang tải dữ liệu...</td></tr>`;
+  try{
+    const imports = await dbLoadAllImports();
+    allImportsCache = imports;
+
+    const latestByYM = {};
+    imports.forEach(imp=>{
+      const key = imp.snapshot_year+'-'+imp.snapshot_month;
+      if(!latestByYM[key] || new Date(imp.imported_at) > new Date(latestByYM[key].imported_at)) latestByYM[key] = imp;
+    });
+    activeImportsCache = Object.values(latestByYM);
+
+    const relevant = activeImportsCache.filter(i=>i.snapshot_year===TARGET_YEAR);
+    if(relevant.length===0){ snapshots = {}; renderMonthChips(); buildAgentsAndRender(); return; }
+
+    const rows = await dbLoadRows(relevant.map(i=>i.id));
+    const impMeta = {}; relevant.forEach(i=> impMeta[i.id] = i);
+
+    snapshots = {};
+    rows.forEach(r=>{
+      const meta = impMeta[r.import_id];
+      if(!meta) return;
+      if(!snapshots[meta.snapshot_month]) snapshots[meta.snapshot_month] = { rows: [] };
+      snapshots[meta.snapshot_month].rows.push(r);
+    });
+    hideConfigBanner();
+    renderMonthChips();
+    buildAgentsAndRender();
+  }catch(err){
+    console.error(err);
+    showConfigBanner('Không tải được dữ liệu từ Supabase: ' + (err.message||err) + '. Kiểm tra URL/khoá anon, tên bảng, và Row Level Security.', 'error');
+    snapshots = {};
+    renderMonthChips();
+    buildAgentsAndRender();
+  }
+}
 
 function renderMonthChips(){
   const el = document.getElementById('monthChips');
-  const months = Object.keys(snapshots).map(Number).sort((a,b)=>a-b);
-  if(months.length===0){ el.innerHTML = `<span class="text-xs" style="color:var(--text-muted)">Chưa có tháng nào được nhập.</span>`; return; }
-  el.innerHTML = `<span class="text-xs mr-1" style="color:var(--text-muted)">Đã nhập:</span>` + months.map(m=>`
-    <span class="month-chip">Tháng ${m} <button onclick="removeMonth(${m})" title="Xoá tháng này">✕</button></span>
+  const relevant = activeImportsCache.filter(i=>i.snapshot_year===TARGET_YEAR).sort((a,b)=>a.snapshot_month-b.snapshot_month);
+  if(relevant.length===0){ el.innerHTML = `<span class="text-xs" style="color:var(--text-muted)">Chưa có tháng nào được nhập.</span>`; return; }
+  el.innerHTML = `<span class="text-xs mr-1" style="color:var(--text-muted)">Đang dùng:</span>` + relevant.map(imp=>`
+    <span class="month-chip" title="Nhập lúc ${new Date(imp.imported_at).toLocaleString('vi-VN')}${imp.file_name ? ' · '+imp.file_name : ''}">
+      Tháng ${imp.snapshot_month} <button onclick="removeImport('${imp.id}')" title="Xoá lượt nhập này">✕</button>
+    </span>
   `).join('');
 }
-function removeMonth(m){
-  delete snapshots[m];
-  saveSnapshots(snapshots);
-  renderMonthChips();
-  buildAgentsAndRender();
+async function removeImport(id){
+  const res = await Swal.fire({ title:'Xoá lượt nhập này?', text:'Nếu tháng này còn lượt nhập cũ hơn, hệ thống sẽ tự dùng lại lượt cũ đó.', showCancelButton:true, confirmButtonText:'Xoá', cancelButtonText:'Huỷ', confirmButtonColor:'#ed1b24' });
+  if(!res.isConfirmed) return;
+  try{ await dbDeleteImport(id); await loadActiveSnapshotsAndRender(); await refreshHistoryIfOpen(); }
+  catch(e){ Swal.fire('Lỗi', e.message||String(e), 'error'); }
 }
 
-function saveParsedResult(parsed){
+async function saveParsedResult(parsed, fileName){
   const month = parseInt(document.getElementById('monthSelect').value,10);
-  snapshots[month] = { pastedAt: Date.now(), rows: parsed.rows };
-  saveSnapshots(snapshots);
-  document.getElementById('importPanel').style.display = 'none';
-  hideConfigBanner();
-  renderMonthChips();
-  buildAgentsAndRender();
+  const year = parseInt(document.getElementById('yearSelect').value,10);
+  try{
+    await dbSaveImport(year, month, fileName||'(dán thủ công)', parsed.rows);
+    document.getElementById('importPanel').style.display = 'none';
+    await loadActiveSnapshotsAndRender();
+  }catch(e){
+    console.error(e);
+    Swal.fire('Không lưu được dữ liệu', e.message||String(e), 'error');
+  }
 }
 
 /* ---- Mở/đóng khối nhập ---- */
 document.getElementById('importBtn').addEventListener('click', ()=>{
+  populateYearSelect(TARGET_YEAR);
   populateMonthSelect(new Date().getMonth()+1);
   document.getElementById('fileStatus').textContent = '';
   document.getElementById('pasteArea').value = '';
@@ -446,7 +619,7 @@ function handleFile(file){
   const status = document.getElementById('fileStatus');
   status.textContent = 'Đang đọc file...';
   const reader = new FileReader();
-  reader.onload = (e)=>{
+  reader.onload = async (e)=>{
     try{
       const data = new Uint8Array(e.target.result);
       const wb = XLSX.read(data, { type:'array', cellDates:true });
@@ -456,14 +629,16 @@ function handleFile(file){
       const parsed = rowsFrom2D(rows2D);
       if(parsed.ym){
         document.getElementById('monthSelect').value = String(parsed.ym.month);
-        status.textContent = `Đã đọc ${parsed.rows.length} dòng · phát hiện số liệu tính đến tháng ${parsed.ym.month}/${parsed.ym.year} (từ dòng "Applied filters").`;
-        if(parsed.ym.year !== 2026){
+        document.getElementById('yearSelect').value = String(parsed.ym.year);
+        status.textContent = `Đã đọc ${parsed.rows.length} dòng · phát hiện số liệu tính đến tháng ${parsed.ym.month}/${parsed.ym.year} (từ dòng "Applied filters"). Đang lưu...`;
+        if(parsed.ym.year !== TARGET_YEAR){
           status.textContent += ' ⚠️ Năm khác 2026 — kiểm tra lại vì chỉ tiêu MDRT 2027 tính theo kết quả kinh doanh 2026.';
         }
       } else {
-        status.textContent = `Đã đọc ${parsed.rows.length} dòng · không thấy dòng "Applied filters" để tự dò tháng, hãy kiểm tra lại mục chọn tháng.`;
+        status.textContent = `Đã đọc ${parsed.rows.length} dòng · không thấy dòng "Applied filters" để tự dò tháng, hãy kiểm tra lại mục chọn năm/tháng. Đang lưu...`;
       }
-      saveParsedResult(parsed);
+      await saveParsedResult(parsed, file.name);
+      status.textContent = `Đã lưu ${parsed.rows.length} dòng vào Supabase.`;
     }catch(err){
       console.error(err);
       status.textContent = '';
@@ -474,16 +649,13 @@ function handleFile(file){
 }
 
 /* ---- Dán thủ công (dự phòng) ---- */
-document.getElementById('buildFromPasteBtn').addEventListener('click', ()=>{
+document.getElementById('buildFromPasteBtn').addEventListener('click', async ()=>{
   const text = document.getElementById('pasteArea').value;
   if(!text.trim()){ Swal.fire('Thiếu dữ liệu','Vui lòng dán dữ liệu vào ô bên trên.','warning'); return; }
   let parsed;
   try{ parsed = parsePastedText(text); }
   catch(e){ Swal.fire('Không đọc được dữ liệu', e.message, 'error'); return; }
-  saveParsedResult(parsed);
-});
-document.getElementById('sampleImportBtn').addEventListener('click', ()=>{
-  document.getElementById('pasteArea').value = SAMPLE_TSV;
+  await saveParsedResult(parsed, null);
 });
 
 /* ======================================================================
@@ -734,24 +906,106 @@ function detailHtml(a){
   `;
 }
 
+/* ======================================================================
+   LỊCH SỬ NHẬP LIỆU — xem toàn bộ các lượt import từ trước đến giờ (mdrt_imports),
+   không chỉ riêng lượt đang dùng. Đây là nơi thoả yêu cầu "xem lại lịch sử thay đổi trong năm".
+   ====================================================================== */
+let historyOpen = false;
+
+document.getElementById('historyBtn').addEventListener('click', openHistoryModal);
+
+async function openHistoryModal(){
+  historyOpen = true;
+  document.getElementById('modalBody').innerHTML = `<div class="p-6 text-sm" style="color:var(--text-muted)">Đang tải lịch sử...</div>`;
+  document.getElementById('overlay').classList.add('show');
+  await refreshHistoryIfOpen();
+}
+async function refreshHistoryIfOpen(){
+  if(!historyOpen) return;
+  try{
+    const imports = (await dbLoadAllImports()).filter(i=>i.snapshot_year===TARGET_YEAR);
+    allImportsCache = imports;
+    document.getElementById('modalBody').innerHTML = historyHtml(imports);
+    if(typeof lucide !== 'undefined') lucide.createIcons();
+  }catch(err){
+    document.getElementById('modalBody').innerHTML = `<div class="p-6 text-sm" style="color:#ef7b7b">Không tải được lịch sử: ${err.message||err}</div>`;
+  }
+}
+function historyHtml(imports){
+  if(imports.length===0){
+    return `<div class="p-6">
+      <div class="flex items-center justify-between mb-3"><h3 class="text-base font-bold">Lịch sử nhập liệu</h3>
+      <button class="pill-btn" onclick="closeDetail()"><i data-lucide="x" class="w-3.5 h-3.5"></i></button></div>
+      <div class="text-sm" style="color:var(--text-muted)">Chưa có lượt nhập nào.</div>
+    </div>`;
+  }
+  const activeIds = new Set(activeImportsCache.map(i=>i.id));
+  const rows = imports.map(imp=>`
+    <tr class="mdrt-row" style="cursor:default">
+      <td class="mdrt-td">Tháng ${imp.snapshot_month}/${imp.snapshot_year}</td>
+      <td class="mdrt-td text-xs">${new Date(imp.imported_at).toLocaleString('vi-VN')}</td>
+      <td class="mdrt-td text-xs">${imp.file_name||'—'}</td>
+      <td class="mdrt-td text-xs">${imp.row_count}</td>
+      <td class="mdrt-td">${activeIds.has(imp.id) ? '<span class="badge tier-mdrt">Đang dùng</span>' : ''}</td>
+      <td class="mdrt-td">
+        <button class="pill-btn" onclick="viewImportRows('${imp.id}')">Xem</button>
+        <button class="pill-btn" style="color:#ef7b7b" onclick="removeImport('${imp.id}')">Xoá</button>
+      </td>
+    </tr>`).join('');
+  return `<div class="p-5">
+    <div class="flex items-center justify-between mb-3"><h3 class="text-base font-bold">Lịch sử nhập liệu (${TARGET_YEAR})</h3>
+    <button class="pill-btn" onclick="closeDetail()"><i data-lucide="x" class="w-3.5 h-3.5"></i></button></div>
+    <div class="scroll-x">
+      <table style="min-width:640px; width:100%; border-collapse:collapse;">
+        <thead><tr>
+          <th class="mdrt-th">Tháng</th><th class="mdrt-th">Nhập lúc</th><th class="mdrt-th">File</th>
+          <th class="mdrt-th">Số dòng</th><th class="mdrt-th"></th><th class="mdrt-th">Thao tác</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  </div>`;
+}
+async function viewImportRows(importId){
+  document.getElementById('modalBody').innerHTML = `<div class="p-6 text-sm" style="color:var(--text-muted)">Đang tải...</div>`;
+  try{
+    const rows = await dbLoadRows([importId]);
+    const body = rows.map((r,i)=>`<tr class="mdrt-row" style="cursor:default">
+      <td class="mdrt-td stt">${i+1}</td>
+      <td class="mdrt-td">${r.ten_tvv||''} <span class="text-[11px]" style="color:var(--text-muted)">${r.ma_tvv?'@'+r.ma_tvv:''}</span></td>
+      <td class="mdrt-td">${fmt(r.fyp)}</td>
+      <td class="mdrt-td">${fmt(r.fyc)}</td>
+      <td class="mdrt-td">${r.tldtptt!=null ? Math.round(r.tldtptt*100)+'%' : '—'}</td>
+    </tr>`).join('');
+    document.getElementById('modalBody').innerHTML = `<div class="p-5">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-base font-bold">Chi tiết lượt nhập (đọc-only)</h3>
+        <div class="flex gap-2">
+          <button class="pill-btn" onclick="openHistoryModal()">← Quay lại</button>
+          <button class="pill-btn" onclick="closeDetail()"><i data-lucide="x" class="w-3.5 h-3.5"></i></button>
+        </div>
+      </div>
+      <div class="scroll-x">
+        <table class="mdrt-table" style="min-width:560px;">
+          <thead><tr><th class="mdrt-th">#</th><th class="mdrt-th">TVV</th><th class="mdrt-th">FYP</th><th class="mdrt-th">FYC</th><th class="mdrt-th">TLDTPTT</th></tr></thead>
+          <tbody>${body}</tbody>
+        </table>
+      </div>
+    </div>`;
+    if(typeof lucide !== 'undefined') lucide.createIcons();
+  }catch(err){
+    document.getElementById('modalBody').innerHTML = `<div class="p-6 text-sm" style="color:#ef7b7b">Lỗi: ${err.message||err}</div>`;
+  }
+}
+/* closeDetail() (đã định nghĩa ở trên cho modal chi tiết TVV) cũng dùng chung để đóng modal lịch sử */
+const _origCloseDetail = closeDetail;
+closeDetail = function(){ historyOpen = false; _origCloseDetail(); };
+
 document.getElementById('searchBox').addEventListener('input', renderTable);
 document.getElementById('tierFilter').addEventListener('change', renderTable);
 
-/* Mẫu rút gọn từ đúng cấu trúc file Export thật */
-const SAMPLE_TSV =
-`Mã TVV\tTên TVV\tBan\tNhóm\tChức danh\tFYP\tFYC\tTLDTPTT\tMDRT_On_track
-60746849\tNguyễn Thị Mỹ Linh\tRJX\t9CE\tUM\t1619819000\t411383880\t1\tü
-60732898\tNguyễn Thị Thu Thanh\tRJX\tQ0P\tAG\t1167395300\t303519482\t0.926\tü
-60730128\tVũ Thị Hường\tRJX\tRJX\tAG\t567295800\t144209380\t0.941\t
-60172834\tTrần Hiền Hòa\tEE3\tTUM\tAG\t300862650\t78080211\t0.946\t
-60638998\tNguyễn Thị Thế Nghĩa\tUWN\tUWN\tAG\t229571850\t56962658\t0.674\t
-60807824\tTrương Minh Tứ\tRJX\t9CE\tAG\t126091000\t26436500\t1\t
-60156225\tĐặng Tú Anh\tI60\tASE\tUM\t166524150\t42227500\t0.845\t
-60729088\tBùi Đăng Chụ\tRJX\tQ0P\tAG\t476190000\t116546191\t0.941\t`;
-
 /* ---- Khởi tạo ---- */
-renderMonthChips();
-buildAgentsAndRender();
+loadActiveSnapshotsAndRender();
 </script>
 </body>
 </html>
