@@ -1,20 +1,24 @@
 <!-- 
-  Tên file: public/agents/memos.html
-  Chức năng: Ghi chú công việc / Memos, hiển thị thông báo đang phát triển theo chuẩn giao diện hệ thống.
-  Vị trí: public/agents/memos.html
+  Tên file: public/admin/rpsale_personal.html
+  Chức năng: Báo cáo doanh số cá nhân, hiển thị thông báo đang phát triển theo chuẩn giao diện hệ thống.
+  Vị trí: public/admin/rpsale_personal.html
 -->
 <!DOCTYPE html>
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Ghi Chú Công Việc - CRM Lead</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Báo cáo doanh số cá nhân - CRM Lead</title>
     
     <link rel="icon" type="image/png" href="/uploads/favicon.png">
     <link rel="apple-touch-icon" href="/uploads/icon.png">
 
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Giao diện điện thoại (<768px) & máy tính bảng (768-1024px) - dùng chung mọi trang có header/sidebar -->
+    <link rel="stylesheet" href="/css/mobile.css" media="(max-width: 767.98px)">
+    <link rel="stylesheet" href="/css/tablet.css" media="(min-width: 768px) and (max-width: 1024px)">
+    <script src="/js/responsive.js"></script>
     <!-- Lucide Icons -->
     <script src="/js/lucide.min.js"></script>
     <!-- SweetAlert2 cho Popup -->
@@ -36,8 +40,8 @@
                 <!-- Tiêu đề trang -->
                 <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                     <h1 class="text-base md:text-lg font-bold flex items-center gap-2">
-                        <i data-lucide="file-text" class="w-5 h-5 text-red-600 dark:text-red-500"></i>
-                        <span>Ghi Chú Công Việc</span>
+                        <i data-lucide="user" class="w-5 h-5 text-red-600 dark:text-red-500"></i>
+                        <span>Báo cáo doanh số cá nhân</span>
                     </h1>
                 </div>
 

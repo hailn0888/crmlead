@@ -197,6 +197,7 @@
     /* ---------- 6. BẢNG DẠNG THẺ  (table.rt-cards, nhãn do responsive.js gắn) ---------- */
     html body table.rt-cards,
     html body table.rt-cards tbody { display: block; width: 100%; }
+    html body table.rt-cards { min-width: 0; white-space: normal; }
     html body table.rt-cards thead {   /* ẩn bằng mắt nhưng vẫn cho trình đọc màn hình */
         position: absolute;
         width: 1px; height: 1px;
@@ -244,6 +245,8 @@
     html body table.rt-cards td[data-rt="actions"] button,
     html body table.rt-cards td[data-rt="actions"] a { min-width: 2.5rem; min-height: 2.5rem; }
     html body table.rt-cards td[colspan] { padding: 1rem .5rem !important; text-align: center !important; }
+    html body table.rt-cards td .text-center,
+    html body table.rt-cards td .text-right { text-align: left; }    /* div con tự đặt text-center (vd. ngày upload) */
     html body table.rt-cards td .justify-center { justify-content: flex-start; }
     html body table.rt-cards td[data-rt="actions"] .justify-center { justify-content: flex-end; }
 
@@ -281,6 +284,31 @@
     /* ---------- 8. THƯ VIỆN SẢN PHẨM (products.html) ---------- */
     html body #detailModal { padding: .5rem; }
     html body #detailModal .modal-panel { max-height: 92vh; max-height: 92dvh; border-radius: 1rem; }
+
+    /* ---------- 8b. CÁC TRANG ADMIN ---------- */
+    /* Thẻ nội dung p-6 (24px) quá rộng trên điện thoại */
+    html body #mainContainer .p-6 { padding: 1rem; }
+
+    /* quanlydata.html: 4-5 nút tab không đủ chỗ trên 1 hàng -> thanh tab vuốt ngang */
+    html body div:has(> #tabBtn1) {
+        max-width: 100%;
+        overflow-x: auto;
+        flex-wrap: nowrap;
+        padding-bottom: .25rem;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+    }
+    html body div:has(> #tabBtn1)::-webkit-scrollbar { display: none; }
+    html body [id^="tabBtn"] { flex: 0 0 auto; white-space: nowrap; min-height: 2.5rem; }
+
+    /* mdrt.html: bảng TVV dạng thẻ. Vạch màu danh hiệu chuyển từ ô đầu (đang ẩn) sang cả thẻ.
+       Màu khớp .tier-tot / .tier-cot / .tier-mdrt của chính trang. */
+    html body table.rt-cards tr.row-tot  { box-shadow: inset 4px 0 0 #ed1b24; }
+    html body table.rt-cards tr.row-cot  { box-shadow: inset 4px 0 0 #d4a017; }
+    html body table.rt-cards tr.row-mdrt { box-shadow: inset 4px 0 0 #10b981; }
+    html body table.rt-cards .bar-outer { width: 100%; }
+    html body .overlay { padding: 2vh 8px; }
+    html body .modal-scroll { max-height: 88vh; max-height: 88dvh; }
 
     /* ---------- 9. POPUP SWEETALERT2 ---------- */
     html body .swal2-container { padding: .5rem; }

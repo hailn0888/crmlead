@@ -126,7 +126,7 @@
     // ------------------------------------------------------------------
     // 4. Bảng dạng thẻ trên mobile: gắn data-label theo tiêu đề cột
     // ------------------------------------------------------------------
-    var RE_STT = /^stt$/i;
+    var RE_STT = /^(stt|#)$/i;
     var RE_ACTION = /thao\s*tác/i;
     var RE_WIDE = /địa\s*chỉ|ghi\s*chú|sản\s*phẩm|bên\s*mua|báo\s*cáo|nội\s*dung|insights/i;
 

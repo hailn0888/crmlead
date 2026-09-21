@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+    <!DOCTYPE html>
     <html lang="vi">
     <head>
         <meta charset="UTF-8">
@@ -6,20 +6,9 @@
         <title>Đăng nhập - CRM Lead</title>
         <script src="https://cdn.tailwindcss.com"></script>
         <link rel="stylesheet" href="/css/mobile.css" media="(max-width: 767.98px)">
-        <!-- SweetAlert2: dùng cho popup thông báo (Swal.fire) thay cho alert() mặc định của trình duyệt -->
-        <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
         <link rel="icon" type="image/png" href="../uploads/favicon.png">
         <link rel="apple-touch-icon" href="../uploads/icon.png">
-
-        <!-- Meta OG/Twitter: hiển thị ảnh thumbnail + tiêu đề khi dán link chia sẻ qua Zalo/Facebook -->
-        <meta property="og:title" content="CRM Lead - Đăng nhập hệ thống">
-        <meta property="og:description" content="Hệ thống quản lý chăm sóc khách hàng CRM Lead">
-        <meta property="og:image" content="https://i.ibb.co/W4SpWjYy/icon.png">
-        <meta property="og:type" content="website">
-        <meta name="twitter:card" content="summary">
-        <meta name="twitter:title" content="CRM Lead - Đăng nhập hệ thống">
-        <meta name="twitter:image" content="https://i.ibb.co/W4SpWjYy/icon.png">
     </head>
 
     <body class="bg-slate-900 flex items-center justify-center min-h-screen overflow-y-auto p-4">
@@ -180,12 +169,7 @@
                 const result = await res.json();
                 
                 if(result.success) {
-                    await Swal.fire({
-                        icon: 'success',
-                        title: 'Thành công!',
-                        text: result.message,
-                        confirmButtonText: 'Đóng'
-                    });
+                    alert(result.message);
                     modal.classList.add('hidden');
                     location.reload();
                 } else {
