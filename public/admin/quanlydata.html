@@ -352,9 +352,6 @@
                             <tr class="border-b border-inherit opacity-75 font-semibold">
                                 <th class="p-3.5 text-center w-12">STT</th>
                                 <th class="p-3.5">Tên File Gốc</th>
-                                <th class="p-3.5">Họ Tên</th>
-                                <th class="p-3.5">CCCD</th>
-                                <th class="p-3.5">Địa Chỉ</th>
                                 <th class="p-3.5">Lý Do Bị Loại</th>
                                 <th class="p-3.5 text-center">Ngày Phát Hiện</th>
                                 <th class="p-3.5 text-center">Thao Tác</th>
@@ -362,7 +359,7 @@
                         </thead>
                         <tbody id="invalidLeadsTableBody" class="divide-y divide-inherit">
                             <tr>
-                                <td colspan="8" class="text-center py-8 opacity-60">Đang tải danh sách...</td>
+                                <td colspan="5" class="text-center py-8 opacity-60">Đang tải danh sách...</td>
                             </tr>
                         </tbody>
                     </table>
@@ -1471,7 +1468,7 @@
         const badge = document.getElementById('invalidCountBadge');
         if (!tbody) return;
 
-        tbody.innerHTML = `<tr><td colspan="8" class="text-center py-8 opacity-60">Đang tải danh sách...</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" class="text-center py-8 opacity-60">Đang tải danh sách...</td></tr>`;
 
         try {
             const [resInvalid, resFiles] = await Promise.all([
@@ -1499,7 +1496,7 @@
             if (typeof lucide !== 'undefined') lucide.createIcons();
         } catch (error) {
             console.error('Lỗi tải leads thiếu dữ liệu:', error);
-            tbody.innerHTML = `<tr><td colspan="8" class="text-center py-8 text-red-500">Lỗi kết nối khi tải danh sách.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="5" class="text-center py-8 text-red-500">Lỗi kết nối khi tải danh sách.</td></tr>`;
         }
     }
 
@@ -1508,16 +1505,11 @@
         if (!tbody) return;
 
         if (!list || list.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="8" class="text-center py-8 opacity-60">Không có lead nào bị thiếu dữ liệu. 🎉</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="5" class="text-center py-8 opacity-60">Không có lead nào bị thiếu dữ liệu. 🎉</td></tr>`;
             return;
         }
 
         tbody.innerHTML = list.map((item, index) => {
-            const raw = item.raw_data || {};
-            // Cố gắng đoán tên các cột phổ biến để hiển thị nhanh, dữ liệu gốc đầy đủ vẫn nằm trong raw_data
-            const hoTen = raw['Họ'] || raw['Tên'] ? `${raw['Họ'] || ''} ${raw['Tên'] || ''}`.trim() : (raw['Họ và Tên'] || '-');
-            const cccd = raw['CCCD'] || raw['CMND'] || '-';
-            const diaChi = raw['Địa chỉ cụ thể'] || raw['Địa chỉ'] || '-';
             const fileName = invalidLeadsFileMap[item.file_id] || `File ID: ${item.file_id}`;
             const createdAt = item.created_at ? new Date(item.created_at) : null;
             const dateStr = createdAt ? `${String(createdAt.getDate()).padStart(2,'0')}/${String(createdAt.getMonth()+1).padStart(2,'0')}/${createdAt.getFullYear()}` : '-';
@@ -1526,12 +1518,12 @@
                 <tr class="hover:bg-[var(--hover-bg,rgba(0,0,0,0.03))] transition">
                     <td class="p-3.5 text-center font-mono opacity-60">${index + 1}</td>
                     <td class="p-3.5 font-medium text-emerald-500">${fileName}</td>
-                    <td class="p-3.5">${hoTen || '-'}</td>
-                    <td class="p-3.5">${cccd}</td>
-                    <td class="p-3.5">${diaChi}</td>
                     <td class="p-3.5"><span class="px-2 py-1 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-500">${item.reason || 'Thiếu số điện thoại'}</span></td>
                     <td class="p-3.5 text-center opacity-70">${dateStr}</td>
-                    <td class="p-3.5 text-center">
+                    <td class="p-3.5 text-center space-x-1">
+                        <button onclick="viewInvalidLeadDetail('${item.id}')" class="p-1 rounded opacity-80 hover:opacity-100 hover:bg-slate-500/10 transition inline-block" title="Xem toàn bộ dữ liệu gốc của dòng này">
+                            <i data-lucide="eye" class="w-3.5 h-3.5 text-slate-500"></i>
+                        </button>
                         <button onclick="deleteInvalidLead('${item.id}')" class="p-1 rounded opacity-80 hover:opacity-100 hover:bg-red-500/10 transition inline-block" title="Xóa khỏi danh sách (đã xử lý xong)">
                             <i data-lucide="trash-2" class="w-3.5 h-3.5 text-red-500"></i>
                         </button>
@@ -1542,6 +1534,32 @@
 
         if (typeof lucide !== 'undefined') lucide.createIcons();
     }
+
+    // [MỚI] Xem toàn bộ dữ liệu gốc (raw_data) của 1 dòng lead thiếu dữ liệu, vì tên cột Excel
+    // thực tế khác nhau giữa các file nên không thể hiển thị cố định vài cột trên bảng chính.
+    window.viewInvalidLeadDetail = function(id) {
+        const item = invalidLeadsCache.find(i => String(i.id) === String(id));
+        if (!item) return;
+
+        const raw = item.raw_data || {};
+        const rowsHtml = Object.keys(raw).length > 0
+            ? Object.entries(raw).map(([key, value]) => `
+                <tr class="border-b border-slate-100">
+                    <td style="padding:6px 10px; font-weight:600; color:#475569; white-space:nowrap;">${key}</td>
+                    <td style="padding:6px 10px; color:#0f172a;">${value !== '' && value !== null && value !== undefined ? value : '<span style="opacity:0.5">(trống)</span>'}</td>
+                </tr>
+              `).join('')
+            : `<tr><td colspan="2" style="padding:12px; text-align:center; opacity:0.6;">Không có dữ liệu.</td></tr>`;
+
+        Swal.fire({
+            title: 'Dữ liệu gốc của dòng này',
+            html: `<div style="max-height:60vh; overflow-y:auto; text-align:left;">
+                       <table style="width:100%; border-collapse:collapse; font-size:12px;">${rowsHtml}</table>
+                   </div>`,
+            confirmButtonText: 'Đóng',
+            width: 560
+        });
+    };
 
     // Lọc theo file khi đổi dropdown
     document.addEventListener('DOMContentLoaded', () => {
