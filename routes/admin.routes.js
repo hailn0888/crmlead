@@ -520,6 +520,9 @@ router.post('/upload-data', upload.array('files'), async (req, res) => {
                         invalidRows.push({
                             file_id: fileId,
                             raw_data: rawRowObj,
+                            ho_ten: `${cusRow.ho || ''} ${cusRow.ten || ''}`.trim() || null,
+                            so_hop_dong: cRow.so_hop_dong || null,
+                            menh_gia: cRow.menh_gia || null,
                             reason: 'Thiếu số điện thoại'
                         });
                         return; // Bỏ qua, không xử lý tiếp dòng này

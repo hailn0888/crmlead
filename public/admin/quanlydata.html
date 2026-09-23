@@ -320,21 +320,17 @@
                         <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-500"></i>
                         <span>Leads Bị Loại Khi Upload (Thiếu Số Điện Thoại)</span>
                     </h3>
-                    <p class="text-xs opacity-70 mt-0.5">Những dòng dữ liệu không có Số điện thoại sẽ KHÔNG được ghi vào hệ thống, mà được tách riêng ra đây để xem lại hoặc bổ sung dữ liệu.</p>
+                    <p class="text-xs opacity-70 mt-0.5">Chọn 1 file để kiểm tra những lead thiếu Số điện thoại đã bị tách riêng, không được ghi vào hệ thống.</p>
                 </div>
 
                 <div class="p-4 border-b border-inherit flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                     <div class="flex flex-wrap items-center gap-2">
-                        <select id="fileFilterTab5" class="px-3 py-1.5 rounded-xl border border-inherit bg-transparent text-xs focus:outline-none focus:border-emerald-500 transition">
-                            <option value="">Tất cả file</option>
+                        <select id="fileFilterTab5" onchange="handleFileFilterTab5Change()" class="px-3 py-1.5 rounded-xl border border-inherit bg-transparent text-xs focus:outline-none focus:border-emerald-500 transition">
+                            <option value="">-- Chọn file để kiểm tra --</option>
                         </select>
-                        <span id="invalidCountBadge" class="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20">0 lead</span>
-                        <button onclick="loadInvalidLeads()" class="px-3 py-1.5 rounded-xl border border-inherit hover:opacity-100 opacity-80 transition text-xs font-medium flex items-center space-x-1">
-                            <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
-                            <span>Làm mới</span>
-                        </button>
+                        <span id="invalidCountBadge" class="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20 hidden">0 lead</span>
                     </div>
-                    <div class="flex items-center gap-2">
+                    <div id="tab5ActionButtons" class="flex items-center gap-2 hidden">
                         <button onclick="deleteAllInvalidLeads()" class="px-3 py-1.5 rounded-xl bg-red-500 text-white hover:bg-red-600 transition text-xs font-medium flex items-center space-x-1.5 shadow-sm">
                             <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
                             <span>Xóa Tất Cả</span>
@@ -346,22 +342,26 @@
                     </div>
                 </div>
 
-                <div class="overflow-x-auto flex-1">
+                <!-- Trạng thái mặc định: chưa chọn file -->
+                <div id="tab5Placeholder" class="flex-1 flex items-center justify-center py-20">
+                    <div class="text-center opacity-60">
+                        <i data-lucide="mouse-pointer-click" class="w-8 h-8 mx-auto mb-2"></i>
+                        <p class="text-sm">Chọn file để kiểm tra</p>
+                    </div>
+                </div>
+
+                <div id="tab5TableWrapper" class="overflow-x-auto flex-1 hidden">
                     <table class="rt-cards w-full text-left border-collapse text-xs">
                         <thead>
                             <tr class="border-b border-inherit opacity-75 font-semibold">
                                 <th class="p-3.5 text-center w-12">STT</th>
-                                <th class="p-3.5">Tên File Gốc</th>
-                                <th class="p-3.5">Lý Do Bị Loại</th>
-                                <th class="p-3.5 text-center">Ngày Phát Hiện</th>
+                                <th class="p-3.5">Họ Và Tên</th>
+                                <th class="p-3.5">Số HĐ</th>
+                                <th class="p-3.5 text-right">Mệnh Giá</th>
                                 <th class="p-3.5 text-center">Thao Tác</th>
                             </tr>
                         </thead>
-                        <tbody id="invalidLeadsTableBody" class="divide-y divide-inherit">
-                            <tr>
-                                <td colspan="5" class="text-center py-8 opacity-60">Đang tải danh sách...</td>
-                            </tr>
-                        </tbody>
+                        <tbody id="invalidLeadsTableBody" class="divide-y divide-inherit"></tbody>
                     </table>
                 </div>
             </div>
@@ -1295,7 +1295,7 @@
                     
                     if (tabIndex === 2) typeof loadDataForAllocation === 'function' && loadDataForAllocation();
                     if (tabIndex === 3) loadTab3Files();
-                    if (tabIndex === 5) loadInvalidLeads();
+                    if (tabIndex === 5) initTab5();
                 } else {
                     content.classList.add('hidden');
                     btn.className = "px-3 py-1.5 rounded-xl border border-inherit opacity-60 hover:opacity-100 transition";
@@ -1460,37 +1460,86 @@
      * =====================================================================
      */
     let invalidLeadsCache = [];
-    let invalidLeadsFileMap = {}; // file_id -> file_name, dùng để hiển thị tên file gốc
+    let invalidLeadsFileMap = {}; // file_id -> file_name (dùng khi xuất Excel để biết đang xuất của file nào)
 
-    async function loadInvalidLeads() {
-        const tbody = document.getElementById('invalidLeadsTableBody');
+    // [MỚI] Khởi tạo Tab 5: chỉ nạp danh sách file vào dropdown, KHÔNG tự tải leads thiếu dữ liệu.
+    // Mặc định luôn ở trạng thái "Chọn file để kiểm tra" cho tới khi Admin chọn 1 file cụ thể.
+    async function initTab5() {
         const fileFilterSelect = document.getElementById('fileFilterTab5');
-        const badge = document.getElementById('invalidCountBadge');
-        if (!tbody) return;
+        if (!fileFilterSelect) return;
 
-        tbody.innerHTML = `<tr><td colspan="5" class="text-center py-8 opacity-60">Đang tải danh sách...</td></tr>`;
+        showTab5Placeholder(); // Luôn reset về trạng thái mặc định mỗi lần mở lại Tab 5
 
         try {
-            const [resInvalid, resFiles] = await Promise.all([
-                fetch('/api/admin/invalid-leads'),
-                fetch('/api/admin/data-files')
-            ]);
-            const invalidResult = await resInvalid.json();
-            const filesResult = await resFiles.json();
-
-            invalidLeadsCache = (invalidResult.success && Array.isArray(invalidResult.data)) ? invalidResult.data : [];
-            const files = Array.isArray(filesResult) ? filesResult : (filesResult.data || filesResult.files || []);
+            const res = await fetch('/api/admin/data-files');
+            const result = await res.json();
+            const files = Array.isArray(result) ? result : (result.data || result.files || []);
 
             invalidLeadsFileMap = {};
-            let fileOptions = `<option value="">Tất cả file</option>`;
+            let fileOptions = `<option value="">-- Chọn file để kiểm tra --</option>`;
             files.forEach(f => {
                 const fName = f.file_name || f.ten_file || 'Không có tên';
                 invalidLeadsFileMap[f.id] = fName;
                 fileOptions += `<option value="${f.id}">${fName}</option>`;
             });
-            if (fileFilterSelect) fileFilterSelect.innerHTML = fileOptions;
+            fileFilterSelect.innerHTML = fileOptions;
+        } catch (error) {
+            console.error('Lỗi tải danh sách file cho Tab 5:', error);
+        }
+    }
 
-            if (badge) badge.textContent = `${invalidLeadsCache.length} lead`;
+    // Ẩn bảng, hiện lại thông báo "Chọn file để kiểm tra"
+    function showTab5Placeholder() {
+        const placeholder = document.getElementById('tab5Placeholder');
+        const tableWrapper = document.getElementById('tab5TableWrapper');
+        const actionButtons = document.getElementById('tab5ActionButtons');
+        const badge = document.getElementById('invalidCountBadge');
+        const fileFilterSelect = document.getElementById('fileFilterTab5');
+
+        if (placeholder) placeholder.classList.remove('hidden');
+        if (tableWrapper) tableWrapper.classList.add('hidden');
+        if (actionButtons) actionButtons.classList.add('hidden');
+        if (badge) badge.classList.add('hidden');
+        if (fileFilterSelect) fileFilterSelect.value = '';
+        invalidLeadsCache = [];
+    }
+
+    // [MỚI] Xử lý khi Admin đổi lựa chọn file ở dropdown Tab 5
+    window.handleFileFilterTab5Change = function() {
+        const fileFilterSelect = document.getElementById('fileFilterTab5');
+        const fileId = fileFilterSelect ? fileFilterSelect.value : '';
+
+        if (!fileId) {
+            showTab5Placeholder();
+            return;
+        }
+
+        loadInvalidLeadsForFile(fileId);
+    };
+
+    // [MỚI] Tải danh sách lead thiếu dữ liệu CỦA ĐÚNG 1 FILE đang chọn
+    async function loadInvalidLeadsForFile(fileId) {
+        const placeholder = document.getElementById('tab5Placeholder');
+        const tableWrapper = document.getElementById('tab5TableWrapper');
+        const actionButtons = document.getElementById('tab5ActionButtons');
+        const badge = document.getElementById('invalidCountBadge');
+        const tbody = document.getElementById('invalidLeadsTableBody');
+        if (!tbody) return;
+
+        if (placeholder) placeholder.classList.add('hidden');
+        if (tableWrapper) tableWrapper.classList.remove('hidden');
+        tbody.innerHTML = `<tr><td colspan="5" class="text-center py-8 opacity-60">Đang tải danh sách...</td></tr>`;
+
+        try {
+            const res = await fetch(`/api/admin/invalid-leads?file_id=${fileId}`);
+            const result = await res.json();
+            invalidLeadsCache = (result.success && Array.isArray(result.data)) ? result.data : [];
+
+            if (badge) {
+                badge.textContent = `${invalidLeadsCache.length} lead`;
+                badge.classList.remove('hidden');
+            }
+            if (actionButtons) actionButtons.classList.toggle('hidden', invalidLeadsCache.length === 0);
 
             renderInvalidLeadsTable(invalidLeadsCache);
             if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -1505,25 +1554,24 @@
         if (!tbody) return;
 
         if (!list || list.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="5" class="text-center py-8 opacity-60">Không có lead nào bị thiếu dữ liệu. 🎉</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="5" class="text-center py-8 opacity-60">File này không có lead nào thiếu dữ liệu. 🎉</td></tr>`;
             return;
         }
 
         tbody.innerHTML = list.map((item, index) => {
-            const fileName = invalidLeadsFileMap[item.file_id] || `File ID: ${item.file_id}`;
-            const createdAt = item.created_at ? new Date(item.created_at) : null;
-            const dateStr = createdAt ? `${String(createdAt.getDate()).padStart(2,'0')}/${String(createdAt.getMonth()+1).padStart(2,'0')}/${createdAt.getFullYear()}` : '-';
+            const hoTen = item.ho_ten || '-';
+            const soHD = item.so_hop_dong || '-';
+            const menhGia = (item.menh_gia !== null && item.menh_gia !== undefined && item.menh_gia !== '')
+                ? Number(item.menh_gia).toLocaleString('vi-VN')
+                : '-';
 
             return `
                 <tr class="hover:bg-[var(--hover-bg,rgba(0,0,0,0.03))] transition">
                     <td class="p-3.5 text-center font-mono opacity-60">${index + 1}</td>
-                    <td class="p-3.5 font-medium text-emerald-500">${fileName}</td>
-                    <td class="p-3.5"><span class="px-2 py-1 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-500">${item.reason || 'Thiếu số điện thoại'}</span></td>
-                    <td class="p-3.5 text-center opacity-70">${dateStr}</td>
-                    <td class="p-3.5 text-center space-x-1">
-                        <button onclick="viewInvalidLeadDetail('${item.id}')" class="p-1 rounded opacity-80 hover:opacity-100 hover:bg-slate-500/10 transition inline-block" title="Xem toàn bộ dữ liệu gốc của dòng này">
-                            <i data-lucide="eye" class="w-3.5 h-3.5 text-slate-500"></i>
-                        </button>
+                    <td class="p-3.5 font-medium">${hoTen}</td>
+                    <td class="p-3.5">${soHD}</td>
+                    <td class="p-3.5 text-right font-mono">${menhGia}</td>
+                    <td class="p-3.5 text-center">
                         <button onclick="deleteInvalidLead('${item.id}')" class="p-1 rounded opacity-80 hover:opacity-100 hover:bg-red-500/10 transition inline-block" title="Xóa khỏi danh sách (đã xử lý xong)">
                             <i data-lucide="trash-2" class="w-3.5 h-3.5 text-red-500"></i>
                         </button>
@@ -1534,44 +1582,6 @@
 
         if (typeof lucide !== 'undefined') lucide.createIcons();
     }
-
-    // [MỚI] Xem toàn bộ dữ liệu gốc (raw_data) của 1 dòng lead thiếu dữ liệu, vì tên cột Excel
-    // thực tế khác nhau giữa các file nên không thể hiển thị cố định vài cột trên bảng chính.
-    window.viewInvalidLeadDetail = function(id) {
-        const item = invalidLeadsCache.find(i => String(i.id) === String(id));
-        if (!item) return;
-
-        const raw = item.raw_data || {};
-        const rowsHtml = Object.keys(raw).length > 0
-            ? Object.entries(raw).map(([key, value]) => `
-                <tr class="border-b border-slate-100">
-                    <td style="padding:6px 10px; font-weight:600; color:#475569; white-space:nowrap;">${key}</td>
-                    <td style="padding:6px 10px; color:#0f172a;">${value !== '' && value !== null && value !== undefined ? value : '<span style="opacity:0.5">(trống)</span>'}</td>
-                </tr>
-              `).join('')
-            : `<tr><td colspan="2" style="padding:12px; text-align:center; opacity:0.6;">Không có dữ liệu.</td></tr>`;
-
-        Swal.fire({
-            title: 'Dữ liệu gốc của dòng này',
-            html: `<div style="max-height:60vh; overflow-y:auto; text-align:left;">
-                       <table style="width:100%; border-collapse:collapse; font-size:12px;">${rowsHtml}</table>
-                   </div>`,
-            confirmButtonText: 'Đóng',
-            width: 560
-        });
-    };
-
-    // Lọc theo file khi đổi dropdown
-    document.addEventListener('DOMContentLoaded', () => {
-        const fileFilterSelect = document.getElementById('fileFilterTab5');
-        if (fileFilterSelect) {
-            fileFilterSelect.addEventListener('change', function() {
-                const val = this.value;
-                const filtered = val ? invalidLeadsCache.filter(item => String(item.file_id) === String(val)) : invalidLeadsCache;
-                renderInvalidLeadsTable(filtered);
-            });
-        }
-    });
 
     // Xóa 1 bản ghi lead thiếu dữ liệu (sau khi Admin đã bổ sung SĐT và xử lý thủ công xong)
     window.deleteInvalidLead = async function(id) {
@@ -1590,7 +1600,8 @@
                 const res = await fetch(`/api/admin/invalid-leads/${id}`, { method: 'DELETE' });
                 const result = await res.json();
                 if (res.ok && result.success) {
-                    loadInvalidLeads();
+                    const fileFilterSelect = document.getElementById('fileFilterTab5');
+                    if (fileFilterSelect && fileFilterSelect.value) loadInvalidLeadsForFile(fileFilterSelect.value);
                 } else {
                     throw new Error(result.message || 'Không thể xóa bản ghi.');
                 }
@@ -1600,23 +1611,15 @@
         }
     };
 
-    // Xóa TẤT CẢ lead thiếu dữ liệu đang hiển thị (nếu đang lọc theo 1 file thì chỉ xóa của file đó,
-    // nếu chọn "Tất cả file" thì xóa sạch toàn bộ danh sách).
+    // Xóa TẤT CẢ lead thiếu dữ liệu của file đang được chọn ở dropdown
     window.deleteAllInvalidLeads = async function() {
         const fileFilterSelect = document.getElementById('fileFilterTab5');
         const fileId = fileFilterSelect ? fileFilterSelect.value : '';
-        const scopeText = fileId
-            ? `toàn bộ lead thiếu dữ liệu của file "${invalidLeadsFileMap[fileId] || fileId}"`
-            : 'TOÀN BỘ danh sách leads thiếu dữ liệu';
-
-        if (invalidLeadsCache.length === 0) {
-            Swal.fire({ title: 'Trống!', text: 'Không có lead nào để xóa.', icon: 'info', confirmButtonText: 'Đóng' });
-            return;
-        }
+        if (!fileId || invalidLeadsCache.length === 0) return;
 
         const confirm = await Swal.fire({
             title: 'Xác nhận xóa tất cả?',
-            text: `Bạn có chắc chắn muốn xóa ${scopeText} không? Hành động này không thể hoàn tác!`,
+            text: `Bạn có chắc chắn muốn xóa toàn bộ ${invalidLeadsCache.length} lead thiếu dữ liệu của file "${invalidLeadsFileMap[fileId] || fileId}" không? Hành động này không thể hoàn tác!`,
             icon: 'warning',
             showCancelButton: true,
             confirmButtonText: 'Xóa tất cả',
@@ -1626,13 +1629,12 @@
 
         if (confirm.isConfirmed) {
             try {
-                const url = fileId ? `/api/admin/invalid-leads?file_id=${fileId}` : '/api/admin/invalid-leads';
-                const res = await fetch(url, { method: 'DELETE' });
+                const res = await fetch(`/api/admin/invalid-leads?file_id=${fileId}`, { method: 'DELETE' });
                 const result = await res.json();
 
                 if (res.ok && result.success) {
                     await Swal.fire({ title: 'Đã xóa!', text: result.message, icon: 'success', timer: 1500, showConfirmButton: false });
-                    loadInvalidLeads();
+                    loadInvalidLeadsForFile(fileId);
                 } else {
                     throw new Error(result.message || 'Không thể xóa danh sách.');
                 }
@@ -1642,29 +1644,29 @@
         }
     };
 
-    // Xuất Excel toàn bộ danh sách đang hiển thị (đã áp dụng bộ lọc theo file nếu có)
+    // Xuất Excel toàn bộ leads thiếu dữ liệu của file đang chọn
     function exportInvalidLeadsExcel() {
         const fileFilterSelect = document.getElementById('fileFilterTab5');
-        const val = fileFilterSelect ? fileFilterSelect.value : '';
-        const dataToExport = val ? invalidLeadsCache.filter(item => String(item.file_id) === String(val)) : invalidLeadsCache;
+        const fileId = fileFilterSelect ? fileFilterSelect.value : '';
 
-        if (dataToExport.length === 0) {
+        if (!fileId || invalidLeadsCache.length === 0) {
             Swal.fire({ title: 'Trống!', text: 'Không có lead thiếu dữ liệu nào để xuất.', icon: 'warning', confirmButtonText: 'Đóng' });
             return;
         }
 
-        // Xuất nguyên vẹn dữ liệu gốc (raw_data) theo đúng tên cột Excel ban đầu,
-        // kèm thêm 2 cột phụ (Tên file gốc, Lý do) để dễ đối chiếu.
-        const rows = dataToExport.map(item => ({
-            'Tên file gốc': invalidLeadsFileMap[item.file_id] || `File ID: ${item.file_id}`,
-            'Lý do bị loại': item.reason || 'Thiếu số điện thoại',
+        // Đưa 3 cột chính (Họ Và Tên, Số HĐ, Mệnh Giá) lên đầu cho dễ đọc, kèm theo toàn bộ
+        // dữ liệu gốc (raw_data) theo đúng tên cột Excel ban đầu để không mất thông tin.
+        const rows = invalidLeadsCache.map(item => ({
+            'Họ Và Tên': item.ho_ten || '',
+            'Số HĐ': item.so_hop_dong || '',
+            'Mệnh Giá': item.menh_gia || '',
             ...item.raw_data
         }));
 
         const worksheet = XLSX.utils.json_to_sheet(rows);
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, "LeadsThieuDuLieu");
-        XLSX.writeFile(workbook, `Leads_Thieu_Du_Lieu_${Date.now()}.xlsx`);
+        XLSX.writeFile(workbook, `Leads_Thieu_Du_Lieu_${(invalidLeadsFileMap[fileId] || fileId).replace(/[^\w]+/g, '_')}_${Date.now()}.xlsx`);
     }
     </script>
 </body>
