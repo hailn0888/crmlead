@@ -80,6 +80,71 @@ function parseFlexibleDate(rawVal) {
     return null;
 }
 
+/**
+ * [MỚI] Chuẩn hóa và kiểm tra định dạng Số điện thoại Việt Nam.
+ * - Bỏ khoảng trắng, dấu gạch ngang, dấu chấm, ngoặc đơn (vd: "08-7250783" -> "087250783").
+ * - Chuyển "84xxxxxxxxx" (mã quốc gia không dấu +) về dạng "0xxxxxxxxx".
+ * - Hợp lệ khi kết quả là chuỗi đúng 10 chữ số bắt đầu bằng số 0 (định dạng di động VN chuẩn).
+ *   Các số bàn cũ dạng "08-xxxxxxx" (7-8 chữ số) sẽ KHÔNG khớp và bị coi là sai định dạng.
+ * Trả về { valid: boolean, normalized: string } - normalized là số đã làm sạch (dùng để lưu nếu valid).
+ */
+function normalizeAndValidatePhone(rawPhone) {
+    let cleaned = String(rawPhone || '').replace(/[\s\-.()]/g, '');
+
+    if (/^84\d{9}$/.test(cleaned)) {
+        cleaned = '0' + cleaned.slice(2);
+    }
+
+    const valid = /^0\d{9}$/.test(cleaned);
+    return { valid, normalized: cleaned };
+}
+
+/**
+ * [MỚI] Hàm hỗ trợ đọc lại 1 dòng dữ liệu gốc (raw_data đã lưu trong invalid_leads) và trích xuất
+ * ra các trường của contracts/customers - dùng CHUNG logic nhận diện tên cột với route /upload-data,
+ * để khi Admin bổ sung SĐT cho 1 lead thiếu dữ liệu, dữ liệu import vào sẽ chính xác như lúc upload gốc.
+ */
+function parseLeadFieldsFromRaw(rawRowObj) {
+    let cRow = { so_hop_dong: '' };
+    let cusRow = {};
+
+    Object.entries(rawRowObj || {}).forEach(([h, rawVal]) => {
+        if (!h) return;
+        const keyClean = h.toString().trim().toLowerCase();
+        const val = rawVal !== undefined && rawVal !== null ? String(rawVal).trim() : '';
+
+        if (keyClean.includes('hop_dong') || keyClean.includes('hợp đồng') || keyClean.includes('so_hd')) cRow.so_hop_dong = val;
+        if (keyClean.includes('thu_tu') || keyClean.includes('thứ tự')) cRow.so_thu_tu = val ? parseInt(val) : null;
+        if (keyClean.includes('vp_bank')) cRow.vp_bank = val;
+        if (keyClean.includes('msdl')) cRow.msdl = val ? parseInt(val) : null;
+        if (keyClean.includes('cv')) cRow.cv = val;
+
+        const isCotThamGiaDayDu = keyClean.includes('đầy đủ') || keyClean.includes('day du') || keyClean.includes('daydu');
+        if (!isCotThamGiaDayDu && (keyClean.includes('ngay_tham_gia') || keyClean.includes('ngày tham gia') || keyClean.includes('ngaythamgia') || keyClean.includes('tham gia'))) {
+            cRow.ngay_tham_gia = parseFlexibleDate(rawVal);
+        }
+
+        if (keyClean.includes('tinh_trang') || keyClean.includes('tình trạng')) cRow.tinh_trang_hs = val;
+        if (keyClean.includes('menh_gia') || keyClean.includes('mệnh giá') || keyClean.includes('menhgia')) cRow.menh_gia = val ? parseFloat(val) : null;
+        if (keyClean.includes('dao_han') || keyClean.includes('đáo hạn') || keyClean.includes('daohan')) cRow.nam_dao_han = val ? parseInt(val) : null;
+        if (keyClean.includes('ip')) cRow.ip = val ? parseInt(val) : null;
+
+        if (keyClean.includes('cccd')) cusRow.cccd = val;
+        if (keyClean === 'ho' || keyClean.includes('họ')) cusRow.ho = val;
+        if (keyClean === 'ten' || keyClean.includes('tên')) cusRow.ten = val;
+        if (keyClean.includes('gioi_tinh') || keyClean.includes('giới tính') || keyClean.includes('gioitinh')) cusRow.gioi_tinh = val;
+
+        if (keyClean.includes('ngay_sinh') || keyClean.includes('ngày sinh') || keyClean.includes('ngaysinh')) {
+            cusRow.ngay_sinh = parseFlexibleDate(rawVal);
+        }
+
+        if (keyClean.includes('tuoi') || keyClean.includes('tuổi')) cusRow.tuoi = val ? parseInt(val) : null;
+        if (keyClean.includes('dia_chi') || keyClean.includes('địa chỉ') || keyClean.includes('diachi')) cusRow.dia_chi = val;
+    });
+
+    return { cRow, cusRow };
+}
+
 // ==========================================
 // 0. KIỂM TRA TRẠNG THÁI ROUTE
 // ==========================================
@@ -412,6 +477,107 @@ router.delete('/invalid-leads/:id', async (req, res) => {
 });
 
 /**
+ * [MỚI] PUT /invalid-leads/:id/resolve - Admin bổ sung Số điện thoại còn thiếu cho 1 lead,
+ * hệ thống tự động:
+ *   1. Đọc lại dữ liệu gốc (raw_data) đã lưu, ghép thêm SĐT vừa nhập.
+ *   2. Import thẳng vào customers/contracts của ĐÚNG file đã upload (giữ nguyên file_id).
+ *   3. Nếu file đó đã được phân bổ cho 1 Agent (data_files.agent_id) -> tự tạo bản ghi
+ *      lead_assignments để lead mới này cũng được giao luôn cho đúng Agent đó.
+ *   4. Cập nhật lại số liệu total_records/untouched_count/invalid_count của file.
+ *   5. Xóa bản ghi khỏi invalid_leads vì đã được xử lý xong.
+ */
+router.put('/invalid-leads/:id/resolve', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const dienThoaiInput = (req.body.dien_thoai || '').toString().trim();
+
+        if (!dienThoaiInput) {
+            return res.status(400).json({ success: false, message: 'Vui lòng nhập Số điện thoại.' });
+        }
+
+        // [MỚI] Validate luôn định dạng SĐT admin vừa nhập, tránh nhập nhầm số không hợp lệ vào DB
+        const phoneCheck = normalizeAndValidatePhone(dienThoaiInput);
+        if (!phoneCheck.valid) {
+            return res.status(400).json({ success: false, message: 'Số điện thoại không đúng định dạng (cần đủ 10 số, bắt đầu bằng số 0).' });
+        }
+        const dienThoai = phoneCheck.normalized;
+
+        // Bước 1: Lấy lại bản ghi lead thiếu dữ liệu
+        const { data: invalidLead, error: fetchErr } = await req.supabase
+            .from('invalid_leads')
+            .select('*')
+            .eq('id', id)
+            .single();
+
+        if (fetchErr || !invalidLead) {
+            return res.status(404).json({ success: false, message: 'Không tìm thấy bản ghi lead thiếu dữ liệu này.' });
+        }
+
+        const fileId = invalidLead.file_id;
+
+        // Bước 2: Parse lại dữ liệu gốc + gắn SĐT vừa bổ sung
+        const { cRow, cusRow } = parseLeadFieldsFromRaw(invalidLead.raw_data);
+        cRow.file_id = fileId;
+        cRow.dien_thoai = dienThoai;
+        cusRow.dien_thoai = dienThoai;
+        if (!cRow.so_hop_dong) cRow.so_hop_dong = 'HD_' + (dienThoai || Math.random().toString(36).substring(7));
+
+        // Bước 3: Insert/Update customers
+        const { error: cusErr } = await req.supabase
+            .from('customers')
+            .upsert({ ...cusRow, ngay_tao: new Date().toISOString() }, { onConflict: 'dien_thoai' });
+        if (cusErr) throw cusErr;
+
+        // Bước 4: Insert/Update contracts
+        const { error: contractErr } = await req.supabase
+            .from('contracts')
+            .upsert(cRow, { onConflict: 'so_hop_dong' });
+        if (contractErr) throw contractErr;
+
+        // Bước 5: Nếu file này đã được phân bổ cho Agent -> tạo luôn lead_assignments cho lead mới
+        const { data: fileRecord, error: fileFetchErr } = await req.supabase
+            .from('data_files')
+            .select('*')
+            .eq('id', fileId)
+            .single();
+
+        if (!fileFetchErr && fileRecord && fileRecord.agent_id) {
+            const { error: assignErr } = await req.supabase
+                .from('lead_assignments')
+                .upsert({
+                    dien_thoai: dienThoai,
+                    so_hop_dong: cRow.so_hop_dong,
+                    agent_id: fileRecord.agent_id,
+                    ngay_tao: new Date().toISOString(),
+                    created_at: new Date().toISOString()
+                }, { onConflict: 'so_hop_dong' });
+            // Không throw nếu bước gán agent lỗi - lead vẫn đã được import thành công vào contracts,
+            // chỉ log lại để Admin biết cần gán tay nếu cần.
+            if (assignErr) console.error('Lỗi tự động gán agent cho lead vừa bổ sung:', assignErr.message);
+        }
+
+        // Bước 6: Cập nhật lại số liệu của file + xóa khỏi danh sách leads thiếu dữ liệu
+        if (fileRecord) {
+            await req.supabase
+                .from('data_files')
+                .update({
+                    total_records: (fileRecord.total_records || 0) + 1,
+                    untouched_count: (fileRecord.untouched_count || 0) + 1,
+                    invalid_count: Math.max((fileRecord.invalid_count || 0) - 1, 0)
+                })
+                .eq('id', fileId);
+        }
+
+        await req.supabase.from('invalid_leads').delete().eq('id', id);
+
+        res.json({ success: true, message: 'Đã bổ sung Số điện thoại và import lead vào hệ thống thành công!' });
+    } catch (error) {
+        console.error('Lỗi resolve invalid lead:', error.message);
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+/**
  * POST /upload-data - Tải lên file Excel và tự động gán file_id cho từng dòng contracts
  */
 router.post('/upload-data', upload.array('files'), async (req, res) => {
@@ -527,6 +693,24 @@ router.post('/upload-data', upload.array('files'), async (req, res) => {
                         });
                         return; // Bỏ qua, không xử lý tiếp dòng này
                     }
+
+                    // [MỚI] Có SĐT nhưng SAI ĐỊNH DẠNG (vd: số bàn cũ "08-7250783") -> cũng tách riêng,
+                    // không ghi vào customers/contracts, để tránh data bẩn lọt vào danh sách gọi của Agent.
+                    const phoneCheck = normalizeAndValidatePhone(cRow.dien_thoai);
+                    if (!phoneCheck.valid) {
+                        invalidRows.push({
+                            file_id: fileId,
+                            raw_data: rawRowObj,
+                            ho_ten: `${cusRow.ho || ''} ${cusRow.ten || ''}`.trim() || null,
+                            so_hop_dong: cRow.so_hop_dong || null,
+                            menh_gia: cRow.menh_gia || null,
+                            reason: 'Sai định dạng số điện thoại'
+                        });
+                        return; // Bỏ qua, không xử lý tiếp dòng này
+                    }
+                    // Dùng số đã chuẩn hóa (đã bỏ dấu gạch ngang/khoảng trắng) để lưu vào DB cho sạch dữ liệu
+                    cRow.dien_thoai = phoneCheck.normalized;
+                    cusRow.dien_thoai = phoneCheck.normalized;
 
                     if (!cRow.so_hop_dong) cRow.so_hop_dong = 'HD_' + (cRow.dien_thoai || Math.random().toString(36).substring(7));
 

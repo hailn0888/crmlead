@@ -318,9 +318,9 @@
                 <div class="p-6 border-b border-inherit">
                     <h3 class="font-bold text-sm flex items-center space-x-2">
                         <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-500"></i>
-                        <span>Leads Bị Loại Khi Upload (Thiếu Số Điện Thoại)</span>
+                        <span>Leads Bị Loại Khi Upload (Thiếu / Sai Định Dạng SĐT)</span>
                     </h3>
-                    <p class="text-xs opacity-70 mt-0.5">Chọn 1 file để kiểm tra những lead thiếu Số điện thoại đã bị tách riêng, không được ghi vào hệ thống.</p>
+                    <p class="text-xs opacity-70 mt-0.5">Chọn 1 file để kiểm tra những lead bị thiếu hoặc sai định dạng Số điện thoại, đã bị tách riêng, không được ghi vào hệ thống.</p>
                 </div>
 
                 <div class="p-4 border-b border-inherit flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -358,6 +358,7 @@
                                 <th class="p-3.5">Họ Và Tên</th>
                                 <th class="p-3.5">Số HĐ</th>
                                 <th class="p-3.5 text-right">Mệnh Giá</th>
+                                <th class="p-3.5">Số ĐT</th>
                                 <th class="p-3.5 text-center">Thao Tác</th>
                             </tr>
                         </thead>
@@ -557,6 +558,11 @@
                     existingFileNames.add(fileName.toLowerCase());
                     
                     const totalLeads = f.total_records !== undefined ? f.total_records : (f.tong_so_lead || 0);
+                    const invalidCount = f.invalid_count || 0;
+                    const fileId = f.id || index;
+                    const invalidNote = invalidCount > 0
+                        ? `<br><button onclick="goToTab5File('${fileId}')" class="text-[10px] text-amber-500 hover:underline mt-0.5" title="Xem chi tiết ở Tab 5">+${invalidCount} thiếu SĐT</button>`
+                        : '';
                     const agentId = f.agent_id;
                     const isAssigned = (agentId !== null && agentId !== undefined && agentId !== '');
                     const statusText = isAssigned ? "Đã phân bổ" : "Chờ phân bổ";
@@ -568,13 +574,12 @@
                     const d = rawDate ? new Date(new Date(rawDate).getTime() + 7 * 60 * 60 * 1000) : null;
                     const uploadDate = d ? `<div class="text-center">${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}<br><span class="text-slate-400 text-[11px]">${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}</span></div>` : '';
                     
-                    const fileId = f.id || index;
 
                     return `
                         <tr class="hover:bg-[var(--hover-bg,rgba(0,0,0,0.03))] dark:hover:bg-[var(--hover-bg,rgba(255,255,255,0.05))] transition">
                             <td class="p-3.5 text-center font-mono opacity-60">${index + 1}</td>
                             <td class="p-3.5 font-medium text-emerald-500">${fileName}</td>
-                            <td class="p-3.5 text-center font-mono">${totalLeads}</td>
+                            <td class="p-3.5 text-center font-mono">${totalLeads}${invalidNote}</td>
                             <td class="p-3.5 text-center">
                                 <span class="px-2 py-1 rounded-full text-[10px] font-semibold ${statusBadgeClass}">${statusText}</span>
                             </td>
@@ -1461,9 +1466,17 @@
      */
     let invalidLeadsCache = [];
     let invalidLeadsFileMap = {}; // file_id -> file_name (dùng khi xuất Excel để biết đang xuất của file nào)
+    let pendingTab5FileId = null; // [MỚI] file_id cần tự động chọn sẵn khi vừa điều hướng từ Tab 1 sang
+
+    // [MỚI] Bấm vào "+N thiếu SĐT" ở Tab 1 -> nhảy thẳng sang Tab 5 và tự chọn đúng file đó
+    window.goToTab5File = function(fileId) {
+        pendingTab5FileId = fileId;
+        switchTab(5);
+    };
 
     // [MỚI] Khởi tạo Tab 5: chỉ nạp danh sách file vào dropdown, KHÔNG tự tải leads thiếu dữ liệu.
-    // Mặc định luôn ở trạng thái "Chọn file để kiểm tra" cho tới khi Admin chọn 1 file cụ thể.
+    // Mặc định luôn ở trạng thái "Chọn file để kiểm tra" cho tới khi Admin chọn 1 file cụ thể
+    // (trừ khi có pendingTab5FileId do vừa bấm điều hướng từ Tab 1 sang thì tự chọn sẵn luôn).
     async function initTab5() {
         const fileFilterSelect = document.getElementById('fileFilterTab5');
         if (!fileFilterSelect) return;
@@ -1483,6 +1496,12 @@
                 fileOptions += `<option value="${f.id}">${fName}</option>`;
             });
             fileFilterSelect.innerHTML = fileOptions;
+
+            if (pendingTab5FileId) {
+                fileFilterSelect.value = pendingTab5FileId;
+                pendingTab5FileId = null;
+                handleFileFilterTab5Change();
+            }
         } catch (error) {
             console.error('Lỗi tải danh sách file cho Tab 5:', error);
         }
@@ -1528,7 +1547,7 @@
 
         if (placeholder) placeholder.classList.add('hidden');
         if (tableWrapper) tableWrapper.classList.remove('hidden');
-        tbody.innerHTML = `<tr><td colspan="5" class="text-center py-8 opacity-60">Đang tải danh sách...</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center py-8 opacity-60">Đang tải danh sách...</td></tr>`;
 
         try {
             const res = await fetch(`/api/admin/invalid-leads?file_id=${fileId}`);
@@ -1545,7 +1564,7 @@
             if (typeof lucide !== 'undefined') lucide.createIcons();
         } catch (error) {
             console.error('Lỗi tải leads thiếu dữ liệu:', error);
-            tbody.innerHTML = `<tr><td colspan="5" class="text-center py-8 text-red-500">Lỗi kết nối khi tải danh sách.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="6" class="text-center py-8 text-red-500">Lỗi kết nối khi tải danh sách.</td></tr>`;
         }
     }
 
@@ -1554,16 +1573,31 @@
         if (!tbody) return;
 
         if (!list || list.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="5" class="text-center py-8 opacity-60">File này không có lead nào thiếu dữ liệu. 🎉</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="6" class="text-center py-8 opacity-60">File này không có lead nào thiếu dữ liệu. 🎉</td></tr>`;
             return;
         }
 
         tbody.innerHTML = list.map((item, index) => {
-            const hoTen = item.ho_ten || '-';
-            const soHD = item.so_hop_dong || '-';
-            const menhGia = (item.menh_gia !== null && item.menh_gia !== undefined && item.menh_gia !== '')
-                ? Number(item.menh_gia).toLocaleString('vi-VN')
-                : '-';
+            // Ưu tiên dùng dữ liệu đã parse sẵn từ backend (ho_ten/so_hop_dong/menh_gia).
+            // Nếu trống (dữ liệu cũ upload trước khi có bản vá, hoặc tên cột Excel gốc quá đặc biệt
+            // khiến backend không nhận diện được) -> tự dò lại trực tiếp trong raw_data làm phương án dự phòng.
+            const hoTen = item.ho_ten || guessHoTenFromRawData(item.raw_data) || '-';
+            const soHD = item.so_hop_dong || guessFromRawData(item.raw_data, ['so hop dong', 'sohopdong', 'so_hop_dong', 'so hd', 'sohd', 'ma hop dong']) || '-';
+
+            let menhGiaRaw = item.menh_gia;
+            if (menhGiaRaw === null || menhGiaRaw === undefined || menhGiaRaw === '') {
+                menhGiaRaw = guessFromRawData(item.raw_data, ['menh gia', 'menhgia', 'stbh', 'so tien bao hiem']);
+            }
+            const menhGiaNum = menhGiaRaw !== null && menhGiaRaw !== undefined && menhGiaRaw !== '' ? Number(String(menhGiaRaw).replace(/[^\d.-]/g, '')) : NaN;
+            const menhGia = !isNaN(menhGiaNum) && menhGiaRaw !== null && menhGiaRaw !== undefined && menhGiaRaw !== '' ? menhGiaNum.toLocaleString('vi-VN') : '-';
+
+            // Số ĐT: hiển thị đúng lý do bị loại (thiếu hẳn hoặc có nhưng sai định dạng), kèm giá trị gốc
+            // đã nhập (nếu có) để Admin dễ đối chiếu khi bổ sung/sửa lại.
+            const sdtRaw = guessFromRawData(item.raw_data, ['so dien thoai', 'sodienthoai', 'so_dien_thoai', 'sdt', 'dien thoai', 'phone']);
+            const reasonLabel = item.reason || 'Thiếu số điện thoại';
+            const sdtCell = sdtRaw
+                ? `<span class="px-2 py-1 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-500" title="${reasonLabel}">${sdtRaw} (sai định dạng)</span>`
+                : `<span class="px-2 py-1 rounded-full text-[10px] font-semibold bg-red-500/10 text-red-500">${reasonLabel}</span>`;
 
             return `
                 <tr class="hover:bg-[var(--hover-bg,rgba(0,0,0,0.03))] transition">
@@ -1571,7 +1605,11 @@
                     <td class="p-3.5 font-medium">${hoTen}</td>
                     <td class="p-3.5">${soHD}</td>
                     <td class="p-3.5 text-right font-mono">${menhGia}</td>
-                    <td class="p-3.5 text-center">
+                    <td class="p-3.5">${sdtCell}</td>
+                    <td class="p-3.5 text-center space-x-1">
+                        <button onclick="resolveInvalidLead('${item.id}', '${(sdtRaw || '').toString().replace(/'/g, "\\'")}')" class="p-1 rounded opacity-80 hover:opacity-100 hover:bg-emerald-500/10 transition inline-block" title="Bổ sung/Sửa Số điện thoại và import vào hệ thống">
+                            <i data-lucide="user-plus" class="w-3.5 h-3.5 text-emerald-500"></i>
+                        </button>
                         <button onclick="deleteInvalidLead('${item.id}')" class="p-1 rounded opacity-80 hover:opacity-100 hover:bg-red-500/10 transition inline-block" title="Xóa khỏi danh sách (đã xử lý xong)">
                             <i data-lucide="trash-2" class="w-3.5 h-3.5 text-red-500"></i>
                         </button>
@@ -1582,6 +1620,91 @@
 
         if (typeof lucide !== 'undefined') lucide.createIcons();
     }
+
+    // [MỚI] Bỏ dấu tiếng Việt để so khớp tên cột không phân biệt dấu/hoa-thường
+    function stripDiacriticsVN(str) {
+        return String(str)
+            .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            .replace(/đ/gi, 'd')
+            .toLowerCase()
+            .trim();
+    }
+
+    // [MỚI] Dò tìm giá trị trong raw_data theo danh sách tên cột khả dĩ (không phân biệt dấu),
+    // dùng làm phương án dự phòng khi backend chưa nhận diện được đúng cột.
+    function guessFromRawData(raw, candidateKeywords) {
+        if (!raw) return null;
+        const keys = Object.keys(raw);
+        for (const keyword of candidateKeywords) {
+            const foundKey = keys.find(k => stripDiacriticsVN(k).includes(keyword));
+            if (foundKey && raw[foundKey] !== '' && raw[foundKey] !== null && raw[foundKey] !== undefined) {
+                return raw[foundKey];
+            }
+        }
+        return null;
+    }
+
+    // [MỚI] Bảng customers có 2 cột riêng "Họ" và "Tên" (không gộp chung 1 cột), nên phải dò
+    // và ghép 2 cột này lại mới ra được họ tên đầy đủ. Ưu tiên cột "Họ và Tên" gộp sẵn nếu có.
+    function guessHoTenFromRawData(raw) {
+        if (!raw) return null;
+
+        const combined = guessFromRawData(raw, ['ho va ten', 'hovaten', 'ho_va_ten', 'ten khach hang', 'khach hang']);
+        if (combined) return combined;
+
+        const keys = Object.keys(raw);
+        const hoKey = keys.find(k => stripDiacriticsVN(k) === 'ho');
+        const tenKey = keys.find(k => stripDiacriticsVN(k) === 'ten');
+        const ho = hoKey ? (raw[hoKey] || '') : '';
+        const ten = tenKey ? (raw[tenKey] || '') : '';
+        const fullName = `${ho} ${ten}`.trim();
+
+        return fullName || null;
+    }
+
+    // [MỚI] Bổ sung Số điện thoại còn thiếu cho 1 lead -> tự động import vào customers/contracts
+    // của đúng file đã upload, và gán luôn cho Agent nếu file đó đã được phân bổ.
+    window.resolveInvalidLead = async function(id, existingPhone) {
+        const { value: dienThoai } = await Swal.fire({
+            title: existingPhone ? 'Sửa lại Số điện thoại' : 'Bổ sung Số điện thoại',
+            input: 'text',
+            inputLabel: existingPhone
+                ? 'Số điện thoại hiện tại đang sai định dạng, sửa lại cho đúng (10 số, bắt đầu bằng 0):'
+                : 'Nhập Số điện thoại của lead này',
+            inputValue: existingPhone || '',
+            inputPlaceholder: 'VD: 0912345678',
+            showCancelButton: true,
+            confirmButtonText: existingPhone ? 'Sửa & Import' : 'Bổ sung & Import',
+            cancelButtonText: 'Hủy',
+            confirmButtonColor: '#10b981',
+            inputValidator: (val) => {
+                if (!val || !val.trim()) return 'Vui lòng nhập Số điện thoại!';
+                const cleaned = val.replace(/[\s\-.()]/g, '');
+                if (!/^0\d{9}$/.test(cleaned)) return 'Số điện thoại cần đủ 10 số và bắt đầu bằng số 0.';
+            }
+        });
+
+        if (!dienThoai) return; // Người dùng bấm Hủy hoặc không nhập gì
+
+        try {
+            const res = await fetch(`/api/admin/invalid-leads/${id}/resolve`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ dien_thoai: dienThoai.trim() })
+            });
+            const result = await res.json();
+
+            if (res.ok && result.success) {
+                await Swal.fire({ title: 'Thành công!', text: result.message, icon: 'success', timer: 2000, showConfirmButton: false });
+                const fileFilterSelect = document.getElementById('fileFilterTab5');
+                if (fileFilterSelect && fileFilterSelect.value) loadInvalidLeadsForFile(fileFilterSelect.value);
+            } else {
+                throw new Error(result.message || 'Không thể bổ sung dữ liệu cho lead này.');
+            }
+        } catch (error) {
+            Swal.fire({ title: 'Lỗi!', text: error.message, icon: 'error', confirmButtonText: 'Đóng' });
+        }
+    };
 
     // Xóa 1 bản ghi lead thiếu dữ liệu (sau khi Admin đã bổ sung SĐT và xử lý thủ công xong)
     window.deleteInvalidLead = async function(id) {
@@ -1654,12 +1777,13 @@
             return;
         }
 
-        // Đưa 3 cột chính (Họ Và Tên, Số HĐ, Mệnh Giá) lên đầu cho dễ đọc, kèm theo toàn bộ
-        // dữ liệu gốc (raw_data) theo đúng tên cột Excel ban đầu để không mất thông tin.
+        // Đưa các cột chính (Họ Và Tên, Số HĐ, Mệnh Giá, Số ĐT) lên đầu cho dễ đọc, dùng cùng
+        // logic dò dự phòng như trên bảng, kèm theo toàn bộ dữ liệu gốc (raw_data) để không mất thông tin.
         const rows = invalidLeadsCache.map(item => ({
-            'Họ Và Tên': item.ho_ten || '',
-            'Số HĐ': item.so_hop_dong || '',
-            'Mệnh Giá': item.menh_gia || '',
+            'Họ Và Tên': item.ho_ten || guessHoTenFromRawData(item.raw_data) || '',
+            'Số HĐ': item.so_hop_dong || guessFromRawData(item.raw_data, ['so hop dong', 'sohopdong', 'so_hop_dong', 'so hd', 'sohd', 'ma hop dong']) || '',
+            'Mệnh Giá': item.menh_gia || guessFromRawData(item.raw_data, ['menh gia', 'menhgia', 'stbh', 'so tien bao hiem']) || '',
+            'Số ĐT': guessFromRawData(item.raw_data, ['so dien thoai', 'sodienthoai', 'so_dien_thoai', 'sdt', 'dien thoai', 'phone']) || '(Thiếu số điện thoại)',
             ...item.raw_data
         }));
 
