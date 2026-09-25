@@ -969,6 +969,55 @@ router.put('/data-files/lock-bulk', async (req, res) => {
 });
 
 /**
+ * [MỚI] DELETE /data-files/bulk - Xóa NHIỀU file cùng lúc (dùng chung logic dọn dẹp
+ * lead_assignments/contracts như route xóa đơn lẻ bên dưới). Body: { ids: [1, 2, 3] }
+ * invalid_leads liên quan sẽ tự động bị xóa theo nhờ ràng buộc ON DELETE CASCADE.
+ * LƯU Ý: route này PHẢI đặt TRƯỚC route '/data-files/:fileId' bên dưới, nếu không
+ * Express sẽ hiểu nhầm chữ "bulk" chính là :fileId và gọi sai route.
+ */
+router.delete('/data-files/bulk', async (req, res) => {
+    try {
+        const { ids } = req.body;
+        if (!Array.isArray(ids) || ids.length === 0) {
+            return res.status(400).json({ success: false, message: 'Vui lòng chọn ít nhất một file cần xóa.' });
+        }
+
+        // 0. Lấy trước danh sách so_hop_dong thuộc các file này (để dọn lead_assignments)
+        const { data: contractsToDelete, error: fetchErr } = await req.supabase
+            .from('contracts')
+            .select('so_hop_dong')
+            .in('file_id', ids);
+        if (fetchErr) throw new Error(fetchErr.message);
+
+        const soHopDongList = (contractsToDelete || []).map(c => c.so_hop_dong).filter(Boolean);
+
+        // 1. Xóa lead_assignments tương ứng
+        if (soHopDongList.length > 0) {
+            const { error: delAssignErr } = await req.supabase
+                .from('lead_assignments')
+                .delete()
+                .in('so_hop_dong', soHopDongList);
+            if (delAssignErr) throw new Error(`Không thể xóa phân bổ lead: ${delAssignErr.message}`);
+        }
+
+        // 2. Xóa contracts
+        const { error: deleteContractsError } = await req.supabase
+            .from('contracts').delete().in('file_id', ids);
+        if (deleteContractsError) throw new Error(`Không thể xóa dữ liệu hợp đồng: ${deleteContractsError.message}`);
+
+        // 3. Xóa data_files
+        const { error: deleteFileError } = await req.supabase
+            .from('data_files').delete().in('id', ids);
+        if (deleteFileError) throw new Error(`Không thể xóa thông tin file: ${deleteFileError.message}`);
+
+        return res.status(200).json({ success: true, message: `Đã xóa sạch ${ids.length} file và toàn bộ dữ liệu liên quan!` });
+    } catch (error) {
+        console.error('Bulk Delete Files Error:', error.message);
+        return res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+/**
  * DELETE /data-files/:fileId - Xóa sạch file và toàn bộ contracts thuộc file_id đó (Dùng req.supabase)
  */
 router.delete('/data-files/:fileId', async (req, res) => {
