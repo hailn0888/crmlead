@@ -1,5 +1,5 @@
 /**
- * public/agents/js/security.js
+ * public/js/security.js
  * Bảo mật nội dung cho các trang chứa dữ liệu khách hàng nhạy cảm (ví dụ leads.html).
  * Cách dùng: thêm 1 dòng vào cuối trang cần bảo vệ:
  *   <script src="/js/security.js"></script>
@@ -302,9 +302,7 @@
 
     // ==================== KHỞI TẠO ====================
     document.addEventListener('DOMContentLoaded', function () {
-        // [TẠM GỠ] Đã tắt chặn copy/bôi đen/right-click theo yêu cầu - cho phép Ctrl+C bình thường.
-        // Muốn bật lại: bỏ comment dòng disableCopy() bên dưới.
-        // disableCopy();
+        disableCopy();
         initScreenshotGuard();
         initWatermark();
         initWatermarkThemeSync();
