@@ -145,6 +145,53 @@ function parseLeadFieldsFromRaw(rawRowObj) {
     return { cRow, cusRow };
 }
 
+/**
+ * [MỚI] Chia 1 mảng thành nhiều mảng con, mỗi mảng tối đa `size` phần tử.
+ * Dùng để chia nhỏ danh sách SĐT trước khi truy vấn .in(), tránh trường hợp
+ * truyền quá nhiều giá trị cùng lúc (hàng nghìn SĐT) khiến query bị lỗi/timeout.
+ */
+function chunkArray(arr, size) {
+    const chunks = [];
+    for (let i = 0; i < arr.length; i += size) {
+        chunks.push(arr.slice(i, i + size));
+    }
+    return chunks;
+}
+
+/**
+ * [MỚI] Tra cứu KẾT QUẢ CUỘC GỌI MỚI NHẤT của từng SĐT trong bảng call_history.
+ * FIX QUAN TRỌNG: trước đây 2 route /data-files/stats và /file-leads/:fileId đều gọi
+ * .in('dien_thoai', phoneList) với TOÀN BỘ danh sách SĐT trong 1 lần truy vấn duy nhất.
+ * Khi hệ thống có nhiều file/nhiều nghìn lead (như /data-files/stats lấy contracts của
+ * TẤT CẢ các file cùng lúc), danh sách SĐT truyền vào .in() quá dài khiến Supabase trả
+ * lỗi (URL/query quá dài) -> route trả về success:false -> frontend fallback "Đã Gọi = 0"
+ * cho MỌI file, dù thực tế Agent đã gọi rất nhiều (đúng như lỗi đang gặp).
+ * Hàm này chia nhỏ phoneList thành từng lô 300 SĐT/lần truy vấn để tránh lỗi trên.
+ */
+async function fetchLatestCallResultsMap(supabase, phoneList) {
+    const callMap = new Map(); // dien_thoai (trim) -> ket_qua_cuoc_goi mới nhất
+    if (!phoneList || phoneList.length === 0) return callMap;
+
+    const batches = chunkArray(phoneList, 300);
+    for (const batch of batches) {
+        const { data: calls, error: callErr } = await supabase
+            .from('call_history')
+            .select('dien_thoai, ket_qua_cuoc_goi, thoi_gian_goi')
+            .in('dien_thoai', batch)
+            .order('thoi_gian_goi', { ascending: false });
+        if (callErr) throw callErr;
+
+        (calls || []).forEach(c => {
+            const phone = String(c.dien_thoai || '').trim();
+            // Chỉ set 1 lần cho mỗi số (vì đã order mới nhất trước, dòng đầu tiên gặp là mới nhất)
+            if (phone && !callMap.has(phone)) {
+                callMap.set(phone, c.ket_qua_cuoc_goi);
+            }
+        });
+    }
+    return callMap;
+}
+
 // ==========================================
 // 0. KIỂM TRA TRẠNG THÁI ROUTE
 // ==========================================
@@ -369,38 +416,35 @@ router.get('/data-files', async (req, res) => {
 router.get('/data-files/stats', async (req, res) => {
     try {
         // 1. Lấy toàn bộ contracts (chỉ cần file_id + dien_thoai để gom nhóm/đếm)
-        const { data: contracts, error: cErr } = await req.supabase
-            .from('contracts')
-            .select('file_id, dien_thoai');
-        if (cErr) throw cErr;
-
-        const phoneList = [...new Set((contracts || []).map(c => c.dien_thoai).filter(Boolean))];
-
-        // 2. Lấy lịch sử cuộc gọi của các số này, sắp mới nhất lên đầu để lấy kết quả GẦN NHẤT
-        const callMap = new Map(); // dien_thoai (trim) -> ket_qua_cuoc_goi mới nhất
-        if (phoneList.length > 0) {
-            const { data: calls, error: callErr } = await req.supabase
-                .from('call_history')
-                .select('dien_thoai, ket_qua_cuoc_goi, thoi_gian_goi')
-                .in('dien_thoai', phoneList)
-                .order('thoi_gian_goi', { ascending: false });
-            if (callErr) throw callErr;
-
-            (calls || []).forEach(c => {
-                const phone = String(c.dien_thoai || '').trim();
-                // Chỉ set 1 lần cho mỗi số (vì đã order mới nhất trước, dòng đầu tiên gặp là mới nhất)
-                if (phone && !callMap.has(phone)) {
-                    callMap.set(phone, c.ket_qua_cuoc_goi);
-                }
-            });
+        // FIX QUAN TRỌNG: Supabase mặc định chỉ trả về tối đa 1000 dòng/lần truy vấn.
+        // Với hệ thống có nhiều file (17+ file x ~470 lead/file = hàng nghìn dòng), trước đây
+        // chỉ lấy được 1000 dòng ĐẦU TIÊN rồi dừng, khiến rất nhiều file không có trong
+        // thống kê -> mặc định "Đã Gọi = 0". Giờ phân trang lấy cho tới khi hết dữ liệu.
+        let contracts = [];
+        let pageFrom = 0;
+        const PAGE_SIZE = 1000;
+        while (true) {
+            const { data: page, error: cErr } = await req.supabase
+                .from('contracts')
+                .select('file_id, dien_thoai')
+                .range(pageFrom, pageFrom + PAGE_SIZE - 1);
+            if (cErr) throw cErr;
+            contracts = contracts.concat(page || []);
+            if (!page || page.length < PAGE_SIZE) break;
+            pageFrom += PAGE_SIZE;
         }
+
+        const phoneList = [...new Set(contracts.map(c => c.dien_thoai).filter(Boolean))];
+
+        // 2. Lấy lịch sử cuộc gọi của các số này (chia lô để tránh lỗi .in() với danh sách quá dài)
+        const callMap = await fetchLatestCallResultsMap(req.supabase, phoneList);
 
         // 3. Gom nhóm theo file_id, đếm 3 trạng thái
         // Quy ước (khớp logic calculateCallStatistics() trong chuadahen.js):
         // - "Đã Gọi" tính TẤT CẢ các lead đã có kết quả cuộc gọi (bao gồm cả lead đã hẹn thành công)
         // - "Đã Hẹn" là tập CON của "Đã Gọi", chỉ tính khi kết quả = "Hẹn gặp thành công"
         const statsMap = {};
-        (contracts || []).forEach(c => {
+        contracts.forEach(c => {
             const fileId = c.file_id;
             if (!fileId) return;
             if (!statsMap[fileId]) statsMap[fileId] = { chuaGoi: 0, daGoi: 0, daHen: 0 };
@@ -834,22 +878,9 @@ router.get('/file-leads/:fileId', async (req, res) => {
 
         // 3. Join sang call_history: lấy KẾT QUẢ CUỘC GỌI MỚI NHẤT theo từng số điện thoại
         // FIX: đây chính là dữ liệu còn thiếu khiến bộ đếm Chưa Gọi/Đã Gọi/Đã Hẹn và bộ lọc
-        // trạng thái ở Khung 2 không hoạt động được trước đây.
-        const callMap = new Map();
-        if (phoneList.length > 0) {
-            const { data: calls, error: callErr } = await req.supabase
-                .from('call_history')
-                .select('dien_thoai, ket_qua_cuoc_goi, thoi_gian_goi')
-                .in('dien_thoai', phoneList)
-                .order('thoi_gian_goi', { ascending: false });
-            if (callErr) throw callErr;
-            (calls || []).forEach(c => {
-                const phone = String(c.dien_thoai || '').trim();
-                if (phone && !callMap.has(phone)) {
-                    callMap.set(phone, c.ket_qua_cuoc_goi);
-                }
-            });
-        }
+        // trạng thái ở Khung 2 không hoạt động được trước đây. Dùng chung helper chia lô
+        // với route /data-files/stats để tránh lỗi .in() khi 1 file có rất nhiều lead.
+        const callMap = await fetchLatestCallResultsMap(req.supabase, phoneList);
 
         // 4. Ghép đủ dữ liệu: contracts + customers + ket_qua_cuoc_goi mới nhất.
         // Trả về ĐẦY ĐỦ field (khớp Template_data.xlsx) để:
