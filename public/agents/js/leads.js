@@ -114,6 +114,12 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
+    // Lead được coi là ĐÃ GỌI khi backend đánh dấu da_goi, hoặc trang_thai_lead = 'Đã gọi'
+    function isCalledLead(item) {
+        if (item.da_goi === true) return true;
+        return String(item.trang_thai_lead || '').trim().toLowerCase() === 'đã gọi';
+    }
+
     async function loadLeadsBySelectedFile() {
         try {
             const selectedFileId = sourceFileSelect ? sourceFileSelect.value : '';
@@ -121,22 +127,35 @@ document.addEventListener("DOMContentLoaded", () => {
             const result = await res.json();
 
             if (result.success && result.data) {
+                // originalLeadList giữ TOÀN BỘ lead (kể cả đã gọi) để popup chi tiết
+                // trong Nhật Ký Cuộc Gọi vẫn tra được hồ sơ khách hàng.
                 originalLeadList = result.data;
 
+                let scoped = originalLeadList;
                 if (selectedFileId) {
-                    leadList = originalLeadList.filter(item => {
+                    scoped = originalLeadList.filter(item => {
                         const fileId = item.contracts?.file_id;
                         return String(fileId) === String(selectedFileId);
                     });
-                } else {
-                    leadList = [...originalLeadList];
                 }
+
+                // FIX: chỉ đưa lead CHƯA GỌI vào hàng đợi -> vào lại trang sẽ tiếp tục
+                // từ lead mới thay vì hiện lại từ đầu các số đã gọi.
+                leadList = scoped.filter(item => !isCalledLead(item));
 
                 currentIndex = 0;
                 if (leadList.length > 0) {
                     displayLead(leadList[currentIndex]);
                 } else {
+                    currentLead = null;
                     clearDisplay();
+                    if (scoped.length > 0) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Đã gọi hết',
+                            text: 'Bạn đã gọi hết toàn bộ lead trong nguồn này.'
+                        });
+                    }
                 }
             }
         } catch (error) {
@@ -270,11 +289,19 @@ document.addEventListener("DOMContentLoaded", () => {
                         // GỌI NGAY LẬP TỨC ĐỂ HIỂN THỊ LỊCH SỬ MỚI MÀ KHÔNG CẦN F5
                         loadCallHistory();
 
+                        // Đánh dấu ngay lead vừa gọi là "đã gọi" trong bộ nhớ trang
+                        if (currentLead) {
+                            currentLead.da_goi = true;
+                            currentLead.trang_thai_lead = 'Đã gọi';
+                        }
+
                         currentIndex++;
                         if (currentIndex < leadList.length) {
                             displayLead(leadList[currentIndex]);
                         } else {
-                            Swal.fire({ icon: 'info', title: 'Hoàn thành', text: 'Đã gọi hết danh sách lead trong ngày!' });
+                            currentLead = null;
+                            clearDisplay();
+                            Swal.fire({ icon: 'info', title: 'Hoàn thành', text: 'Đã gọi hết danh sách lead chưa gọi!' });
                         }
                     });
                 } else {

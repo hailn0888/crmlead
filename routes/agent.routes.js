@@ -15,6 +15,38 @@ async function getAgentId(agentName) {
     return data.id;
 }
 
+
+// Hàm phụ: chia mảng thành các lô nhỏ (tránh .in() quá dài / quá nhiều giá trị)
+function chunkArray(arr, size) {
+    const out = [];
+    for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+    return out;
+}
+
+// Hàm phụ: lấy dữ liệu theo danh sách giá trị, chia lô 300 giá trị/lần
+async function fetchByInChunks(table, columns, column, values, size = 300) {
+    let all = [];
+    for (const chunk of chunkArray(values, size)) {
+        const { data, error } = await supabase.from(table).select(columns).in(column, chunk);
+        if (error) throw error;
+        if (data) all = all.concat(data);
+    }
+    return all;
+}
+
+// Hàm phụ: lấy TOÀN BỘ dòng (vượt giới hạn 1000 dòng/truy vấn mặc định của Supabase)
+async function fetchAllPages(buildQuery, pageSize = 1000) {
+    let all = [];
+    for (let from = 0; ; from += pageSize) {
+        const { data, error } = await buildQuery().range(from, from + pageSize - 1);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        all = all.concat(data);
+        if (data.length < pageSize) break;
+    }
+    return all;
+}
+
 // 1. API: Lấy danh sách file được phân bổ cho Agent (Truy vấn độc lập chống lỗi quan hệ)
 router.get('/files', async (req, res) => {
     try {
@@ -118,6 +150,14 @@ router.get('/colleagues', async (req, res) => {
 // checkOfficeIp('agent'): CHỈ chặn nếu agent này đang bị admin bật "Giới hạn IP" (cột
 // ip_limit trong bảng users) VÀ đang gọi từ ngoài IP văn phòng - ai không bị bật cờ đó thì
 // middleware bỏ qua hoàn toàn, không ảnh hưởng gì (xem middleware/officeIp.middleware.js).
+//
+// FIX "vào lại trang bị gọi lại từ đầu":
+//  - Trước đây route không sắp xếp + không đánh dấu lead nào đã gọi nên frontend luôn
+//    hiện lại lead đầu tiên của danh sách. Nay: sắp xếp cố định theo id, và mỗi lead
+//    trả thêm cờ "da_goi" (true nếu trang_thai_lead = 'Đã gọi' HOẶC số ĐT đã có trong
+//    call_history của agent này) để frontend bỏ qua, chỉ hiện lead CHƯA gọi.
+//  - Phân trang lấy lead_assignments + chia lô .in() để không bị cắt ở 1000 dòng.
+//  - Gộp các dòng lead_assignments trùng so_hop_dong (nguyên nhân hiển thị lặp lead).
 router.get('/leads', checkOfficeIp('agent'), async (req, res) => {
     try {
         const agentName = req.query.agent;
@@ -130,38 +170,31 @@ router.get('/leads', checkOfficeIp('agent'), async (req, res) => {
             return res.json({ success: true, data: [] });
         }
 
-        // 1. Lấy danh sách lead_assignments của agent
-        const { data: assignments, error: assignError } = await supabase
-            .from('lead_assignments')
-            .select('*')
-            .eq('agent_id', agentId);
+        // 1. Lấy danh sách lead_assignments của agent (thứ tự cố định theo id)
+        const assignments = await fetchAllPages(() =>
+            supabase
+                .from('lead_assignments')
+                .select('*')
+                .eq('agent_id', agentId)
+                .order('id', { ascending: true })
+        );
 
-        if (assignError) throw assignError;
         if (!assignments || assignments.length === 0) {
             return res.json({ success: true, data: [] });
         }
 
-        const soHopDongs = assignments.map(item => item.so_hop_dong).filter(Boolean);
-        const dienThoais = assignments.map(item => item.dien_thoai).filter(Boolean);
+        const soHopDongs = [...new Set(assignments.map(item => item.so_hop_dong).filter(Boolean))];
+        const dienThoais = [...new Set(assignments.map(item => item.dien_thoai).filter(Boolean))];
 
         // 2. Lấy dữ liệu từ bảng contracts
         let contractsMap = new Map();
         if (soHopDongs.length > 0) {
-            const { data: contractsData } = await supabase
-                .from('contracts')
-                .select('*')
-                .in('so_hop_dong', soHopDongs);
-            
-            if (contractsData) {
-                contractsData.forEach(c => contractsMap.set(String(c.so_hop_dong).trim(), c));
-            }
+            const contractsData = await fetchByInChunks('contracts', '*', 'so_hop_dong', soHopDongs);
+            contractsData.forEach(c => contractsMap.set(String(c.so_hop_dong).trim(), c));
         }
 
-        // 2.5. FIX: Loại bỏ các lead thuộc file_id đã bị Admin khoá ("Đã khóa").
-        // Yêu cầu: khi khoá file, agent không được thấy tiếp lead của file đó trong
-        // Leads nữa, NHƯNG lịch sử/nhật ký cuộc gọi (bảng call_history) không bị
-        // đụng tới - việc này tự động đảm bảo vì call_history không có cột file_id,
-        // chỉ có bảng contracts/lead_assignments mới bị lọc ở đây.
+        // 2.5. Loại bỏ các lead thuộc file_id đã bị Admin khoá ("Đã khóa").
+        // Lịch sử/nhật ký cuộc gọi (call_history) không bị ảnh hưởng.
         const fileIdsInvolved = [...new Set(
             Array.from(contractsMap.values()).map(c => c.file_id).filter(Boolean)
         )];
@@ -179,34 +212,61 @@ router.get('/leads', checkOfficeIp('agent'), async (req, res) => {
         // 3. Lấy dữ liệu từ bảng customers
         let customersMap = new Map();
         if (dienThoais.length > 0) {
-            const { data: customersData } = await supabase
-                .from('customers')
-                .select('*')
-                .in('dien_thoai', dienThoais);
-            
-            if (customersData) {
-                customersData.forEach(cus => customersMap.set(String(cus.dien_thoai).trim(), cus));
-            }
+            const customersData = await fetchByInChunks('customers', '*', 'dien_thoai', dienThoais);
+            customersData.forEach(cus => customersMap.set(String(cus.dien_thoai).trim(), cus));
         }
 
-        // 4. Ghép nối dữ liệu trả về cho frontend (bỏ qua các lead thuộc file đã khoá)
-        const formattedData = assignments
-            .map(item => {
-                const contractKey = item.so_hop_dong ? String(item.so_hop_dong).trim() : '';
-                const phoneKey = item.dien_thoai ? String(item.dien_thoai).trim() : '';
+        // 3.5. Tập số điện thoại agent này ĐÃ TỪNG gọi (lấy từ call_history) - dự phòng
+        // cho trường hợp cột trang_thai_lead chưa được cập nhật (dữ liệu gọi từ trước).
+        const calledPhones = new Set();
+        const historyRows = await fetchAllPages(() =>
+            supabase
+                .from('call_history')
+                .select('id, dien_thoai')
+                .eq('ten_agent', agentName)
+                .order('id', { ascending: true })
+        );
+        historyRows.forEach(h => {
+            if (h.dien_thoai) calledPhones.add(String(h.dien_thoai).trim());
+        });
 
-                const contract = contractsMap.get(contractKey) || {};
-                const customer = customersMap.get(phoneKey || String(contract.dien_thoai || '').trim()) || {};
+        // 4. Ghép nối dữ liệu + đánh dấu da_goi + gộp trùng
+        const dedupMap = new Map();
+        const result = [];
 
-                return {
-                    ...item,
-                    contracts: contract,
-                    customers: customer
-                };
-            })
-            .filter(item => !item.contracts.file_id || !lockedFileIds.has(item.contracts.file_id));
+        assignments.forEach(item => {
+            const contractKey = item.so_hop_dong ? String(item.so_hop_dong).trim() : '';
+            const phoneKey = item.dien_thoai ? String(item.dien_thoai).trim() : '';
 
-        res.json({ success: true, data: formattedData });
+            const contract = contractsMap.get(contractKey) || {};
+            // Bỏ lead thuộc file đã khoá
+            if (contract.file_id && lockedFileIds.has(contract.file_id)) return;
+
+            const phoneForLookup = phoneKey || String(contract.dien_thoai || '').trim();
+            const customer = customersMap.get(phoneForLookup) || {};
+
+            const daGoi =
+                String(item.trang_thai_lead || '').trim().toLowerCase() === 'đã gọi' ||
+                (phoneForLookup !== '' && calledPhones.has(phoneForLookup));
+
+            const entry = { ...item, contracts: contract, customers: customer, da_goi: daGoi };
+
+            // Khoá gộp trùng: ưu tiên số hợp đồng, không có thì dùng số điện thoại
+            const dedupKey = contractKey || phoneKey;
+            if (!dedupKey) {
+                result.push(entry);
+                return;
+            }
+            if (dedupMap.has(dedupKey)) {
+                // Đã có dòng trùng -> giữ dòng đầu, nhưng nếu dòng nào đã gọi thì coi là đã gọi
+                if (daGoi) dedupMap.get(dedupKey).da_goi = true;
+                return;
+            }
+            dedupMap.set(dedupKey, entry);
+            result.push(entry);
+        });
+
+        res.json({ success: true, data: result });
     } catch (error) {
         console.error("Lỗi lấy danh sách lead:", error);
         res.status(500).json({ success: false, message: 'Lỗi server' });
@@ -235,25 +295,30 @@ router.post('/calls', async (req, res) => {
 
         if (historyError) throw historyError;
 
-        // 2. Cập nhật trạng thái mới nhất vào lead_assignments (Dùng so_hop_dong hoặc dien_thoai để định danh)
+        // 2. Cập nhật trạng thái mới nhất vào lead_assignments.
+        // FIX: chỉ cập nhật dòng thuộc đúng agent này (tránh đè sang agent khác cùng số HĐ),
+        // và nếu không khớp số hợp đồng thì dự phòng khớp theo số điện thoại - để đảm bảo
+        // lead luôn được đánh dấu 'Đã gọi', lần sau vào lại sẽ không hiện lại nữa.
         const updatePayload = {
             trang_thai_lead: 'Đã gọi',
             ket_qua_moi_nhat: ket_qua_cuoc_goi,
-            ghi_chu_moi_nhat: ghi_chu
+            ghi_chu_moi_nhat: ghi_chu,
+            ngay_cap_nhat: new Date()
         };
 
-        let query = supabase
-            .from('lead_assignments')
-            .update(updatePayload);
+        const agentId = await getAgentId(ten_agent);
 
-        if (so_hop_dong) {
-            query = query.eq('so_hop_dong', so_hop_dong);
-        } else {
-            query = query.eq('dien_thoai', dien_thoai);
-        }
+        const runUpdate = async (column, value) => {
+            let q = supabase.from('lead_assignments').update(updatePayload).eq(column, value);
+            if (agentId) q = q.eq('agent_id', agentId);
+            const { data, error } = await q.select('id');
+            if (error) throw error;
+            return data || [];
+        };
 
-        const { error: updateError } = await query;
-        if (updateError) throw updateError;
+        let updatedRows = [];
+        if (so_hop_dong) updatedRows = await runUpdate('so_hop_dong', so_hop_dong);
+        if (updatedRows.length === 0) updatedRows = await runUpdate('dien_thoai', dien_thoai);
 
         res.json({ success: true, message: 'Đã lưu kết quả cuộc gọi thành công!' });
     } catch (error) {
