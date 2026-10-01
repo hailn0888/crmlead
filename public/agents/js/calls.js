@@ -1,142 +1,1456 @@
-// ==========================================
-// TÊN FILE: public/agents/js/calls.js
-// CHỨC NĂNG: Chỉ cung cấp các hàm dùng chung mà khối <script> nội tuyến
-// trong calls.html cần tới (formatDateVN, formatCurrency, showLeadDetailModal).
-//
-// LƯU Ý QUAN TRỌNG:
-// Việc fetch dữ liệu (fetchData) và render bảng (renderTab1/2/3) của cả 4 tab
-// ĐÃ được xử lý đầy đủ bởi khối <script> viết ngay trong calls.html.
-// KHÔNG được thêm lại loadSuccessfulAppointments()/renderAppointmentsTable()/
-// listener DOMContentLoaded tự fetch ở file này nữa — nếu thêm lại sẽ tạo ra
-// 2 luồng fetch + render cùng lúc vào chung 1 tbody, gây race condition
-// (dữ liệu lúc hiện đúng lúc hiện sai/thiếu cột tuỳ request nào trả về sau).
-// ==========================================
+<!-- 
+  Tên file: public/agents/calls.html
+  Chức năng: Quản lý cuộc hẹn đầy đủ 4 tab, chuẩn màu theme.js hoàn toàn.
+-->
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quản Lý Cuộc Hẹn - CRM Lead</title>
+    
+    <link rel="icon" type="image/png" href="/uploads/favicon.png">
+    <link rel="apple-touch-icon" href="/uploads/icon.png">
 
-function formatDateVN(dateStr) {
-    if (!dateStr) return '-';
-    const cleanStr = String(dateStr).replace(/\D/g, '');
-    if (cleanStr.length === 8) {
-        const year = cleanStr.substring(0, 4);
-        const month = cleanStr.substring(4, 6);
-        const day = cleanStr.substring(6, 8);
-        return `${day}/${month}/${year}`;
-    }
-    return dateStr;
-}
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Giao diện điện thoại (<768px) & máy tính bảng (768-1024px) - dùng chung mọi trang có header/sidebar -->
+    <link rel="stylesheet" href="/css/mobile.css" media="(max-width: 767.98px)">
+    <link rel="stylesheet" href="/css/tablet.css" media="(min-width: 768px) and (max-width: 1024px)">
+    <script src="/js/responsive.js"></script>
+    <!-- Lucide Icons -->
+    <script src="/js/lucide.min.js"></script>
+    <!-- SweetAlert2 cho Popup -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    
+    <!-- Các script dùng chung hệ thống chuẩn -->
+    <script src="/js/header.js"></script>
+    <script src="/js/sidebar.js"></script>
+    <script src="/js/footer.js"></script>
+    <script src="/js/theme.js"></script>
+    <script src="/js/searchHelper.js"></script>
+    <script src="/agents/js/calls.js"></script>
 
-function formatCurrency(amount) {
-    if (!amount && amount !== 0) return '-';
-    const num = Number(String(amount).replace(/\D/g, ''));
-    if (isNaN(num)) return amount;
-    return num.toLocaleString('vi-VN');
-}
-
-// --- HIỂN THỊ POPUP CHI TIẾT HỒ SƠ KHÁCH HÀNG ---
-// Được gọi từ nút mắt trong renderTab1() (calls.html, dòng ~297):
-// onclick='showLeadDetailModal(${JSON.stringify(item)...})'
-// "item" truyền vào đã có sẵn item.customers và item.contracts do API
-// /api/calls/successful-appointments trả về (đã fix ở calls.routes.js).
-function showLeadDetailModal(item) {
-    const contract = item.contracts || {};
-    const customer = item.customers || {};
-
-    // Số hợp đồng: ưu tiên contracts trước, sau đó đến item
-    const soHopDongVal = contract.so_hop_dong || item.so_hop_dong || '-';
-
-    // Họ và Tên: ưu tiên customers trước
-    const hoVal = customer.ho || '';
-    const tenVal = customer.ten || item.ho_ten || '-';
-    const hoTenVal = (hoVal && tenVal) ? `${hoVal} ${tenVal}` : tenVal;
-
-    // Giới tính
-    let gioiTinhVal = '-';
-    const rawGender = String(customer.gioi_tinh || '').trim().toUpperCase();
-    if (rawGender === 'M' || rawGender === 'NAM') gioiTinhVal = 'Nam';
-    else if (rawGender === 'F' || rawGender === 'NỮ') gioiTinhVal = 'Nữ';
-    else if (rawGender) gioiTinhVal = rawGender;
-
-    // CCCD / CMND
-    const cccdVal = customer.cccd || '-';
-
-    // Ngày sinh: table: customers -> row: ngay_sinh
-    let ngaySinhVal = '-';
-    if (customer.ngay_sinh) {
-        const formattedDob = formatDateVN(customer.ngay_sinh);
-        const tuoival = customer.tuoi || '';
-        ngaySinhVal = tuoival ? `${formattedDob} (${tuoival} tuổi)` : formattedDob;
-    }
-
-    // Ngày tham gia: table: contracts -> row: ngay_tham_gia
-    let ngayThamGiaVal = '-';
-    const ngayThamGiaRaw = contract.ngay_tham_gia;
-    if (ngayThamGiaRaw) {
-        ngayThamGiaVal = formatDateVN(ngayThamGiaRaw);
-    }
-
-    // Năm đáo hạn: table: contracts -> row: nam_dao_han
-    const namDaoHanVal = contract.nam_dao_han || '-';
-
-    // Mệnh giá bảo hiểm: table: contracts -> row: menh_gia
-    let menhGiaVal = '-';
-    if (contract.menh_gia !== undefined && contract.menh_gia !== null && contract.menh_gia !== '') {
-        menhGiaVal = `${formatCurrency(contract.menh_gia)} VND`;
-    }
-
-    // Địa chỉ đăng ký: table: customers -> row: dia_chi
-    const diaChiVal = customer.dia_chi || item.dia_chi || '-';
-    const finalPhoneVal = item.dien_thoai || contract.dien_thoai || customer.dien_thoai || '-';
-
-    // Render Popup
-    Swal.fire({
-        title: '<div class="text-lg font-bold">Chi Tiết Hồ Sơ Khách Hàng</div>',
-        html: `
-            <div class="theme-card border rounded-xl p-4 text-left text-xs space-y-3 shadow-sm">
-                <div class="flex justify-between border-b pb-2">
-                    <span class="opacity-75 font-medium">Số hợp đồng:</span>
-                    <span class="font-bold">${soHopDongVal}</span>
-                </div>
-                <div class="flex justify-between border-b pb-2">
-                    <span class="opacity-75 font-medium">Họ và tên:</span>
-                    <span class="font-bold">${hoTenVal}</span>
-                </div>
-                <div class="flex justify-between border-b pb-2">
-                    <span class="opacity-75 font-medium">Giới tính:</span>
-                    <span>${gioiTinhVal}</span>
-                </div>
-                <div class="flex justify-between border-b pb-2">
-                    <span class="opacity-75 font-medium">Điện thoại:</span>
-                    <span class="font-semibold text-emerald-600">${finalPhoneVal}</span>
-                </div>
-                <div class="flex justify-between border-b pb-2">
-                    <span class="opacity-75 font-medium">CCCD / CMND:</span>
-                    <span>${cccdVal}</span>
-                </div>
-                <div class="flex justify-between border-b pb-2">
-                    <span class="opacity-75 font-medium">Ngày sinh (Tuổi):</span>
-                    <span>${ngaySinhVal}</span>
-                </div>
-                <div class="flex justify-between border-b pb-2">
-                    <span class="opacity-75 font-medium">Ngày tham gia:</span>
-                    <span>${ngayThamGiaVal}</span>
-                </div>
-                <div class="flex justify-between border-b pb-2">
-                    <span class="opacity-75 font-medium">Năm đáo hạn:</span>
-                    <span>${namDaoHanVal}</span>
-                </div>
-                <div class="flex justify-between border-b pb-2">
-                    <span class="opacity-75 font-medium">Mệnh giá bảo hiểm:</span>
-                    <span>${menhGiaVal}</span>
-                </div>
-                <div class="flex flex-col space-y-1">
-                    <span class="opacity-75 font-medium">Địa chỉ đăng ký:</span>
-                    <span class="p-2 rounded border opacity-90">${diaChiVal}</span>
-                </div>
-            </div>
-        `,
-        confirmButtonText: 'Đóng',
-        width: '580px',
-        customClass: {
-            confirmButton: 'theme-btn px-4 py-2 rounded-lg font-medium transition'
+    <!-- ================================================================
+         TỐI ƯU HIỂN THỊ TRÊN ĐIỆN THOẠI (Mobile Scroll Optimization)
+         Các vùng chứa dùng .overflow-x-auto / .overflow-y-auto (bảng dữ liệu,
+         thanh tab, modal...) sẽ cuộn mượt kiểu native trên điện thoại thay vì
+         bị bóp méo/vỡ khối khi nội dung rộng hoặc cao hơn màn hình.
+    ================================================================= -->
+    <style>
+        .overflow-x-auto,
+        .overflow-y-auto {
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(148,163,184,.5) transparent;
         }
-    });
-}
+        .overflow-x-auto::-webkit-scrollbar,
+        .overflow-y-auto::-webkit-scrollbar {
+            height: 6px;
+            width: 6px;
+        }
+        .overflow-x-auto::-webkit-scrollbar-thumb,
+        .overflow-y-auto::-webkit-scrollbar-thumb {
+            background: rgba(148,163,184,.5);
+            border-radius: 999px;
+        }
+        .overflow-x-auto::-webkit-scrollbar-track,
+        .overflow-y-auto::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        @media (max-width: 768px) {
+            /* Cuộn ngang (thanh tab, bảng dữ liệu) sẽ không kích hoạt
+               cử chỉ vuốt back/forward của trình duyệt trên điện thoại */
+            .overflow-x-auto {
+                overscroll-behavior-x: contain;
+            }
+        }
+    </style>
+</head>
+<body class="font-sans antialiased transition-colors duration-200">
+
+    <!-- Khung cấu trúc chuẩn App Native bắt màu theo theme.js -->
+    <div class="flex h-screen overflow-hidden">
+        <div id="mainContainer" class="flex-1 flex flex-col overflow-y-auto transition-colors duration-200 pt-16">
+            <main class="px-4 py-4 max-w-full w-full flex flex-col gap-4">
+                
+                <!-- Tiêu đề trang -->
+                <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                    <h1 class="text-base md:text-lg font-bold flex items-center gap-2">
+                        <i data-lucide="calendar-range" class="w-5 h-5 text-red-600 dark:text-red-500"></i>
+                        <span>Quản Lý Cuộc Hẹn & Lịch Chăm Sóc</span>
+                    </h1>
+                </div>
+
+                <!-- Hệ thống 4 Tab chuyển đổi giao diện -->
+                <div class="flex border-b border-gray-200 dark:border-gray-700 gap-2 overflow-x-auto">
+                    <button onclick="switchTab(1)" id="tab-btn-1" class="px-4 py-2 text-xs font-bold border-b-2 border-red-600 text-red-600 dark:text-red-500 flex items-center gap-1.5 whitespace-nowrap transition">
+                        <i data-lucide="calendar-check" class="w-4 h-4"></i> Danh sách hẹn gặp thành công
+                    </button>
+                    <button onclick="switchTab(6)" id="tab-btn-6" class="px-4 py-2 text-xs font-semibold opacity-75 hover:opacity-100 border-b-2 border-transparent flex items-center gap-1.5 whitespace-nowrap transition">
+                        <i data-lucide="phone-call" class="w-4 h-4"></i> Nhật Ký Cuộc Gọi
+                    </button>
+                    <button onclick="switchTab(2)" id="tab-btn-2" class="px-4 py-2 text-xs font-semibold opacity-75 hover:opacity-100 border-b-2 border-transparent flex items-center gap-1.5 whitespace-nowrap transition">
+                        <i data-lucide="send" class="w-4 h-4"></i> Hẹn được gửi từ TMR
+                    </button>
+                    <button onclick="switchTab(3)" id="tab-btn-3" class="px-4 py-2 text-xs font-semibold opacity-75 hover:opacity-100 border-b-2 border-transparent flex items-center gap-1.5 whitespace-nowrap transition">
+                        <i data-lucide="inbox" class="w-4 h-4"></i> Hẹn gửi cho DMO
+                    </button>
+                    <button onclick="switchTab(4)" id="tab-btn-4" class="px-4 py-2 text-xs font-semibold opacity-75 hover:opacity-100 border-b-2 border-transparent flex items-center gap-1.5 whitespace-nowrap transition">
+                        <i data-lucide="bell" class="w-4 h-4"></i> Nhắc lịch chăm sóc khách hàng
+                    </button>
+                    <button onclick="switchTab(5)" id="tab-btn-5" class="px-4 py-2 text-xs font-semibold opacity-75 hover:opacity-100 border-b-2 border-transparent flex items-center gap-1.5 whitespace-nowrap transition">
+                        <i data-lucide="bot-message-square" class="w-4 h-4"></i> AI Insights
+                    </button>
+                </div>
+
+                <!-- Thanh công cụ tìm kiếm & bộ lọc chung cho các tab -->
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <div class="relative">
+                        <input type="text" id="searchInput" placeholder="Tìm tên hoặc SĐT..." class="theme-card border rounded-lg px-3 py-1.5 text-xs outline-none bg-transparent w-48 md:w-56">
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button id="btn-tat-ca" class="theme-card border px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1 shadow-sm hover:opacity-80 transition">
+                            <i data-lucide="list" class="w-3.5 h-3.5"></i> Tất cả
+                        </button>
+                        <!-- Bộ lọc "Chọn người nhận": chỉ hiện ở Tab 1 và Tab 2 (JS sẽ ẩn/hiện + đổ option) -->
+                        <div class="relative" id="filter-container-nguoi-nhan">
+                            <select id="filter-nguoi-nhan" class="theme-card border rounded-lg px-3 py-1.5 text-xs outline-none bg-transparent cursor-pointer">
+                                <option value="">Chọn người nhận</option>
+                            </select>
+                        </div>
+                        <!-- Bộ lọc trạng thái: option thay đổi theo từng tab (JS đổ động) -->
+                        <div class="relative" id="filter-container-trang-thai">
+                            <select id="filter-trang-thai" class="theme-card border rounded-lg px-3 py-1.5 text-xs outline-none bg-transparent cursor-pointer">
+                                <option value="">Tất cả trạng thái</option>
+                            </select>
+                        </div>
+                        <!-- Bộ lọc theo ngày: Tab1 lọc theo thời gian gọi, Tab2/Tab3 lọc theo thời gian gửi -->
+                        <div class="relative flex items-center">
+                            <input type="date" id="filter-ngay" class="theme-card border rounded-lg px-3 py-1.5 text-xs outline-none bg-transparent cursor-pointer">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ================= TAB 1: DANH SÁCH HẸN GẶP THÀNH CÔNG ================= -->
+                <div id="tab-content-1" class="tab-content block">
+                    <div class="theme-card border rounded-xl shadow-sm overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="rt-cards w-full text-left border-collapse text-xs">
+                                <thead>
+                                    <tr class="border-b border-gray-200 dark:border-gray-700 opacity-80 bg-black/5 dark:bg-white/5 font-semibold">
+                                        <th class="p-3 text-center w-12">STT</th>
+                                        <th class="p-3 min-w-[220px]">Khách hàng</th>
+                                        <th class="p-3 text-center min-w-[130px]">Số ĐT</th>
+                                        <th class="p-3 min-w-[200px]">Địa chỉ</th>
+                                        <th class="p-3 text-center min-w-[150px]">Trạng thái</th>
+                                        <th class="p-3 text-center min-w-[160px]">DMO</th>
+                                        <th class="p-3 text-center min-w-[140px]">File đính kèm</th>
+                                        <th class="p-3 text-center min-w-[110px]">Thao tác</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="table-body-1" class="divide-y divide-gray-200 dark:divide-gray-700"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ================= TAB 6: NHẬT KÝ CUỘC GỌI ================= -->
+                <!-- Mọi cuộc gọi của agent có kết quả KHÁC "Hẹn gặp thành công". Lọc theo kết quả dùng chung
+                     dropdown #filter-trang-thai, lọc theo ngày dùng chung #filter-ngay -->
+                <div id="tab-content-6" class="tab-content hidden">
+                    <div class="theme-card border rounded-xl shadow-sm overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="rt-cards w-full text-left border-collapse text-xs">
+                                <thead>
+                                    <tr class="border-b border-gray-200 dark:border-gray-700 opacity-80 bg-black/5 dark:bg-white/5 font-semibold">
+                                        <th class="p-3 text-center w-12">STT</th>
+                                        <th class="p-3 min-w-[200px]">Khách hàng</th>
+                                        <th class="p-3 text-center min-w-[130px]">Số ĐT</th>
+                                        <th class="p-3 text-center min-w-[160px]">Kết quả cuộc gọi</th>
+                                        <th class="p-3 text-center min-w-[150px]">Thời gian gọi</th>
+                                        <th class="p-3 min-w-[240px]">Ghi chú</th>
+                                        <th class="p-3 text-center min-w-[90px]">Thao tác</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="table-body-6" class="divide-y divide-gray-200 dark:divide-gray-700"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ================= TAB 2: HẸN ĐÃ GỬI ================= -->
+                <div id="tab-content-2" class="tab-content hidden">
+                    <div class="theme-card border rounded-xl shadow-sm overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="rt-cards w-full text-left border-collapse text-xs">
+                                <thead>
+                                    <tr class="border-b border-gray-200 dark:border-gray-700 opacity-80 bg-black/5 dark:bg-white/5 font-semibold">
+                                        <th class="p-3 text-center w-12">STT</th>
+                                        <th class="p-3 min-w-[220px]">Khách hàng</th>
+                                        <th class="p-3 min-w-[180px]">Báo cáo hẹn</th>
+                                        <th class="p-3 min-w-[180px]">DMO</th>
+                                        <th class="p-3 min-w-[140px]">File đính kèm</th>
+                                        <th class="p-3 min-w-[150px]">Trạng thái</th>
+                                        <th class="p-3 text-center min-w-[110px]">Thao tác</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="table-body-2" class="divide-y divide-gray-200 dark:divide-gray-700"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ================= TAB 3: HẸN ĐƯỢC GỬI ================= -->
+                <!-- FIX: đã bỏ cột "Địa chỉ" theo yêu cầu (địa chỉ đã hiện trong cột Khách hàng) -->
+                <div id="tab-content-3" class="tab-content hidden">
+                    <div class="theme-card border rounded-xl shadow-sm overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="rt-cards w-full text-left border-collapse text-xs">
+                                <thead>
+                                    <tr class="border-b border-gray-200 dark:border-gray-700 opacity-80 bg-black/5 dark:bg-white/5 font-semibold">
+                                        <th class="p-3 text-center w-12">STT</th>
+                                        <th class="p-3 min-w-[220px]">Khách hàng</th>
+                                        <th class="p-3 min-w-[130px]">Số ĐT</th>
+                                        <th class="p-3 min-w-[220px]">Ghi chú</th>
+                                        <th class="p-3 min-w-[180px]">Người gửi</th>
+                                        <th class="p-3 min-w-[140px]">File đính kèm</th>
+                                        <th class="p-3 min-w-[160px]">Trạng thái</th>
+                                        <th class="p-3 text-center min-w-[150px]">Thao tác</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="table-body-3" class="divide-y divide-gray-200 dark:divide-gray-700"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ================= TAB 4: NHẮC LỊCH CHĂM SÓC KHÁCH HÀNG ================= -->
+                <div id="tab-content-4" class="tab-content hidden">
+                    <div class="theme-card border rounded-xl p-8 text-center shadow-sm">
+                        <i data-lucide="construction" class="w-10 h-10 mx-auto text-amber-500 mb-3"></i>
+                        <h2 class="font-bold text-sm mb-1">Tính năng đang được phát triển</h2>
+                        <p class="opacity-75 text-xs">Logic Nhắc lịch chăm sóc khách hàng sẽ được cập nhật trong phiên bản tiếp theo.</p>
+                    </div>
+                </div>
+
+                <!-- ================= TAB 5: AI INSIGHTS ================= -->
+                <!-- Danh sách các khách hàng có kết quả cuộc gọi (call_history) KHÁC "Hẹn gặp thành công"
+                     -> đây là nhóm khách cần chăm sóc lại, AI sẽ đọc ghi chú các lần gọi để đưa ra đánh giá/lời khuyên -->
+                <div id="tab-content-5" class="tab-content hidden">
+                    <div class="theme-card border rounded-xl shadow-sm overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="rt-cards w-full text-left border-collapse text-xs">
+                                <thead>
+                                    <tr class="border-b border-gray-200 dark:border-gray-700 opacity-80 bg-black/5 dark:bg-white/5 font-semibold">
+                                        <th class="p-3 text-center w-12">STT</th>
+                                        <th class="p-3 min-w-[200px]">Khách hàng</th>
+                                        <th class="p-3 min-w-[280px]">Ghi chú</th>
+                                        <th class="p-3 text-center min-w-[100px]">AI Insights</th>
+                                        <th class="p-3 text-center min-w-[100px]">Thao tác</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="table-body-5" class="divide-y divide-gray-200 dark:divide-gray-700"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+            </main>
+        </div>
+    </div>
+
+    <!-- Script xử lý toàn bộ logic 4 tab, API, đếm ngược 24h và tương tác -->
+    <script>
+        // ==========================================================================
+        // BIẾN TRẠNG THÁI TOÀN CỤC
+        // ==========================================================================
+        let currentActiveTab = 1;
+
+        // Mỗi tab có nguồn dữ liệu RIÊNG (khác API, khác chiều dữ liệu) - không dùng
+        // chung 1 mảng như bản cũ nữa, vì Tab 3 cần lấy hẹn của NGƯỜI KHÁC gửi tới,
+        // hoàn toàn khác chiều với Tab 1/2 (hẹn của CHÍNH mình).
+        let tab1List = [];
+        let tab2List = [];
+        let tab3List = [];
+        let tab5List = []; // Tab 5: danh sách khách hàng cần chăm sóc lại (AI Insights)
+        let tab6List = []; // Tab 6: nhật ký cuộc gọi (kết quả khác "Hẹn gặp thành công")
+        // Gom dần các giá trị "kết quả cuộc gọi" đã gặp để đổ vào dropdown lọc
+        // (tích luỹ để khi lọc theo ngày làm danh sách thu hẹp, dropdown không bị mất lựa chọn)
+        const callResultOptions = new Set();
+
+        let colleaguesList = []; // Danh sách DMO (dùng cho popup Gửi hẹn + bộ lọc)
+        let countdownIntervalId = null;
+
+        // Tên hiển thị (ho_va_ten) của agent đang đăng nhập, lưu ở localStorage lúc login
+        // FIX NGHIÊM TRỌNG: đọc đúng key 'userName' (khớp login.js/header.js), bỏ hẳn
+        function getCurrentAgentName() {
+            const name = localStorage.getItem('userName');
+            if (!name) {
+                window.location.href = '/login.html';
+                return '';
+            }
+            return name;
+        }
+
+        // --- CHUYỂN TAB ---
+        function switchTab(tabIndex) {
+            currentActiveTab = tabIndex;
+            for (let i = 1; i <= 6; i++) {
+                const content = document.getElementById(`tab-content-${i}`);
+                const btn = document.getElementById(`tab-btn-${i}`);
+                if (i === tabIndex) {
+                    content.classList.remove('hidden');
+                    content.classList.add('block');
+                    btn.classList.add('border-red-600', 'text-red-600', 'dark:text-red-500', 'font-bold');
+                    btn.classList.remove('border-transparent', 'opacity-75');
+                } else {
+                    content.classList.remove('block');
+                    content.classList.add('hidden');
+                    btn.classList.remove('border-red-600', 'text-red-600', 'dark:text-red-500', 'font-bold');
+                    btn.classList.add('border-transparent', 'opacity-75');
+                }
+            }
+            document.getElementById('searchInput').value = '';
+            document.getElementById('filter-nguoi-nhan').value = '';
+            document.getElementById('filter-trang-thai').value = '';
+            // Đổi tab = đổi hẳn nguồn dữ liệu -> phải fetch lại, không chỉ render lại
+            populateFiltersForActiveTab(); // đặt lại dropdown đúng theo tab mới (vd: "kết quả" ở Tab 6)
+            fetchData();
+        }
+
+        // ==========================================================================
+        // TẢI DỮ LIỆU: mỗi tab gọi đúng API riêng của mình
+        // ==========================================================================
+        async function fetchData() {
+            if (currentActiveTab === 1) await fetchTab1();
+            else if (currentActiveTab === 2) await fetchTab2();
+            else if (currentActiveTab === 3) await fetchTab3();
+            else if (currentActiveTab === 5) await fetchTab5();
+            else if (currentActiveTab === 6) await fetchTab6();
+            renderCurrentTab();
+        }
+
+        async function fetchTab1() {
+            try {
+                const agentName = getCurrentAgentName();
+                const date = document.getElementById('filter-ngay').value;
+                let url = `/api/calls/successful-appointments?agent=${encodeURIComponent(agentName)}`;
+                if (date) url += `&date=${date}`;
+
+                const res = await fetch(url);
+                const result = await res.json();
+                if (!result.success) throw new Error(result.message);
+
+                tab1List = result.data || [];
+                populateFiltersForActiveTab();
+            } catch (err) {
+                console.error("Lỗi tải Tab 1:", err);
+                Swal.fire({ icon: 'error', title: 'Lỗi tải dữ liệu', text: 'Không thể kết nối tới máy chủ.' });
+            }
+        }
+
+        async function fetchTab2() {
+            try {
+                const agentName = getCurrentAgentName();
+                const date = document.getElementById('filter-ngay').value;
+                let url = `/api/calls/sent-appointments?agent=${encodeURIComponent(agentName)}`;
+                if (date) url += `&date=${date}`;
+
+                const res = await fetch(url);
+                const result = await res.json();
+                if (!result.success) throw new Error(result.message);
+
+                tab2List = result.data || [];
+                populateFiltersForActiveTab();
+            } catch (err) {
+                console.error("Lỗi tải Tab 2:", err);
+                Swal.fire({ icon: 'error', title: 'Lỗi tải dữ liệu', text: 'Không thể kết nối tới máy chủ.' });
+            }
+        }
+
+        async function fetchTab3() {
+            try {
+                const agentName = getCurrentAgentName();
+                const date = document.getElementById('filter-ngay').value;
+                let url = `/api/calls/received-appointments?agent=${encodeURIComponent(agentName)}`;
+                if (date) url += `&date=${date}`;
+
+                const res = await fetch(url);
+                const result = await res.json();
+                if (!result.success) throw new Error(result.message);
+
+                tab3List = result.data || [];
+            } catch (err) {
+                console.error("Lỗi tải Tab 3:", err);
+                Swal.fire({ icon: 'error', title: 'Lỗi tải dữ liệu', text: 'Không thể kết nối tới máy chủ.' });
+            }
+        }
+
+        // Tab 5 - AI Insights: lấy các số điện thoại có kết quả cuộc gọi (call_history.ket_qua_cuoc_goi)
+        // KHÁC "Hẹn gặp thành công" (những khách chưa chốt được, cần chăm sóc/gọi lại), kèm toàn bộ
+        // lịch sử ghi chú các lần gọi và đánh giá AI đã lưu trước đó (nếu có) cho từng khách.
+        async function fetchTab5() {
+            try {
+                const agentName = getCurrentAgentName();
+                const date = document.getElementById('filter-ngay').value;
+                let url = `/api/calls/ai-insights?agent=${encodeURIComponent(agentName)}`;
+                if (date) url += `&date=${date}`;
+
+                const res = await fetch(url);
+                const result = await res.json();
+                if (!result.success) throw new Error(result.message);
+
+                tab5List = result.data || [];
+            } catch (err) {
+                console.error("Lỗi tải Tab 5:", err);
+                Swal.fire({ icon: 'error', title: 'Lỗi tải dữ liệu', text: 'Không thể kết nối tới máy chủ.' });
+            }
+        }
+
+        // Tab 6 - Nhật ký cuộc gọi: mọi cuộc gọi của agent có kết quả khác "Hẹn gặp thành công"
+        async function fetchTab6() {
+            try {
+                const agentName = getCurrentAgentName();
+                const date = document.getElementById('filter-ngay').value;
+                let url = `/api/calls/call-logs?agent=${encodeURIComponent(agentName)}`;
+                if (date) url += `&date=${date}`;
+
+                const res = await fetch(url);
+                const result = await res.json();
+                if (!result.success) throw new Error(result.message);
+
+                tab6List = result.data || [];
+                tab6List.forEach(it => { if (it.ket_qua_cuoc_goi) callResultOptions.add(it.ket_qua_cuoc_goi); });
+                populateFiltersForActiveTab();
+            } catch (err) {
+                console.error("Lỗi tải Tab 6:", err);
+                Swal.fire({ icon: 'error', title: 'Lỗi tải dữ liệu', text: 'Không thể kết nối tới máy chủ.' });
+            }
+        }
+
+        // Hàm dùng chung: chuẩn hoá 1 chuỗi timestamp về đúng giờ Việt Nam (UTC+7).
+        // Backend đôi khi trả timestamp thiếu hậu tố 'Z' (UTC marker), khiến trình duyệt
+        // hiểu nhầm là giờ local thay vì UTC -> tự thêm 'Z' để ép hiểu đúng là giờ UTC.
+        function getVNDateParts(isoString) {
+            if (!isoString) return null;
+            let normalized = isoString;
+            if (!/[zZ]|[+\-]\d{2}:\d{2}$/.test(normalized)) {
+                normalized += 'Z';
+            }
+            const date = new Date(normalized);
+            if (isNaN(date.getTime())) return null;
+
+            const vnDate = new Date(date.getTime() + 7 * 60 * 60 * 1000);
+            const hour24 = vnDate.getUTCHours();
+            let hour12 = hour24 % 12;
+            if (hour12 === 0) hour12 = 12;
+            return {
+                hh24: String(hour24).padStart(2, '0'),
+                hh12: String(hour12).padStart(2, '0'),
+                mm: String(vnDate.getUTCMinutes()).padStart(2, '0'),
+                dd: String(vnDate.getUTCDate()).padStart(2, '0'),
+                mo: String(vnDate.getUTCMonth() + 1).padStart(2, '0'),
+                yy: vnDate.getUTCFullYear(),
+                buoi: hour24 < 12 ? 'SÁNG' : 'CHIỀU'
+            };
+        }
+
+        function formatDateTimeVN(isoString) {
+            const p = getVNDateParts(isoString);
+            if (!p) return isoString || '-';
+            return `${p.hh24}:${p.mm} ngày ${p.dd}/${p.mo}/${p.yy}`;
+        }
+
+        function renderCurrentTab() {
+            if (currentActiveTab === 1) renderTab1();
+            if (currentActiveTab === 2) renderTab2();
+            if (currentActiveTab === 3) renderTab3();
+            if (currentActiveTab === 5) renderTab5();
+            if (currentActiveTab === 6) renderTab6();
+        }
+
+        // ==========================================================================
+        // TÍNH TRẠNG THÁI (3 mức) DÙNG CHUNG CHO TAB 1 VÀ BỘ LỌC
+        // ==========================================================================
+        function computeStatusTab1(item) {
+            if (item.trang_thai_tiep_nhan === 'Đã tiếp nhận') return 'Đã gửi';
+            if (item.trang_thai_gui === 'Đã gửi') return 'Chờ tiếp nhận';
+            return 'Chưa gửi';
+        }
+
+        function computeStatusTab2(item) {
+            return item.trang_thai_tiep_nhan === 'Đã tiếp nhận' ? 'Đã tiếp nhận' : 'Chờ tiếp nhận';
+        }
+
+        // ==========================================================================
+        // BỘ LỌC: đổ option động theo tab đang xem + áp dụng lọc client-side
+        // (lọc theo ngày đã xử lý ở backend qua query param date)
+        // ==========================================================================
+        function populateFiltersForActiveTab() {
+            const trangThaiSelect = document.getElementById('filter-trang-thai');
+            const nguoiNhanSelect = document.getElementById('filter-nguoi-nhan');
+            const containerNguoiNhan = document.getElementById('filter-container-nguoi-nhan');
+
+            // Giữ lại lựa chọn hiện tại (nếu có) để không bị mất khi refetch do đổi ngày
+            const currentTrangThai = trangThaiSelect.value;
+            const currentNguoiNhan = nguoiNhanSelect.value;
+
+            trangThaiSelect.innerHTML = `<option value="">${currentActiveTab === 6 ? 'Tất cả kết quả' : 'Tất cả trạng thái'}</option>`;
+            nguoiNhanSelect.innerHTML = '<option value="">Chọn người nhận</option>';
+
+            let list = [];
+            let statusOptions = [];
+            let showNguoiNhan = false;
+
+            if (currentActiveTab === 1) {
+                list = tab1List;
+                statusOptions = ['Chưa gửi', 'Chờ tiếp nhận', 'Đã gửi'];
+                showNguoiNhan = true;
+            } else if (currentActiveTab === 2) {
+                list = tab2List;
+                statusOptions = ['Chờ tiếp nhận', 'Đã tiếp nhận'];
+                showNguoiNhan = true;
+            } else if (currentActiveTab === 6) {
+                // Tab 6: dropdown này đóng vai trò "lọc theo kết quả cuộc gọi"
+                statusOptions = [...callResultOptions].sort((a, b) => a.localeCompare(b, 'vi'));
+                showNguoiNhan = false;
+            }
+
+            statusOptions.forEach(s => {
+                trangThaiSelect.innerHTML += `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`;
+            });
+
+            containerNguoiNhan.style.display = showNguoiNhan ? 'block' : 'none';
+
+            if (showNguoiNhan) {
+                const seen = new Map();
+                list.forEach(item => {
+                    if (item.nguoi_nhan_username && !seen.has(item.nguoi_nhan_username)) {
+                        seen.set(item.nguoi_nhan_username, item.nguoi_nhan_ten);
+                    }
+                });
+                seen.forEach((ten, username) => {
+                    nguoiNhanSelect.innerHTML += `<option value="${username}">${ten} (${username})</option>`;
+                });
+            }
+
+            trangThaiSelect.value = currentTrangThai;
+            nguoiNhanSelect.value = currentNguoiNhan;
+        }
+
+        // Lọc client-side theo lựa chọn hiện tại của 2 dropdown (người nhận / trạng thái)
+        function getFilteredList(list, computeStatusFn) {
+            let filtered = [...list];
+            const nguoiNhan = document.getElementById('filter-nguoi-nhan').value;
+            const trangThai = document.getElementById('filter-trang-thai').value;
+
+            if (nguoiNhan) {
+                filtered = filtered.filter(item => item.nguoi_nhan_username === nguoiNhan);
+            }
+            if (trangThai && computeStatusFn) {
+                filtered = filtered.filter(item => computeStatusFn(item) === trangThai);
+            }
+            return filtered;
+        }
+
+        // ==========================================================================
+        // ĐẾM NGƯỢC 24H (dùng chung cho Tab 2 và Tab 3)
+        // Mỗi phần tử cần đếm ngược phải có class="countdown-timer" và
+        // thuộc tính data-deadline="<mốc thời gian tính bằng mili-giây>"
+        // ==========================================================================
+        function startCountdownTimers() {
+            if (countdownIntervalId) clearInterval(countdownIntervalId);
+            countdownIntervalId = setInterval(() => {
+                const timers = document.querySelectorAll('.countdown-timer');
+                let anyExpired = false;
+                timers.forEach(el => {
+                    const deadline = Number(el.dataset.deadline);
+                    const remaining = deadline - Date.now();
+                    if (remaining <= 0) {
+                        el.textContent = '00:00:00';
+                        anyExpired = true;
+                    } else {
+                        const totalSec = Math.floor(remaining / 1000);
+                        const h = String(Math.floor(totalSec / 3600)).padStart(2, '0');
+                        const m = String(Math.floor((totalSec % 3600) / 60)).padStart(2, '0');
+                        const s = String(totalSec % 60).padStart(2, '0');
+                        el.textContent = `${h}:${m}:${s}`;
+                    }
+                });
+                // Khi có ít nhất 1 đồng hồ về 0 -> đồng bộ lại với server
+                // (server sẽ tự động thu hồi hẹn quá hạn ở đầu mỗi API GET)
+                if (anyExpired) fetchData();
+            }, 1000);
+        }
+
+        // ================= RENDER TAB 1: DANH SÁCH HẸN GẶP THÀNH CÔNG =================
+        function renderTab1() {
+            const tbody = document.getElementById('table-body-1');
+            tbody.innerHTML = '';
+
+            const list = getFilteredList(tab1List, computeStatusTab1);
+
+            if (!list || list.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="8" class="p-6 text-center opacity-70 text-xs">Không có cuộc hẹn gặp thành công nào.</td></tr>`;
+                return;
+            }
+
+            list.forEach((item, index) => {
+                const customer = item.customers || {};
+                const hoTen = `${customer.ho || ''} ${customer.ten || ''}`.trim() || '-';
+                const sdt = customer.dien_thoai || item.dien_thoai || '-';
+                const diaChi = customer.dia_chi || 'Chưa cập nhật';
+
+                // Trạng thái 3 mức: Chưa gửi / Chờ tiếp nhận / Đã gửi
+                const status = computeStatusTab1(item);
+                let trangThaiBadge = '';
+                if (status === 'Đã gửi') {
+                    trangThaiBadge = `<span class="px-2 py-1 bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-md font-medium text-xs inline-flex items-center gap-1 justify-center"><i data-lucide="check-check" class="w-3 h-3"></i> Đã gửi</span>`;
+                } else if (status === 'Chờ tiếp nhận') {
+                    trangThaiBadge = `<span class="px-2 py-1 bg-amber-500/20 text-amber-600 dark:text-amber-400 rounded-md font-medium text-xs inline-flex items-center gap-1 justify-center"><i data-lucide="clock" class="w-3 h-3"></i> Chờ tiếp nhận</span>`;
+                } else {
+                    trangThaiBadge = `<span class="px-2 py-1 bg-gray-400/20 text-gray-600 dark:text-gray-400 rounded-md font-medium text-xs inline-flex items-center gap-1 justify-center"><i data-lucide="x" class="w-3 h-3"></i> Chưa gửi</span>`;
+                }
+                if (item.thoi_gian_gui && status !== 'Chưa gửi') {
+                    trangThaiBadge += `<div class="text-[11px] opacity-75 mt-1 text-center">${formatDateTimeVN(item.thoi_gian_gui)}</div>`;
+                }
+
+                let dmoHtml = `<span class="opacity-75 italic text-xs">Chưa gửi</span>`;
+                if (status !== 'Chưa gửi' && item.nguoi_nhan_ten) {
+                    dmoHtml = `<span class="text-xs font-medium">${item.nguoi_nhan_ten}</span><br><span class="text-[11px] italic opacity-75">(${item.nguoi_nhan_username})</span>`;
+                }
+
+                let fileHtml = `<span class="opacity-65 text-xs">---</span>`;
+                if (item.file_dinh_kem) {
+                    fileHtml = `<a href="/uploads/${item.file_dinh_kem}" target="_blank" class="text-red-600 dark:text-red-400 underline inline-flex items-center gap-1 text-xs justify-center" title="${item.file_dinh_kem}"><i data-lucide="file-text" class="w-3 h-3"></i>File</a>`;
+                }
+
+                let ghiChuHtml = `<span class="italic text-[11px] opacity-80">Ghi chú: ${item.ghi_chu || '-'}</span>`;
+
+                // Nút "Gửi hẹn" chỉ bật khi trạng thái = 'Chưa gửi' theo yêu cầu
+                const sendDisabled = status !== 'Chưa gửi';
+                const sendBtnHtml = sendDisabled
+                    ? `<button disabled class="p-2 rounded-lg text-gray-400 opacity-50 cursor-not-allowed inline-flex items-center justify-center" title="Đã gửi hẹn - không thể gửi lại"><i data-lucide="send" class="w-4 h-4"></i></button>`
+                    : `<button onclick="openGuiHenPopup(${item.id})" class="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition inline-flex items-center justify-center" title="Gửi cuộc hẹn"><i data-lucide="send" class="w-4 h-4"></i></button>`;
+
+                const tr = document.createElement('tr');
+                tr.className = 'border-b border-gray-100 dark:border-gray-800 hover:bg-black/5 dark:hover:bg-white/5 transition';
+                tr.innerHTML = `
+                    <td class="p-3 text-center font-medium text-xs">${index + 1}</td>
+                    <td class="p-3">
+                        <div class="font-bold text-xs">${hoTen}</div>
+                        <div class="mt-1">${ghiChuHtml}</div>
+                    </td>
+                    <td class="p-3 text-center">
+                        <a href="tel:${sdt}" class="text-red-600 dark:text-red-400 font-semibold inline-flex items-center justify-center gap-1 text-xs w-full">
+                            <i data-lucide="phone" class="w-3 h-3"></i> ${sdt}
+                        </a>
+                    </td>
+                    <td class="p-3 opacity-90 text-xs">${diaChi}</td>
+                    <td class="p-3 text-center">${trangThaiBadge}</td>
+                    <td class="p-3 text-center">${dmoHtml}</td>
+                    <td class="p-3 text-center">${fileHtml}</td>
+                    <td class="p-3 text-center">
+                        <div class="flex items-center justify-center gap-1">
+                            ${sendBtnHtml}
+                            <button onclick='showLeadDetailModal(${JSON.stringify(item).replace(/'/g, "&#39;")})' class="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition inline-flex items-center justify-center" title="Xem thông tin khách hàng">
+                                <i data-lucide="eye" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+            if (typeof initTableSearch === 'function') initTableSearch('searchInput', null, 'table-body-1', [1, 3]);
+        }
+
+        function escapeHtml(str) {
+            return String(str ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+
+        // Màu badge theo từ khoá của kết quả cuộc gọi (không khớp từ khoá nào -> màu xanh dương mặc định)
+        function getCallResultBadgeClass(result) {
+            const r = String(result || '').toLowerCase();
+            if (r.includes('từ chối') || r.includes('không quan tâm') || r.includes('sai số')) return 'bg-red-500/20 text-red-600 dark:text-red-400';
+            if (r.includes('không nghe') || r.includes('bận') || r.includes('không liên lạc') || r.includes('thuê bao')) return 'bg-gray-400/20 text-gray-600 dark:text-gray-400';
+            if (r.includes('gọi lại') || r.includes('suy nghĩ') || r.includes('cân nhắc')) return 'bg-amber-500/20 text-amber-600 dark:text-amber-400';
+            return 'bg-blue-500/20 text-blue-600 dark:text-blue-400';
+        }
+
+        // ================= RENDER TAB 6: NHẬT KÝ CUỘC GỌI =================
+        function renderTab6() {
+            const tbody = document.getElementById('table-body-6');
+            tbody.innerHTML = '';
+
+            // Lọc theo kết quả cuộc gọi (client-side); lọc theo ngày đã xử lý ở backend
+            const list = getFilteredList(tab6List, item => item.ket_qua_cuoc_goi);
+
+            if (!list || list.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" class="p-6 text-center opacity-70 text-xs">Không có cuộc gọi nào trong nhật ký.</td></tr>`;
+                return;
+            }
+
+            list.forEach((item, index) => {
+                const customer = item.customers || {};
+                const hoTen = `${customer.ho || ''} ${customer.ten || ''}`.trim() || '-';
+                const sdt = item.dien_thoai || '-';
+                const ketQua = item.ket_qua_cuoc_goi || '-';
+
+                const tg = formatDateTimeVN(item.thoi_gian_goi);
+
+                const tr = document.createElement('tr');
+                tr.className = 'border-b border-gray-100 dark:border-gray-800 hover:bg-black/5 dark:hover:bg-white/5 transition';
+                tr.innerHTML = `
+                    <td class="p-3 text-center font-medium text-xs">${index + 1}</td>
+                    <td class="p-3 font-bold text-xs">${escapeHtml(hoTen)}</td>
+                    <td class="p-3 text-center">
+                        <a href="tel:${escapeHtml(sdt)}" class="text-red-600 dark:text-red-400 font-semibold inline-flex items-center justify-center gap-1 text-xs w-full">
+                            <i data-lucide="phone" class="w-3 h-3"></i> ${escapeHtml(sdt)}
+                        </a>
+                    </td>
+                    <td class="p-3 text-center">
+                        <span class="px-2 py-1 ${getCallResultBadgeClass(ketQua)} rounded-md font-medium text-xs inline-block">${escapeHtml(ketQua)}</span>
+                    </td>
+                    <td class="p-3 text-center text-xs opacity-90">${tg}</td>
+                    <td class="p-3 text-xs italic opacity-80">${escapeHtml(item.ghi_chu || '-')}</td>
+                    <td class="p-3 text-center">
+                        <button onclick='showLeadDetailModal(${JSON.stringify(item).replace(/'/g, "&#39;")})' class="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition inline-flex items-center justify-center" title="Xem thông tin khách hàng">
+                            <i data-lucide="eye" class="w-4 h-4"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+            if (typeof initTableSearch === 'function') initTableSearch('searchInput', null, 'table-body-6', [1, 2]);
+        }
+
+        // ================= RENDER TAB 2: HẸN ĐÃ GỬI =================
+        function renderTab2() {
+            const tbody = document.getElementById('table-body-2');
+            tbody.innerHTML = '';
+
+            const list = getFilteredList(tab2List, computeStatusTab2);
+
+            if (!list || list.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" class="p-6 text-center opacity-70 text-xs">Chưa có cuộc hẹn nào đã gửi.</td></tr>`;
+                return;
+            }
+
+            list.forEach((item, index) => {
+                const customer = item.customers || {};
+                const hoTen = `${customer.ho || ''} ${customer.ten || ''}`.trim() || '-';
+
+                // Cột "Báo cáo hẹn": lấy trực tiếp bao_cao_hen, mặc định khi null
+                const baoCaoText = item.bao_cao_hen || 'DMO chưa trả kết quả hẹn';
+
+                const dmoHtml = item.nguoi_nhan_ten
+                    ? `<span class="text-xs font-medium">${item.nguoi_nhan_ten}</span><br><span class="text-[11px] italic opacity-75">(${item.nguoi_nhan_username})</span>`
+                    : '-';
+
+                let fileHtml = `<span class="opacity-65 text-xs">---</span>`;
+                if (item.file_dinh_kem) {
+                    fileHtml = `<a href="/uploads/${item.file_dinh_kem}" target="_blank" class="text-red-600 dark:text-red-400 underline inline-flex items-center gap-1 text-xs"><i data-lucide="file-text" class="w-3 h-3"></i>File</a>`;
+                }
+
+                const daTiepNhan = item.trang_thai_tiep_nhan === 'Đã tiếp nhận';
+                let trangThaiHtml = '';
+
+                if (daTiepNhan) {
+                    trangThaiHtml = `<span class="font-bold text-xs text-emerald-600 dark:text-emerald-400">Đã tiếp nhận</span>`;
+                } else {
+                    // Đếm ngược 24h kể từ thời điểm gửi hẹn - khi về 0, server tự thu hồi
+                    const deadline = new Date(item.thoi_gian_gui).getTime() + 24 * 60 * 60 * 1000;
+                    trangThaiHtml = `
+                        <div class="countdown-timer text-[11px] font-mono font-bold text-amber-600" data-deadline="${deadline}">--:--:--</div>
+                        <span class="text-[11px] opacity-75">Chờ tiếp nhận</span>
+                    `;
+                }
+
+                // Cột Thao tác: chỉ có nút Thu hồi + xem chi tiết khách hàng (theo đúng yêu cầu)
+                const actionHtml = `
+                    <div class="flex items-center justify-center gap-1">
+                        <button onclick="thuHoiHen(${item.id})" class="p-2 rounded-lg text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 transition" title="Thu hồi">
+                            <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+                        </button>
+                        <button onclick='showLeadDetailModal(${JSON.stringify(item).replace(/'/g, "&#39;")})' class="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition" title="Xem thông tin khách hàng">
+                            <i data-lucide="eye" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                `;
+
+                const tr = document.createElement('tr');
+                tr.className = 'border-b border-gray-100 dark:border-gray-800 hover:bg-black/5 dark:hover:bg-white/5 transition';
+                tr.innerHTML = `
+                    <td class="p-3 text-center font-medium text-xs">${index + 1}</td>
+                    <td class="p-3 font-bold text-xs">${hoTen}</td>
+                    <td class="p-3 italic text-xs opacity-80">${baoCaoText}</td>
+                    <td class="p-3">${dmoHtml}</td>
+                    <td class="p-3">${fileHtml}</td>
+                    <td class="p-3">${trangThaiHtml}</td>
+                    <td class="p-3 text-center">${actionHtml}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+            if (typeof initTableSearch === 'function') initTableSearch('searchInput', null, 'table-body-2', [1]);
+            startCountdownTimers();
+        }
+
+        // ================= RENDER TAB 3: HẸN ĐƯỢC GỬI =================
+        function renderTab3() {
+            const tbody = document.getElementById('table-body-3');
+            tbody.innerHTML = '';
+
+            // Tab 3 không có bộ lọc người nhận/trạng thái riêng theo yêu cầu ban đầu,
+            // chỉ hiển thị nguyên danh sách đã được lọc theo ngày ở backend
+            const list = tab3List;
+
+            if (!list || list.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="8" class="p-6 text-center opacity-70 text-xs">Không có cuộc hẹn nào được gửi đến bạn.</td></tr>`;
+                return;
+            }
+
+            list.forEach((item, index) => {
+                const customer = item.customers || {};
+                const hoTen = `${customer.ho || ''} ${customer.ten || ''}`.trim() || '-';
+                const diaChi = customer.dia_chi || '-';
+
+                const daTiepNhan = item.trang_thai_tiep_nhan === 'Đã tiếp nhận';
+
+                // Số điện thoại: backend đã tự che (VD 375***092) nếu chưa tiếp nhận,
+                // nên frontend chỉ cần hiển thị nguyên giá trị server trả về
+                const sdtDisplay = item.dien_thoai || '-';
+
+                // Ghi chú: ghép thông tin "Khách hẹn lúc..." (nếu loai_hen = 'Khách hẹn')
+                // với nội dung ghi_chu_hen mà người gửi đã nhập
+                let ghiChuHtml = '';
+                if (item.loai_hen === 'Khách hẹn' && item.thoi_gian_khach_hen) {
+                    const p = getVNDateParts(item.thoi_gian_khach_hen);
+                    if (p) {
+                        ghiChuHtml += `<div class="font-semibold text-[11px] text-amber-600">Khách hẹn lúc ${p.hh12}:${p.mm} ${p.buoi} ngày ${p.dd}/${p.mo}/${p.yy}</div>`;
+                    }
+                }
+                ghiChuHtml += `<div class="text-xs opacity-90">${item.ghi_chu_hen || '-'}</div>`;
+
+                const nguoiGuiHtml = `<span class="text-xs font-medium">${item.ten_agent || '-'}</span>`;
+
+                let fileHtml = `<span class="opacity-65 text-xs">---</span>`;
+                if (daTiepNhan && item.file_dinh_kem) {
+                    fileHtml = `<a href="/uploads/${item.file_dinh_kem}" target="_blank" class="text-red-600 dark:text-red-400 underline inline-flex items-center gap-1 text-xs"><i data-lucide="file-text" class="w-3 h-3"></i>${item.file_dinh_kem}</a>`;
+                } else if (!daTiepNhan && item.file_dinh_kem !== undefined) {
+                    // Trường hợp có file nhưng backend đã ẩn tên (null) do chưa tiếp nhận
+                    fileHtml = `<span class="text-[11px] italic opacity-60 flex items-center gap-1"><i data-lucide="lock" class="w-3 h-3"></i> Cần tiếp nhận để xem</span>`;
+                }
+
+                let trangThaiHtml = '';
+                let actionHtml = '';
+
+                if (daTiepNhan) {
+                    trangThaiHtml = `<span class="font-bold text-xs text-emerald-600 dark:text-emerald-400">Đã tiếp nhận</span>`;
+                    actionHtml = `
+                        <div class="flex items-center justify-center gap-1">
+                            <button onclick="openBaoCaoHenPopup(${item.id})" class="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition" title="Báo cáo hẹn">
+                                <i data-lucide="clipboard-edit" class="w-4 h-4"></i>
+                            </button>
+                            <button onclick='showLeadDetailModal(${JSON.stringify(item).replace(/'/g, "&#39;")})' class="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition" title="Xem thông tin khách hàng">
+                                <i data-lucide="eye" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    `;
+                } else {
+                    const deadline = new Date(item.thoi_gian_gui).getTime() + 24 * 60 * 60 * 1000;
+                    trangThaiHtml = `
+                        <div class="countdown-timer text-[11px] font-mono font-bold text-amber-600" data-deadline="${deadline}">--:--:--</div>
+                        <span class="text-[11px] opacity-75">Chờ tiếp nhận</span>
+                    `;
+                    actionHtml = `
+                        <div class="flex flex-col items-center gap-1">
+                            <div class="flex items-center gap-1.5">
+                                <button onclick="tiepNhanHen(${item.id}, true)" class="p-2 rounded-lg text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition" title="Tiếp nhận">
+                                    <i data-lucide="check" class="w-4 h-4"></i>
+                                </button>
+                                <button onclick="tiepNhanHen(${item.id}, false)" class="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition" title="Không tiếp nhận">
+                                    <i data-lucide="x" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                            <button onclick='showLeadDetailModal(${JSON.stringify(item).replace(/'/g, "&#39;")})' class="text-[11px] text-blue-600 underline mt-0.5">Xem thông tin (giới hạn)</button>
+                        </div>
+                    `;
+                }
+
+                const tr = document.createElement('tr');
+                tr.className = 'border-b border-gray-100 dark:border-gray-800 hover:bg-black/5 dark:hover:bg-white/5 transition';
+                tr.innerHTML = `
+                    <td class="p-3 text-center font-medium text-xs">${index + 1}</td>
+                    <td class="p-3">
+                        <div class="font-bold text-xs">${hoTen}</div>
+                        <div class="text-[11px] opacity-75 mt-0.5">${diaChi}</div>
+                    </td>
+                    <td class="p-3 text-xs">
+                        <a href="tel:${sdtDisplay}" class="text-red-600 dark:text-red-400 font-semibold inline-flex items-center gap-1 text-xs">
+                            <i data-lucide="phone" class="w-3 h-3"></i> ${sdtDisplay}
+                        </a>
+                    </td>
+                    <td class="p-3">${ghiChuHtml}</td>
+                    <td class="p-3">${nguoiGuiHtml}</td>
+                    <td class="p-3">${fileHtml}</td>
+                    <td class="p-3">${trangThaiHtml}</td>
+                    <td class="p-3 text-center">${actionHtml}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+            if (typeof initTableSearch === 'function') initTableSearch('searchInput', null, 'table-body-3', [1]);
+            startCountdownTimers();
+        }
+
+        // ================= RENDER TAB 5: AI INSIGHTS =================
+        // Dữ liệu mỗi item kỳ vọng có dạng:
+        // {
+        //   id: <id để gọi API cho khách/nhóm số ĐT này>,
+        //   dien_thoai, customers: { ho, ten },
+        //   ghi_chu_list: [ { lan_goi, thoi_gian_goi, noi_dung }, ... ],  // toàn bộ ghi chú các lần gọi (call_history)
+        //   ai_insight: <đánh giá AI đã lưu trước đó, null nếu chưa từng phân tích>
+        // }
+        function renderTab5() {
+            const tbody = document.getElementById('table-body-5');
+            tbody.innerHTML = '';
+
+            const list = tab5List;
+
+            if (!list || list.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center opacity-70 text-xs">Không có khách hàng nào cần chăm sóc lại.</td></tr>`;
+                return;
+            }
+
+            list.forEach((item, index) => {
+                const customer = item.customers || {};
+                const hoTen = `${customer.ho || ''} ${customer.ten || ''}`.trim() || '-';
+                const sdt = customer.dien_thoai || item.dien_thoai || '-';
+
+                // Cột Ghi chú: liệt kê toàn bộ các lần gọi, giữ nguyên nhãn "Gọi lần x:" + thời gian
+                const ghiChuList = item.ghi_chu_list || [];
+                let ghiChuHtml = '';
+                if (ghiChuList.length > 0) {
+                    ghiChuHtml = ghiChuList.map(gc => {
+                        const p = getVNDateParts(gc.thoi_gian_goi);
+                        const tg = p ? `${p.hh24}:${p.mm} ngày ${p.dd}/${p.mo}/${p.yy}` : '';
+                        return `
+                            <div class="mb-1.5 last:mb-0">
+                                <span class="font-semibold text-red-600 dark:text-red-400">Gọi lần ${gc.lan_goi}:</span>
+                                <span class="italic opacity-60 text-[11px]">(lúc ${tg})</span>
+                                <div class="opacity-90">${gc.noi_dung || '-'}</div>
+                            </div>
+                        `;
+                    }).join('');
+                } else {
+                    ghiChuHtml = `<span class="italic opacity-60">Chưa có ghi chú</span>`;
+                }
+
+                const ghiChuCellHtml = `
+                    <div class="flex items-start gap-2">
+                        <div class="flex-1">${ghiChuHtml}</div>
+                        <button onclick='openEditGhiChuPopup(${JSON.stringify(item).replace(/'/g, "&#39;")})' class="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition shrink-0" title="Chỉnh sửa / bổ sung ghi chú">
+                            <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
+                        </button>
+                    </div>
+                `;
+
+                // Cột AI Insights: icon bot-message-square, tô màu tím khi đã có đánh giá lưu sẵn
+                const hasInsight = !!item.ai_insight;
+                const aiBtnHtml = `
+                    <button onclick='openAiInsightPopup(${item.id}, ${JSON.stringify(item.ai_insight || "").replace(/'/g, "&#39;")})' class="p-2 rounded-lg ${hasInsight ? 'text-violet-600 bg-violet-50 dark:bg-violet-950/30' : 'text-gray-500'} hover:bg-violet-50 dark:hover:bg-violet-950/30 transition" title="${hasInsight ? 'Xem đánh giá AI đã lưu' : 'Phân tích AI Insights'}">
+                        <i data-lucide="bot-message-square" class="w-4 h-4"></i>
+                    </button>
+                `;
+
+                // Cột Thao tác: gọi lại (mở tel:) + nhắc hẹn gọi lại
+                const actionHtml = `
+                    <div class="flex items-center justify-center gap-1">
+                        <a href="tel:${sdt}" class="p-2 rounded-lg text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition" title="Gọi lại">
+                            <i data-lucide="phone-outgoing" class="w-4 h-4"></i>
+                        </a>
+                        <button onclick='openNhacHenGoiLaiPopup(${item.id}, ${JSON.stringify(hoTen).replace(/'/g, "&#39;")})' class="p-2 rounded-lg text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition" title="Nhắc hẹn gọi lại">
+                            <i data-lucide="alarm-clock-plus" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                `;
+
+                const tr = document.createElement('tr');
+                tr.className = 'border-b border-gray-100 dark:border-gray-800 hover:bg-black/5 dark:hover:bg-white/5 transition align-top';
+                tr.innerHTML = `
+                    <td class="p-3 text-center font-medium text-xs">${index + 1}</td>
+                    <td class="p-3">
+                        <div class="font-bold text-xs">${hoTen}</div>
+                        <a href="tel:${sdt}" class="text-red-600 dark:text-red-400 font-semibold inline-flex items-center gap-1 text-xs mt-1">
+                            <i data-lucide="phone" class="w-3 h-3"></i> ${sdt}
+                        </a>
+                    </td>
+                    <td class="p-3 text-xs">${ghiChuCellHtml}</td>
+                    <td class="p-3 text-center">${aiBtnHtml}</td>
+                    <td class="p-3 text-center">${actionHtml}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+            if (typeof initTableSearch === 'function') initTableSearch('searchInput', null, 'table-body-5', [1]);
+        }
+
+        // ==========================================================================
+        // TAB 5 - CHỈNH SỬA / BỔ SUNG GHI CHÚ (giữ nguyên nhãn "Gọi lần x:" + thời gian,
+        // chỉ cho phép sửa phần nội dung; thêm ghi chú mới sẽ tự đánh số lần gọi tiếp theo)
+        // ==========================================================================
+        function openEditGhiChuPopup(item) {
+            const ghiChuList = item.ghi_chu_list || [];
+            let itemsHtml = '';
+            ghiChuList.forEach(gc => {
+                const p = getVNDateParts(gc.thoi_gian_goi);
+                const tg = p ? `${p.hh24}:${p.mm} ngày ${p.dd}/${p.mo}/${p.yy}` : '';
+                itemsHtml += `
+                    <div class="mb-3 text-left">
+                        <div class="text-xs font-semibold text-red-600 dark:text-red-400 mb-1">Gọi lần ${gc.lan_goi}: <span class="font-normal italic opacity-60">(lúc ${tg})</span></div>
+                        <textarea class="theme-card border rounded-lg p-2 w-full outline-none bg-transparent text-xs leading-relaxed ai-ghichu-item" style="margin:0" rows="2" data-lan="${gc.lan_goi}" data-thoigian="${gc.thoi_gian_goi}">${gc.noi_dung || ''}</textarea>
+                    </div>
+                `;
+            });
+
+            Swal.fire({
+                title: '<div class="text-sm md:text-base font-bold">Ghi Chú Chăm Sóc Khách Hàng</div>',
+                html: `
+                    <div class="text-left max-h-72 overflow-y-auto pr-1">
+                        ${itemsHtml || '<div class="text-xs italic opacity-60 mb-3">Chưa có lịch sử ghi chú.</div>'}
+                        <div class="text-xs font-semibold text-emerald-600 dark:text-emerald-400 mb-1">+ Bổ sung ghi chú mới</div>
+                        <textarea id="ai-ghichu-new" class="theme-card border rounded-lg p-2 w-full outline-none bg-transparent text-xs leading-relaxed" style="margin:0" rows="2" placeholder="Nội dung ghi chú bổ sung (sẽ tự lưu kèm nhãn Gọi lần ${ghiChuList.length + 1} và thời gian hiện tại)..."></textarea>
+                    </div>
+                `,
+                showCancelButton: true,
+                confirmButtonText: 'Lưu',
+                cancelButtonText: 'Hủy',
+                confirmButtonColor: '#dc2626',
+                width: 600,
+                preConfirm: () => {
+                    const items = Array.from(document.querySelectorAll('.ai-ghichu-item')).map(el => ({
+                        lan_goi: Number(el.dataset.lan),
+                        thoi_gian_goi: el.dataset.thoigian,
+                        noi_dung: el.value
+                    }));
+                    const ghiChuMoi = document.getElementById('ai-ghichu-new').value.trim();
+                    return { items, ghiChuMoi };
+                }
+            }).then(async (res) => {
+                if (!res.isConfirmed) return;
+                try {
+                    const response = await fetch(`/api/calls/ai-insights/${item.id}/notes`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(res.value)
+                    });
+                    const data = await response.json();
+                    if (data.success) {
+                        Swal.fire('Thành công', 'Đã lưu ghi chú.', 'success');
+                        fetchData();
+                    } else {
+                        throw new Error(data.message);
+                    }
+                } catch (err) {
+                    Swal.fire('Lỗi', err.message || 'Không thể lưu ghi chú!', 'error');
+                }
+            });
+        }
+
+        // ==========================================================================
+        // TAB 5 - AI INSIGHTS: phân tích ghi chú chăm sóc và đưa đánh giá/lời khuyên
+        // ==========================================================================
+        function openAiInsightPopup(id, existingInsight) {
+            Swal.fire({
+                title: '<div class="text-sm md:text-base font-bold flex items-center justify-center gap-2"><i data-lucide="bot-message-square" class="w-4 h-4"></i>AI Insights</div>',
+                html: `
+                    <div id="ai-insight-loading" class="py-8 text-xs opacity-70 flex flex-col items-center gap-3">
+                        <div class="w-6 h-6 border-2 border-violet-500 border-t-transparent rounded-full animate-spin"></div>
+                        Đang phân tích ghi chú chăm sóc khách hàng...
+                    </div>
+                    <textarea id="ai-insight-textarea" class="theme-card border rounded-lg p-3 w-full outline-none bg-transparent text-xs leading-relaxed hidden" style="margin:0" rows="12" placeholder="Đánh giá và lời khuyên chăm sóc khách hàng..."></textarea>
+                `,
+                showCancelButton: true,
+                confirmButtonText: 'Lưu',
+                cancelButtonText: 'Hủy',
+                confirmButtonColor: '#7c3aed',
+                width: 620,
+                didOpen: async () => {
+                    if (typeof lucide !== 'undefined') lucide.createIcons();
+                    const loadingEl = document.getElementById('ai-insight-loading');
+                    const textareaEl = document.getElementById('ai-insight-textarea');
+
+                    // Nếu đã có đánh giá lưu sẵn từ trước -> hiển thị luôn, không cần gọi lại AI
+                    if (existingInsight) {
+                        loadingEl.classList.add('hidden');
+                        textareaEl.classList.remove('hidden');
+                        textareaEl.value = existingInsight;
+                        return;
+                    }
+
+                    try {
+                        const res = await fetch(`/api/calls/ai-insights/${id}/analyze`, { method: 'POST' });
+                        const data = await res.json();
+                        loadingEl.classList.add('hidden');
+                        textareaEl.classList.remove('hidden');
+                        if (data.success) {
+                            textareaEl.value = (data.data && data.data.insight) || '';
+                        } else {
+                            Swal.showValidationMessage(data.message || 'Không thể tạo đánh giá AI.');
+                        }
+                    } catch (err) {
+                        loadingEl.classList.add('hidden');
+                        textareaEl.classList.remove('hidden');
+                        Swal.showValidationMessage('Lỗi kết nối máy chủ AI.');
+                    }
+                },
+                preConfirm: () => document.getElementById('ai-insight-textarea').value
+            }).then(async (res) => {
+                if (!res.isConfirmed) return;
+                try {
+                    const response = await fetch(`/api/calls/ai-insights/${id}/save-insight`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ insight: res.value })
+                    });
+                    const data = await response.json();
+                    if (data.success) {
+                        Swal.fire('Thành công', 'Đã lưu đánh giá AI.', 'success');
+                        fetchData();
+                    } else {
+                        throw new Error(data.message);
+                    }
+                } catch (err) {
+                    Swal.fire('Lỗi', err.message || 'Không thể lưu đánh giá AI!', 'error');
+                }
+            });
+        }
+
+        // ==========================================================================
+        // TAB 5 - NHẮC HẸN GỌI LẠI
+        // ==========================================================================
+        function openNhacHenGoiLaiPopup(id, hoTen) {
+            Swal.fire({
+                title: '<div class="text-sm md:text-base font-bold">Nhắc Hẹn Gọi Lại</div>',
+                html: `
+                    <div class="text-left">
+                        <div class="text-xs mb-2">Khách hàng: <span class="font-semibold">${hoTen}</span></div>
+                        <label class="text-xs font-medium block mb-1">Thời gian nhắc gọi lại:</label>
+                        <input type="datetime-local" id="nhac-hen-thoi-gian" class="theme-card border rounded-lg p-2 w-full outline-none bg-transparent text-xs" style="margin:0; width:100%;">
+                        <label class="text-xs font-medium block mt-3 mb-1">Ghi chú (nếu có):</label>
+                        <textarea id="nhac-hen-ghichu" class="theme-card border rounded-lg p-2 w-full outline-none bg-transparent text-xs leading-relaxed" style="margin:0" rows="2" placeholder="Nội dung cần lưu ý khi gọi lại..."></textarea>
+                    </div>
+                `,
+                showCancelButton: true,
+                confirmButtonText: 'Lưu nhắc hẹn',
+                cancelButtonText: 'Hủy',
+                confirmButtonColor: '#d97706',
+                preConfirm: () => {
+                    const thoiGian = document.getElementById('nhac-hen-thoi-gian').value;
+                    if (!thoiGian) {
+                        Swal.showValidationMessage('Vui lòng chọn thời gian nhắc hẹn!');
+                        return false;
+                    }
+                    return {
+                        thoi_gian_nhac: new Date(thoiGian).toISOString(),
+                        ghi_chu: document.getElementById('nhac-hen-ghichu').value
+                    };
+                }
+            }).then(async (res) => {
+                if (!res.isConfirmed) return;
+                try {
+                    const response = await fetch(`/api/calls/ai-insights/${id}/remind`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(res.value)
+                    });
+                    const data = await response.json();
+                    if (data.success) {
+                        Swal.fire('Thành công', 'Đã lưu nhắc hẹn gọi lại.', 'success');
+                    } else {
+                        throw new Error(data.message);
+                    }
+                } catch (err) {
+                    Swal.fire('Lỗi', err.message || 'Không thể lưu nhắc hẹn!', 'error');
+                }
+            });
+        }
+
+        // ==========================================================================
+        // POPUP: GỬI CUỘC HẸN CHO ĐỒNG NGHIỆP (nút Send ở Tab 1)
+        // ==========================================================================
+        function openGuiHenPopup(leadId) {
+            const item = tab1List.find(l => l.id === leadId);
+            if (!item) {
+                Swal.fire({ icon: 'error', title: 'Không tìm thấy dữ liệu cuộc hẹn!' });
+                return;
+            }
+
+            const customer = item.customers || {};
+            const hoTen = `${customer.ho || ''} ${customer.ten || ''}`.trim() || '-';
+            const sdt = customer.dien_thoai || item.dien_thoai || '-';
+
+            // FIX: loại bỏ chính người đang đăng nhập ra khỏi danh sách DMO có thể chọn
+            // (gửi hẹn cho chính mình là vô lý)
+            const currentAgentName = getCurrentAgentName();
+            const selectableColleagues = colleaguesList.filter(a => a.ho_va_ten !== currentAgentName);
+
+            const datalistOptions = selectableColleagues.map(a =>
+                `<option value="${a.ho_va_ten} (${a.ten_dang_nhap})">`
+            ).join('');
+
+            Swal.fire({
+                title: '<div class="text-base font-bold flex items-center gap-2"><i data-lucide="send" class="w-5 h-5"></i> Gửi Cuộc Hẹn Cho Đồng Nghiệp</div>',
+                html: `
+                    <div class="text-left text-xs space-y-4">
+                        <div>
+                            <label class="block font-semibold mb-1">Khách hàng:</label>
+                            <div class="border rounded-lg px-3 py-2 bg-gray-50 font-medium">${hoTen} - ${sdt}</div>
+                        </div>
+
+                        <div>
+                            <label class="block font-semibold mb-1">Loại cuộc hẹn:</label>
+                            <select id="swal-loai-hen" class="swal2-input" style="margin:0; width:100%;">
+                                <option value="DMO tự chủ động hẹn">DMO tự chủ động hẹn</option>
+                                <option value="Khách hẹn">Khách hẹn</option>
+                            </select>
+                        </div>
+
+                        <div id="swal-khach-hen-wrap" style="display:none;">
+                            <label class="block font-semibold mb-1">Thời gian khách hẹn:</label>
+                            <input type="datetime-local" id="swal-thoi-gian-khach-hen" class="swal2-input" style="margin:0; width:100%;">
+                        </div>
+
+                        <div>
+                            <label class="block font-semibold mb-1">Ghi chú cuộc hẹn:</label>
+                            <textarea id="swal-ghi-chu" rows="3" class="swal2-textarea" style="margin:0; width:100%;" placeholder="Nhập ghi chú..."></textarea>
+                        </div>
+
+                        <div>
+                            <label class="block font-semibold mb-1">File tài liệu đính kèm (nếu có):</label>
+                            <input type="file" id="swal-file" accept=".jpg,.jpeg,.png,.pdf,.xls,.xlsx" class="swal2-file" style="margin:0; width:100%;">
+                        </div>
+
+                        <div>
+                            <label class="block font-semibold mb-1">Chọn DMO nhận cuộc hẹn:</label>
+                            <input list="swal-dmo-list" id="swal-dmo" class="swal2-input" autocomplete="off" style="margin:0; width:100%;" placeholder="Nhập tên hoặc mã đăng nhập để tìm...">
+                            <datalist id="swal-dmo-list">${datalistOptions}</datalist>
+                        </div>
+                    </div>
+                `,
+                width: '520px',
+                showCancelButton: true,
+                confirmButtonText: 'Xác nhận Gửi Hẹn',
+                cancelButtonText: 'Hủy',
+                confirmButtonColor: '#059669',
+                cancelButtonColor: '#6b7280',
+                didOpen: () => {
+                    if (typeof lucide !== 'undefined') lucide.createIcons();
+                    const selectLoai = document.getElementById('swal-loai-hen');
+                    const wrapKhachHen = document.getElementById('swal-khach-hen-wrap');
+                    selectLoai.addEventListener('change', () => {
+                        wrapKhachHen.style.display = selectLoai.value === 'Khách hẹn' ? 'block' : 'none';
+                    });
+                },
+                preConfirm: () => {
+                    const loaiHen = document.getElementById('swal-loai-hen').value;
+                    const thoiGianKhachHen = document.getElementById('swal-thoi-gian-khach-hen').value;
+                    const ghiChu = document.getElementById('swal-ghi-chu').value.trim();
+                    const fileInput = document.getElementById('swal-file');
+                    const dmoInputVal = document.getElementById('swal-dmo').value.trim();
+
+                    if (loaiHen === 'Khách hẹn' && !thoiGianKhachHen) {
+                        Swal.showValidationMessage('Vui lòng chọn thời gian khách hẹn!');
+                        return false;
+                    }
+
+                    const match = dmoInputVal.match(/^(.*)\s\(([^)]+)\)$/);
+                    if (!match) {
+                        Swal.showValidationMessage('Vui lòng chọn đúng DMO từ danh sách gợi ý!');
+                        return false;
+                    }
+                    const tenDangNhap = match[2].trim();
+                    const agent = selectableColleagues.find(a => a.ten_dang_nhap === tenDangNhap);
+                    if (!agent) {
+                        Swal.showValidationMessage('Không tìm thấy DMO này trong danh sách, vui lòng chọn lại!');
+                        return false;
+                    }
+
+                    return { loaiHen, thoiGianKhachHen, ghiChu, file: fileInput.files[0] || null, agent };
+                }
+            }).then(async (result) => {
+                if (!result.isConfirmed) return;
+
+                const { loaiHen, thoiGianKhachHen, ghiChu, file, agent } = result.value;
+
+                const formData = new FormData();
+                formData.append('nguoi_nhan_id', agent.id);
+                formData.append('nguoi_nhan_ten', agent.ho_va_ten);
+                formData.append('nguoi_nhan_username', agent.ten_dang_nhap);
+                formData.append('loai_hen', loaiHen);
+                if (loaiHen === 'Khách hẹn') {
+                    formData.append('thoi_gian_khach_hen', new Date(thoiGianKhachHen).toISOString());
+                }
+                formData.append('ghi_chu', ghiChu);
+                if (file) formData.append('file', file);
+
+                try {
+                    const res = await fetch(`/api/calls/${leadId}/send`, { method: 'POST', body: formData });
+                    const data = await res.json();
+                    if (data.success) {
+                        Swal.fire({ icon: 'success', title: 'Đã gửi cuộc hẹn!', timer: 1200, showConfirmButton: false });
+                        fetchData();
+                    } else {
+                        throw new Error(data.message);
+                    }
+                } catch (err) {
+                    Swal.fire({ icon: 'error', title: 'Gửi thất bại', text: err.message });
+                }
+            });
+        }
+
+        // Tải danh sách DMO cho popup Gửi hẹn
+        async function loadColleagues() {
+            try {
+                const res = await fetch('/api/agent/colleagues');
+                const result = await res.json();
+                if (result.success) colleaguesList = result.data || [];
+            } catch (err) {
+                console.error("Lỗi tải danh sách đồng nghiệp:", err);
+            }
+        }
+
+        // ==========================================================================
+        // THU HỒI HẸN (Tab 2) - gọi API thật, không chỉ sửa dữ liệu tạm trong RAM nữa
+        // ==========================================================================
+        function thuHoiHen(leadId) {
+            Swal.fire({
+                title: 'Xác nhận thu hồi cuộc hẹn?',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Đồng ý thu hồi',
+                cancelButtonText: 'Hủy',
+                confirmButtonColor: '#dc2626'
+            }).then(async (res) => {
+                if (!res.isConfirmed) return;
+                try {
+                    const response = await fetch(`/api/calls/${leadId}/recall`, { method: 'POST' });
+                    const data = await response.json();
+                    if (data.success) {
+                        Swal.fire('Thành công', 'Đã thu hồi cuộc hẹn.', 'success');
+                        fetchData();
+                    } else {
+                        throw new Error(data.message);
+                    }
+                } catch (err) {
+                    Swal.fire('Lỗi', err.message || 'Không thể thu hồi cuộc hẹn!', 'error');
+                }
+            });
+        }
+
+        // ==========================================================================
+        // TIẾP NHẬN / KHÔNG TIẾP NHẬN (Tab 3) - gọi API thật
+        // ==========================================================================
+        function tiepNhanHen(leadId, isAccepted) {
+            const actionText = isAccepted ? 'TIẾP NHẬN' : 'TỪ CHỐI';
+            Swal.fire({
+                title: `${actionText} cuộc hẹn này?`,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'Đồng ý',
+                cancelButtonText: 'Hủy',
+                confirmButtonColor: isAccepted ? '#059669' : '#dc2626'
+            }).then(async (res) => {
+                if (!res.isConfirmed) return;
+                try {
+                    const response = await fetch(`/api/calls/${leadId}/accept`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ accepted: isAccepted })
+                    });
+                    const data = await response.json();
+                    if (data.success) {
+                        Swal.fire({
+                            icon: isAccepted ? 'success' : 'info',
+                            title: isAccepted ? 'Đã tiếp nhận' : 'Đã từ chối',
+                            timer: 1200,
+                            showConfirmButton: false
+                        });
+                        fetchData();
+                    } else {
+                        throw new Error(data.message);
+                    }
+                } catch (err) {
+                    Swal.fire('Lỗi', err.message || 'Không thể xử lý yêu cầu!', 'error');
+                }
+            });
+        }
+
+        // ==========================================================================
+        // BÁO CÁO CUỘC HẸN (Tab 3, sau khi đã tiếp nhận) - gọi API thật
+        // ==========================================================================
+        function openBaoCaoHenPopup(leadId) {
+            Swal.fire({
+                title: '<div class="text-sm md:text-base font-bold">Báo Cáo Cuộc Hẹn</div>',
+                html: `<textarea id="bao-cao-text" rows="4" class="theme-card border rounded-lg p-2 w-full outline-none bg-transparent text-xs" placeholder="Nhập kết quả/báo cáo cuộc hẹn..."></textarea>`,
+                showCancelButton: true,
+                confirmButtonText: 'Lưu báo cáo',
+                cancelButtonText: 'Hủy',
+                confirmButtonColor: '#dc2626',
+                preConfirm: () => document.getElementById('bao-cao-text').value
+            }).then(async (result) => {
+                if (!result.isConfirmed) return;
+                try {
+                    const res = await fetch(`/api/calls/${leadId}/report`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ bao_cao_hen: result.value })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        Swal.fire('Thành công', 'Đã lưu báo cáo hẹn.', 'success');
+                        fetchData();
+                    } else {
+                        throw new Error(data.message);
+                    }
+                } catch (err) {
+                    Swal.fire('Lỗi', err.message || 'Không thể lưu báo cáo!', 'error');
+                }
+            });
+        }
+
+        // Sự kiện nút "Tất cả": reset toàn bộ bộ lọc + tải lại dữ liệu tab hiện tại
+        document.getElementById('btn-tat-ca').addEventListener('click', function() {
+            document.getElementById('searchInput').value = '';
+            document.getElementById('filter-nguoi-nhan').value = '';
+            document.getElementById('filter-trang-thai').value = '';
+            document.getElementById('filter-ngay').value = '';
+            fetchData();
+        });
+
+        // Bộ lọc "người nhận" và "trạng thái" là lọc client-side trên dữ liệu đã tải
+        // -> chỉ cần render lại, không cần gọi API
+        document.getElementById('filter-nguoi-nhan').addEventListener('change', renderCurrentTab);
+        document.getElementById('filter-trang-thai').addEventListener('change', renderCurrentTab);
+
+        // Bộ lọc "ngày" cần gửi lại lên backend (ảnh hưởng query param date)
+        document.getElementById('filter-ngay').addEventListener('change', fetchData);
+
+        // Khởi chạy khi tải trang
+        document.addEventListener('DOMContentLoaded', () => {
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+            loadColleagues();
+            fetchData();
+        });
+    </script>
+</body>
+</html>

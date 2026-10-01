@@ -72,6 +72,16 @@ async function revertExpiredAppointments(supabase) {
     }
 }
 
+// ==========================================================================
+// HÀM PHÂN LOẠI DUY NHẤT: 1 cuộc gọi là "Hẹn gặp thành công" hay không.
+// Tab 1 và tab Nhật Ký Cuộc Gọi cùng dùng hàm này nên 2 tab LUÔN bù trừ nhau
+// đúng 100%: mỗi cuộc gọi chỉ nằm ở đúng 1 tab, không bao giờ lọt cả hai / không tab nào.
+// Chuẩn hoá Unicode (NFC), bỏ khoảng trắng thừa, không phân biệt hoa/thường.
+// ==========================================================================
+function isSuccessfulAppointment(result) {
+    return String(result || '').normalize('NFC').replace(/\s+/g, ' ').trim().toLowerCase() === 'hẹn gặp thành công';
+}
+
 // Hàm phụ: tra ho_va_ten -> user.id (dùng để xác định người NHẬN thông báo)
 async function resolveUserId(supabase, hoVaTen) {
     if (!hoVaTen) return null;
@@ -131,7 +141,6 @@ router.get('/successful-appointments', async (req, res) => {
                 loai_hen, thoi_gian_khach_hen, file_dinh_kem, bao_cao_hen,
                 customers:dien_thoai (ho, ten, dia_chi, cccd, gioi_tinh, ngay_sinh, tuoi)
             `)
-            .eq('ket_qua_cuoc_goi', 'Hẹn gặp thành công')
             .order('thoi_gian_goi', { ascending: false });
 
         if (agent) query = query.eq('ten_agent', agent);
@@ -143,7 +152,8 @@ router.get('/successful-appointments', async (req, res) => {
         const { data, error } = await query;
         if (error) throw error;
 
-        let finalData = data || [];
+        // Chỉ giữ cuộc gọi "Hẹn gặp thành công" (phân loại bằng hàm dùng chung với tab Nhật Ký)
+        let finalData = (data || []).filter(item => isSuccessfulAppointment(item.ket_qua_cuoc_goi));
 
         // Join thủ công sang bảng contracts theo dien_thoai (contracts có sẵn cột này)
         const phoneList = [...new Set(finalData.map(item => item.dien_thoai).filter(Boolean))];
@@ -312,6 +322,76 @@ router.get('/received-appointments', async (req, res) => {
         res.json({ success: true, data: maskedData });
     } catch (error) {
         console.error("Lỗi lấy danh sách hẹn được gửi:", error);
+        res.status(500).json({ success: false, message: 'Lỗi server nội bộ', error: error.message });
+    }
+});
+
+// ==========================================================================
+// TAB "NHẬT KÝ CUỘC GỌI": toàn bộ cuộc gọi của CHÍNH agent này có kết quả
+// KHÁC "Hẹn gặp thành công" (mỗi cuộc gọi = 1 dòng, không gom theo khách).
+// - Loại bỏ dòng 'Ghi chú chăm sóc' vì đó là ghi chú thủ công, KHÔNG phải cuộc gọi thật
+// - Lọc ngày xử lý ở backend (query param date, tính theo giờ VN UTC+7)
+// - Lọc theo kết quả cuộc gọi (query param ket_qua) - tuỳ chọn
+// ==========================================================================
+router.get('/call-logs', async (req, res) => {
+    try {
+        const { agent, date, ket_qua } = req.query;
+        const supabase = req.supabase;
+
+        if (!agent) {
+            return res.status(400).json({ success: false, message: 'Thiếu thông tin Agent!' });
+        }
+
+        let query = supabase
+            .from('call_history')
+            .select(`
+                id, dien_thoai, ten_agent, ket_qua_cuoc_goi, ghi_chu, thoi_gian_goi,
+                customers:dien_thoai (ho, ten, dia_chi, cccd, gioi_tinh, ngay_sinh, tuoi)
+            `)
+            .eq('ten_agent', agent)
+            .order('thoi_gian_goi', { ascending: false });
+
+        if (date) {
+            query = query
+                .gte('thoi_gian_goi', `${date}T00:00:00+07:00`)
+                .lte('thoi_gian_goi', `${date}T23:59:59+07:00`);
+        }
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        // Nhật ký = mọi cuộc gọi CÓ kết quả mà KHÔNG phải "Hẹn gặp thành công" (phần còn lại của Tab 1).
+        // Bỏ dòng 'Ghi chú chăm sóc' (ghi chú thủ công, không phải cuộc gọi thật).
+        let finalData = (data || []).filter(item => {
+            const kq = String(item.ket_qua_cuoc_goi || '').trim();
+            if (!kq) return false;
+            if (isSuccessfulAppointment(kq)) return false;
+            if (kq.normalize('NFC').toLowerCase() === 'ghi chú chăm sóc') return false;
+            if (ket_qua && kq !== String(ket_qua).trim()) return false;
+            return true;
+        });
+
+        // Join thủ công sang contracts (giống Tab 1) để nút "mắt" hiện đủ thông tin hồ sơ
+        const phoneList = [...new Set(finalData.map(item => item.dien_thoai).filter(Boolean))];
+        if (phoneList.length > 0) {
+            const { data: contractsData, error: contractError } = await supabase
+                .from('contracts')
+                .select('so_hop_dong, dien_thoai, ngay_tham_gia, nam_dao_han, menh_gia, file_id')
+                .in('dien_thoai', phoneList);
+            if (contractError) throw contractError;
+
+            const contractsMap = new Map();
+            (contractsData || []).forEach(c => contractsMap.set(String(c.dien_thoai).trim(), c));
+
+            finalData = finalData.map(item => ({
+                ...item,
+                contracts: contractsMap.get(String(item.dien_thoai || '').trim()) || {}
+            }));
+        }
+
+        res.json({ success: true, data: finalData });
+    } catch (error) {
+        console.error("Lỗi lấy nhật ký cuộc gọi:", error);
         res.status(500).json({ success: false, message: 'Lỗi server nội bộ', error: error.message });
     }
 });
