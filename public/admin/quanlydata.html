@@ -955,9 +955,11 @@
                             </select>
                         </td>
                         <td class="p-3.5 text-center space-x-1 whitespace-nowrap">
-                            ${(!isAssigned || isLocked) ? `
-                                <button onclick="assignFileToAgent('${fileId}')" class="px-2.5 py-1.5 rounded-xl bg-emerald-500 text-white hover:bg-emerald-600 transition text-[11px] font-medium shadow-sm">Phân bổ</button>
-                            ` : `
+                            ${(!isAssigned || isLocked) ? (
+                                totalLeads > 0
+                                    ? `<button onclick="assignFileToAgent('${fileId}')" class="px-2.5 py-1.5 rounded-xl bg-emerald-500 text-white hover:bg-emerald-600 transition text-[11px] font-medium shadow-sm">Phân bổ</button>`
+                                    : `<button disabled title="File này có 0 lead hợp lệ (có thể toàn bộ đã bị thiếu/sai định dạng SĐT) - kiểm tra ở Tab 5 Leads Thiếu Dữ Liệu" class="px-2.5 py-1.5 rounded-xl bg-slate-300 text-slate-500 text-[11px] font-medium cursor-not-allowed opacity-70">Phân bổ</button>`
+                            ) : `
                                 <button onclick="enableEditAllocation('${fileId}')" class="px-2.5 py-1.5 rounded-xl border border-emerald-500/30 text-emerald-500 hover:bg-emerald-500/10 transition text-[11px] font-medium">Chỉnh sửa</button>
                             `}
                             
@@ -1771,8 +1773,9 @@
             confirmButtonColor: '#10b981',
             inputValidator: (val) => {
                 if (!val || !val.trim()) return 'Vui lòng nhập Số điện thoại!';
-                const cleaned = val.replace(/[\s\-.()]/g, '');
-                if (!/^0\d{9}$/.test(cleaned)) return 'Số điện thoại cần đủ 10 số và bắt đầu bằng số 0.';
+                let cleaned = val.replace(/[\s\-.()]/g, '');
+                if (/^[1-9]\d{8}$/.test(cleaned)) cleaned = '0' + cleaned; // chấp nhận số bị rụng số 0 đầu
+                if (!/^0\d{9}$/.test(cleaned)) return 'Số điện thoại cần đủ 9-10 số (10 số nếu có đủ số 0 đầu).';
             }
         });
 

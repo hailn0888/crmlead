@@ -84,8 +84,13 @@ function parseFlexibleDate(rawVal) {
  * [MỚI] Chuẩn hóa và kiểm tra định dạng Số điện thoại Việt Nam.
  * - Bỏ khoảng trắng, dấu gạch ngang, dấu chấm, ngoặc đơn (vd: "08-7250783" -> "087250783").
  * - Chuyển "84xxxxxxxxx" (mã quốc gia không dấu +) về dạng "0xxxxxxxxx".
- * - Hợp lệ khi kết quả là chuỗi đúng 10 chữ số bắt đầu bằng số 0 (định dạng di động VN chuẩn).
- *   Các số bàn cũ dạng "08-xxxxxxx" (7-8 chữ số) sẽ KHÔNG khớp và bị coi là sai định dạng.
+ * - Nếu còn lại ĐÚNG 9 chữ số và KHÔNG bắt đầu bằng 0 (vd: "933332881") -> tự thêm lại số 0 đầu,
+ *   vì đây thường là lỗi Excel làm rụng mất số 0 (do cột định dạng Number thay vì Text), không
+ *   phải SĐT sai thật sự.
+ * - Hợp lệ khi kết quả CUỐI CÙNG là chuỗi đúng 10 chữ số bắt đầu bằng số 0 (định dạng di động VN).
+ *   Số bàn cũ dạng "08-xxxxxxx" sau khi bỏ dấu gạch ngang vẫn chỉ có 9 số NHƯNG đã có sẵn số 0 ở
+ *   đầu (vd: "087250783") nên KHÔNG rơi vào trường hợp thêm số 0 ở trên -> vẫn bị coi là sai định dạng,
+ *   đúng như mong muốn (phân biệt được với số di động bị rụng số 0).
  * Trả về { valid: boolean, normalized: string } - normalized là số đã làm sạch (dùng để lưu nếu valid).
  */
 function normalizeAndValidatePhone(rawPhone) {
@@ -93,6 +98,10 @@ function normalizeAndValidatePhone(rawPhone) {
 
     if (/^84\d{9}$/.test(cleaned)) {
         cleaned = '0' + cleaned.slice(2);
+    }
+
+    if (/^[1-9]\d{8}$/.test(cleaned)) {
+        cleaned = '0' + cleaned;
     }
 
     const valid = /^0\d{9}$/.test(cleaned);
@@ -1126,7 +1135,10 @@ router.post('/data-files/:fileId/assign', async (req, res) => {
         if (fetchError) throw new Error(fetchError.message);
 
         if (!fileContracts || fileContracts.length === 0) {
-            return res.status(400).json({ success: false, message: 'File này không chứa dữ liệu hợp đồng hoặc chưa được parse!' });
+            return res.status(400).json({
+                success: false,
+                message: 'File này không có lead hợp lệ nào để phân bổ. Có thể toàn bộ lead trong file đã bị tách sang mục "Leads Thiếu Dữ Liệu" (Tab 5) do thiếu/sai định dạng SĐT, hoặc file chưa từng parse thành công lúc upload.'
+            });
         }
 
         // 3. Batch insert sang bảng lead_assignments

@@ -715,7 +715,7 @@
                         <span class="px-2 py-1 ${getCallResultBadgeClass(ketQua)} rounded-md font-medium text-xs inline-block">${escapeHtml(ketQua)}</span>
                     </td>
                     <td class="p-3 text-center text-xs opacity-90">${tg}</td>
-                    <td class="p-3 text-xs italic opacity-80">${escapeHtml(item.ghi_chu || '-')}</td>
+                    <td class="p-3 text-xs italic opacity-80">${item.ghi_chu || '-'}</td>
                     <td class="p-3 text-center">
                         <button onclick='showLeadDetailModal(${JSON.stringify(item).replace(/'/g, "&#39;")})' class="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition inline-flex items-center justify-center" title="Xem thông tin khách hàng">
                             <i data-lucide="eye" class="w-4 h-4"></i>
