@@ -910,4 +910,6 @@ router.post('/ai-insights/:id/remind', async (req, res) => {
     }
 });
 
+router.use('/report', require('./callsReport.routes'));
+
 module.exports = router;

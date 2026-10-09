@@ -173,6 +173,7 @@
         const qs = new URLSearchParams({ from: ymd(from), to: ymd(to) });
         if (agentId) qs.set('agent_id', agentId);
         const data = await fetchJson(`${API.logs}?${qs}`);
+        if (data && data.truncated) showNotice('Khoảng thời gian này có quá nhiều cuộc gọi, báo cáo chỉ gồm 50.000 cuộc gọi gần nhất. Hãy chọn khoảng ngắn hơn hoặc lọc theo nhân viên.');
         const lo = startOfDay(from), hi = addDays(startOfDay(to), 1);
         const rows = unwrap(data).map(normalizeRow).filter(r => r.at && r.at >= lo && r.at < hi);
         state.cache.set(key, rows);
@@ -564,6 +565,7 @@
         if (from > to) { Swal.fire({ icon: 'warning', title: 'Sai khoảng ngày', text: 'Từ ngày phải trước hoặc bằng Đến ngày.' }); return; }
         const agent = $('agentSelect').value;
         state.cache.clear();
+        if (state.agentsFromApi) showNotice('');
         setLoading(true);
         let ok = false;
         try {
