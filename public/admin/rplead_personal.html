@@ -1,7 +1,8 @@
-<!-- 
+<!--
   Tên file: public/admin/rplead_personal.html
-  Chức năng: Báo cáo kết quả cuộc gọi chi tiết của từng nhân viên, so sánh từng ngày bằng biểu đồ.
-  API: GET /api/calls/report/agents , GET /api/calls/report/daily?agent=&from=&to=
+  Chức năng: Báo cáo Lead cá nhân - hiệu quả gọi điện của nhân viên telesale theo ngày / tuần / tháng / quý / năm.
+  Vị trí: public/admin/rplead_personal.html
+  JS đi kèm: public/admin/js/rplead_personal.js
 -->
 <!DOCTYPE html>
 <html lang="vi">
@@ -13,15 +14,22 @@
     <link rel="icon" type="image/png" href="/uploads/favicon.png">
     <link rel="apple-touch-icon" href="/uploads/icon.png">
 
+    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Giao diện điện thoại (<768px) & máy tính bảng (768-1024px) -->
     <link rel="stylesheet" href="/css/mobile.css" media="(max-width: 767.98px)">
     <link rel="stylesheet" href="/css/tablet.css" media="(min-width: 768px) and (max-width: 1024px)">
     <script src="/js/responsive.js"></script>
-    <script src="/js/lucide.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <!-- Chart.js: vẽ biểu đồ -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
+    <!-- Lucide Icons -->
+    <script src="/js/lucide.min.js"></script>
+    <!-- SweetAlert2 cho Popup -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <!-- Chart.js cho biểu đồ -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+
+    <!-- Các script dùng chung hệ thống chuẩn -->
     <script src="/js/header.js"></script>
     <script src="/js/sidebar.js"></script>
     <script src="/js/footer.js"></script>
@@ -32,251 +40,135 @@
         <div id="mainContainer" class="flex-1 flex flex-col overflow-y-auto transition-colors duration-200 pt-16">
             <main class="px-4 py-4 max-w-full w-full flex flex-col gap-4">
 
-                <h1 class="text-base md:text-lg font-bold flex items-center gap-2">
-                    <i data-lucide="headset" class="w-5 h-5 text-red-600 dark:text-red-500"></i>
-                    <span>Báo cáo Lead cá nhân</span>
-                </h1>
-
-                <!-- BỘ LỌC -->
-                <div class="theme-card border rounded-xl p-3 shadow-sm flex flex-wrap items-end gap-3 text-xs">
-                    <label class="flex flex-col gap-1 min-w-[200px] flex-1 md:flex-none">
-                        <span class="font-semibold opacity-75">Nhân viên</span>
-                        <select id="f-agent" class="theme-input border rounded-lg px-2 py-2 bg-transparent"></select>
-                    </label>
-                    <label class="flex flex-col gap-1">
-                        <span class="font-semibold opacity-75">Từ ngày</span>
-                        <input type="date" id="f-from" class="theme-input border rounded-lg px-2 py-2 bg-transparent">
-                    </label>
-                    <label class="flex flex-col gap-1">
-                        <span class="font-semibold opacity-75">Đến ngày</span>
-                        <input type="date" id="f-to" class="theme-input border rounded-lg px-2 py-2 bg-transparent">
-                    </label>
-                    <div class="flex gap-1.5">
-                        <button data-days="7" class="quick border rounded-lg px-3 py-2 font-medium hover:bg-black/5 dark:hover:bg-white/10 transition">7 ngày</button>
-                        <button data-days="14" class="quick border rounded-lg px-3 py-2 font-medium hover:bg-black/5 dark:hover:bg-white/10 transition">14 ngày</button>
-                        <button data-days="30" class="quick border rounded-lg px-3 py-2 font-medium hover:bg-black/5 dark:hover:bg-white/10 transition">30 ngày</button>
-                    </div>
-                    <button id="btn-load" class="bg-red-600 hover:bg-red-700 text-white rounded-lg px-4 py-2 font-semibold flex items-center gap-1.5 transition">
-                        <i data-lucide="bar-chart-3" class="w-4 h-4"></i> Xem báo cáo
-                    </button>
+                <!-- Tiêu đề trang -->
+                <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                    <h1 class="text-base md:text-lg font-bold flex items-center gap-2">
+                        <i data-lucide="headset" class="w-5 h-5 text-red-600 dark:text-red-500"></i>
+                        <span>Báo cáo Lead cá nhân</span>
+                    </h1>
                 </div>
 
-                <!-- CHỈ SỐ TỔNG QUAN -->
-                <div id="kpis" class="grid grid-cols-2 lg:grid-cols-5 gap-3"></div>
+                <!-- Thông báo khi API lỗi / thiếu -->
+                <div id="apiNotice" class="hidden border border-amber-500/40 bg-amber-500/10 rounded-lg px-3 py-2 text-xs"></div>
 
-                <div id="empty" class="theme-card border rounded-xl p-10 text-center text-xs opacity-75 hidden">Không có cuộc gọi nào trong khoảng thời gian đã chọn.</div>
-
-                <div id="charts" class="flex flex-col gap-4 hidden">
-                    <div class="theme-card border rounded-xl p-4 shadow-sm">
-                        <h2 class="font-bold text-sm mb-3">Kết quả cuộc gọi theo ngày</h2>
-                        <div class="relative h-72"><canvas id="c-stack"></canvas></div>
+                <!-- Bộ lọc -->
+                <div class="theme-card border rounded-xl p-4 shadow-sm">
+                    <div class="flex flex-wrap items-end gap-3">
+                        <div class="flex flex-col gap-1 min-w-[200px]">
+                            <label for="agentSelect" class="text-xs font-medium">Nhân viên</label>
+                            <select id="agentSelect" class="border border-gray-500/40 bg-transparent rounded-lg px-3 py-2 text-sm">
+                                <option value="">Tất cả nhân viên</option>
+                            </select>
+                        </div>
+                        <div class="flex flex-col gap-1">
+                            <label for="dateFrom" class="text-xs font-medium">Từ ngày</label>
+                            <input id="dateFrom" type="date" class="border border-gray-500/40 bg-transparent rounded-lg px-3 py-2 text-sm">
+                        </div>
+                        <div class="flex flex-col gap-1">
+                            <label for="dateTo" class="text-xs font-medium">Đến ngày</label>
+                            <input id="dateTo" type="date" class="border border-gray-500/40 bg-transparent rounded-lg px-3 py-2 text-sm">
+                        </div>
+                        <div id="quickRange" class="flex flex-wrap gap-2">
+                            <button type="button" data-days="0"  class="quick-btn border border-gray-500/40 rounded-lg px-3 py-2 text-sm">Hôm nay</button>
+                            <button type="button" data-days="7"  class="quick-btn border border-gray-500/40 rounded-lg px-3 py-2 text-sm">7 ngày</button>
+                            <button type="button" data-days="14" class="quick-btn border border-gray-500/40 rounded-lg px-3 py-2 text-sm">14 ngày</button>
+                            <button type="button" data-days="30" class="quick-btn border border-gray-500/40 rounded-lg px-3 py-2 text-sm">30 ngày</button>
+                        </div>
                     </div>
+                    <div class="mt-3">
+                        <button id="btnReport" type="button" class="inline-flex items-center gap-2 bg-red-700 hover:bg-red-800 text-white rounded-lg px-4 py-2 text-sm font-medium">
+                            <i data-lucide="bar-chart-3" class="w-4 h-4"></i>
+                            <span id="btnReportText">Xem báo cáo</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="reportBody" class="flex flex-col gap-4 transition-opacity">
+
+                    <!-- Thẻ tổng quan theo khoảng ngày đã chọn -->
+                    <div id="kpiGrid" class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3"></div>
+
+                    <!-- Chi tiết từng kết quả cuộc gọi (cộng lại đúng bằng tổng cuộc gọi) -->
+                    <div class="flex flex-col gap-2">
+                        <h2 id="resultStripTitle" class="font-bold text-sm">Chi tiết theo kết quả cuộc gọi</h2>
+                        <div id="resultStrip" class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3"></div>
+                    </div>
+
+                    <!-- Biểu đồ theo kỳ -->
+                    <div class="theme-card border rounded-xl p-4 shadow-sm flex flex-col gap-3">
+                        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                            <div>
+                                <h2 id="periodTitle" class="font-bold text-sm">Biểu đồ</h2>
+                                <p class="text-xs opacity-70">Bấm vào một cột để xem so sánh chi tiết từng nhân viên của kỳ đó.</p>
+                            </div>
+                            <div id="periodTabs" class="flex flex-wrap gap-2">
+                                <button type="button" data-period="day"     class="period-tab border border-gray-500/40 rounded-lg px-3 py-1.5 text-sm">Ngày</button>
+                                <button type="button" data-period="week"    class="period-tab border border-gray-500/40 rounded-lg px-3 py-1.5 text-sm">Tuần</button>
+                                <button type="button" data-period="month"   class="period-tab border border-gray-500/40 rounded-lg px-3 py-1.5 text-sm">Tháng</button>
+                                <button type="button" data-period="quarter" class="period-tab border border-gray-500/40 rounded-lg px-3 py-1.5 text-sm">Quý</button>
+                                <button type="button" data-period="year"    class="period-tab border border-gray-500/40 rounded-lg px-3 py-1.5 text-sm">Năm</button>
+                            </div>
+                        </div>
+                        <div class="relative h-72"><canvas id="trendChart"></canvas></div>
+
+                        <div class="border-t border-gray-500/30 pt-3 flex flex-col gap-3">
+                            <h3 id="compareTitle" class="font-bold text-sm">So sánh nhân viên</h3>
+                            <div id="compareEmpty" class="hidden text-xs opacity-70 text-center py-8">Chưa có cuộc gọi nào trong kỳ này.</div>
+                            <div id="compareWrap" class="relative h-72"><canvas id="compareChart"></canvas></div>
+                            <div id="bucketTable" class="overflow-x-auto"></div>
+                        </div>
+                    </div>
+
+                    <!-- Tổng hợp từng nhân viên theo khoảng ngày đã chọn -->
+                    <div class="theme-card border rounded-xl p-4 shadow-sm flex flex-col gap-3">
+                        <div class="flex items-center justify-between gap-2">
+                            <h2 class="font-bold text-sm">Tổng hợp theo nhân viên (khoảng ngày đã chọn)</h2>
+                            <button id="btnExportAgents" type="button" class="inline-flex items-center gap-1 border border-gray-500/40 rounded-lg px-3 py-1.5 text-xs">
+                                <i data-lucide="download" class="w-3.5 h-3.5"></i> Xuất CSV
+                            </button>
+                        </div>
+                        <div id="agentTable" class="overflow-x-auto"></div>
+                    </div>
+
+                    <!-- Giờ gọi hiệu quả + cơ cấu kết quả -->
                     <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
                         <div class="theme-card border rounded-xl p-4 shadow-sm lg:col-span-2">
-                            <h2 class="font-bold text-sm mb-3">Số cuộc gọi &amp; tỷ lệ hẹn thành công theo ngày</h2>
-                            <div class="relative h-64"><canvas id="c-rate"></canvas></div>
+                            <h2 class="font-bold text-sm">Số cuộc gọi theo khung giờ</h2>
+                            <p class="text-xs opacity-70 mb-2">Mỗi cột là số cuộc gọi thực hiện trong khung giờ đó (cộng dồn các ngày đã chọn). Cột xanh lá là số hẹn gặp thành công cùng khung giờ, cho biết nên gọi vào giờ nào.</p>
+                            <div class="relative h-64"><canvas id="hourChart"></canvas></div>
                         </div>
                         <div class="theme-card border rounded-xl p-4 shadow-sm">
-                            <h2 class="font-bold text-sm mb-3">Cơ cấu kết quả cả kỳ</h2>
-                            <div class="relative h-64"><canvas id="c-pie"></canvas></div>
+                            <h2 class="font-bold text-sm mb-2">Cơ cấu kết quả cuộc gọi</h2>
+                            <div class="relative h-64"><canvas id="resultChart"></canvas></div>
                         </div>
                     </div>
 
-                    <!-- BẢNG SO SÁNH TỪNG NGÀY -->
-                    <div class="theme-card border rounded-xl shadow-sm overflow-hidden">
-                        <h2 class="font-bold text-sm p-4 pb-2">So sánh chi tiết từng ngày</h2>
-                        <div class="overflow-x-auto">
-                            <table class="w-full text-left border-collapse text-xs" id="t-days"></table>
+                    <!-- Lịch gọi lại -->
+                    <div class="theme-card border rounded-xl p-4 shadow-sm flex flex-col gap-3">
+                        <h2 class="font-bold text-sm">Lịch gọi lại từ hôm nay</h2>
+                        <div id="callbackTable" class="overflow-x-auto"></div>
+                    </div>
+
+                    <!-- Nhật ký cuộc gọi chi tiết -->
+                    <div class="theme-card border rounded-xl p-4 shadow-sm flex flex-col gap-3">
+                        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                            <h2 class="font-bold text-sm">Nhật ký cuộc gọi chi tiết</h2>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <select id="logResult" class="border border-gray-500/40 bg-transparent rounded-lg px-3 py-1.5 text-xs"></select>
+                                <input id="logSearch" type="search" placeholder="Tìm tên, SĐT, ghi chú..." class="border border-gray-500/40 bg-transparent rounded-lg px-3 py-1.5 text-xs w-52">
+                                <button id="btnExportLog" type="button" class="inline-flex items-center gap-1 border border-gray-500/40 rounded-lg px-3 py-1.5 text-xs">
+                                    <i data-lucide="download" class="w-3.5 h-3.5"></i> Xuất CSV
+                                </button>
+                            </div>
                         </div>
+                        <div id="logTable" class="overflow-x-auto"></div>
+                        <div id="logPager" class="flex items-center justify-between text-xs"></div>
                     </div>
                 </div>
-
             </main>
         </div>
     </div>
 
-    <script>
-        const $ = id => document.getElementById(id);
-        const pad = n => String(n).padStart(2, '0');
-        const toISO = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-        const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-        const WD = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
-        const PALETTE = ['#3b82f6', '#8b5cf6', '#06b6d4', '#ec4899', '#14b8a6', '#f97316', '#64748b', '#84cc16'];
-        let charts = {}, report = null;
-
-        // Cùng cách phân loại với trang calls: "Hẹn gặp thành công" là kết quả tốt
-        const isSuccess = r => String(r || '').normalize('NFC').replace(/\s+/g, ' ').trim().toLowerCase() === 'hẹn gặp thành công';
-
-        function colorFor(name, i) {
-            const r = String(name).toLowerCase();
-            if (isSuccess(name)) return '#10b981';
-            if (/từ chối|không quan tâm|sai số/.test(r)) return '#ef4444';
-            if (/không nghe|bận|thuê bao|không liên lạc/.test(r)) return '#9ca3af';
-            if (/gọi lại|suy nghĩ|cân nhắc/.test(r)) return '#f59e0b';
-            return PALETTE[i % PALETTE.length];
-        }
-        const dayLabel = d => { const [y, m, dd] = d.split('-'); return `${dd}/${m}`; };
-        const dayFull = d => `${WD[new Date(d + 'T00:00:00').getDay()]} ${dayLabel(d)}`;
-        const pct = (a, b) => b ? Math.round(a * 1000 / b) / 10 : 0;
-
-        function setRange(days) {
-            const to = new Date(), from = new Date();
-            from.setDate(to.getDate() - (days - 1));
-            $('f-from').value = toISO(from);
-            $('f-to').value = toISO(to);
-        }
-
-        async function api(url) {
-            const res = await fetch(url);
-            const json = await res.json();
-            if (!json.success) throw new Error(json.message || 'Lỗi tải dữ liệu');
-            return json.data;
-        }
-
-        async function loadAgents() {
-            try {
-                const agents = await api('/api/calls/report/agents');
-                const me = localStorage.getItem('userName');
-                $('f-agent').innerHTML = agents.map(a => `<option value="${esc(a)}">${esc(a)}</option>`).join('');
-                if (me && agents.includes(me)) $('f-agent').value = me;
-                if (agents.length) loadReport();
-                else showEmpty('Chưa có dữ liệu cuộc gọi của nhân viên nào.');
-            } catch (e) {
-                Swal.fire({ icon: 'error', title: 'Lỗi', text: e.message });
-            }
-        }
-
-        function showEmpty(msg) {
-            $('empty').textContent = msg;
-            $('empty').classList.remove('hidden');
-            $('charts').classList.add('hidden');
-        }
-
-        async function loadReport() {
-            const agent = $('f-agent').value, from = $('f-from').value, to = $('f-to').value;
-            if (!agent || !from || !to) return;
-            if (from > to) return Swal.fire({ icon: 'warning', title: 'Khoảng ngày không hợp lệ', text: '"Từ ngày" phải trước hoặc bằng "Đến ngày".' });
-            try {
-                report = await api(`/api/calls/report/daily?agent=${encodeURIComponent(agent)}&from=${from}&to=${to}`);
-                render();
-            } catch (e) {
-                Swal.fire({ icon: 'error', title: 'Lỗi tải báo cáo', text: e.message });
-            }
-        }
-
-        function render() {
-            const days = report.days;
-            // Sắp xếp kết quả: "Hẹn gặp thành công" trước, còn lại theo tổng giảm dần
-            const sum = {};
-            days.forEach(d => Object.entries(d.results).forEach(([k, v]) => sum[k] = (sum[k] || 0) + v));
-            const results = Object.keys(sum).sort((a, b) => (isSuccess(b) - isSuccess(a)) || sum[b] - sum[a]);
-            const total = days.reduce((s, d) => s + d.total, 0);
-            days.forEach(d => { d.ok = Object.entries(d.results).reduce((x, [k, v]) => x + (isSuccess(k) ? v : 0), 0); d.rate = pct(d.ok, d.total); });
-            const ok = days.reduce((s, d) => s + d.ok, 0);
-            const active = days.filter(d => d.total > 0);
-
-            if (!total) return (renderKpis(0, 0, 0, null), showEmpty('Không có cuộc gọi nào trong khoảng thời gian đã chọn.'));
-            $('empty').classList.add('hidden');
-            $('charts').classList.remove('hidden');
-
-            const best = days.reduce((b, d) => d.ok > b.ok ? d : b, days[0]);
-            renderKpis(total, ok, active.length, best);
-            drawCharts(days, results, sum);
-            drawTable(days, results);
-            if (typeof lucide !== 'undefined') lucide.createIcons();
-        }
-
-        function renderKpis(total, ok, activeDays, best) {
-            const card = (label, val, sub) => `<div class="theme-card border rounded-xl p-3 shadow-sm">
-                <div class="text-[11px] font-semibold opacity-70">${label}</div>
-                <div class="text-xl font-bold mt-1">${val}</div>
-                <div class="text-[11px] opacity-60 mt-0.5">${sub}</div></div>`;
-            $('kpis').innerHTML =
-                card('Tổng cuộc gọi', total, `${activeDays} ngày có hoạt động`) +
-                card('Hẹn gặp thành công', ok, 'cả kỳ') +
-                card('Tỷ lệ hẹn thành công', pct(ok, total) + '%', 'hẹn thành công / tổng cuộc gọi') +
-                card('Trung bình / ngày', activeDays ? (total / activeDays).toFixed(1) : 0, 'tính trên ngày có gọi') +
-                card('Ngày hiệu quả nhất', best && best.ok ? dayFull(best.date) : '-', best && best.ok ? `${best.ok} hẹn / ${best.total} cuộc gọi` : 'chưa có hẹn thành công');
-        }
-
-        function drawCharts(days, results, sum) {
-            Object.values(charts).forEach(c => c.destroy());
-            const fg = getComputedStyle(document.body).color;
-            const grid = 'rgba(128,128,128,.2)';
-            Chart.defaults.color = fg;
-            Chart.defaults.font.size = 11;
-            const labels = days.map(d => dayLabel(d.date));
-            const scales = (extra = {}) => ({
-                x: { grid: { display: false } },
-                y: { beginAtZero: true, grid: { color: grid }, ticks: { precision: 0 }, ...extra }
-            });
-
-            charts.stack = new Chart($('c-stack'), {
-                type: 'bar',
-                data: { labels, datasets: results.map((r, i) => ({ label: r, data: days.map(d => d.results[r] || 0), backgroundColor: colorFor(r, i), stack: 's' })) },
-                options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index' },
-                    scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true, beginAtZero: true, grid: { color: grid }, ticks: { precision: 0 } } },
-                    plugins: { legend: { position: 'bottom' } } }
-            });
-
-            charts.rate = new Chart($('c-rate'), {
-                data: { labels, datasets: [
-                    { type: 'bar', label: 'Tổng cuộc gọi', data: days.map(d => d.total), backgroundColor: 'rgba(59,130,246,.55)', yAxisID: 'y' },
-                    { type: 'line', label: 'Tỷ lệ hẹn thành công (%)', data: days.map(d => d.total ? d.rate : null), borderColor: '#10b981', backgroundColor: '#10b981', tension: .25, spanGaps: true, yAxisID: 'y1' }
-                ] },
-                options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index' },
-                    scales: { x: { grid: { display: false } }, y: { beginAtZero: true, grid: { color: grid }, ticks: { precision: 0 } },
-                        y1: { position: 'right', beginAtZero: true, max: 100, grid: { display: false }, ticks: { callback: v => v + '%' } } },
-                    plugins: { legend: { position: 'bottom' } } }
-            });
-
-            charts.pie = new Chart($('c-pie'), {
-                type: 'doughnut',
-                data: { labels: results, datasets: [{ data: results.map(r => sum[r]), backgroundColor: results.map((r, i) => colorFor(r, i)), borderWidth: 0 }] },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
-            });
-        }
-
-        // Mũi tên chênh lệch so với ngày liền trước (ngày trước không có cuộc gọi vẫn so sánh bình thường = 0)
-        function delta(cur, prev, suffix = '') {
-            if (prev === undefined) return '<span class="opacity-40">-</span>';
-            const d = Math.round((cur - prev) * 10) / 10;
-            if (d === 0) return '<span class="opacity-50">0' + suffix + '</span>';
-            return d > 0 ? `<span class="text-emerald-600 font-semibold">▲ ${d}${suffix}</span>` : `<span class="text-red-600 font-semibold">▼ ${Math.abs(d)}${suffix}</span>`;
-        }
-
-        function drawTable(days, results) {
-            const head = `<thead><tr class="border-b border-gray-200 dark:border-gray-700 bg-black/5 dark:bg-white/5 font-semibold">
-                <th class="p-3 whitespace-nowrap">Ngày</th>
-                <th class="p-3 text-center whitespace-nowrap">Tổng gọi</th>
-                <th class="p-3 text-center whitespace-nowrap">So hôm trước</th>
-                ${results.map(r => `<th class="p-3 text-center whitespace-nowrap">${esc(r)}</th>`).join('')}
-                <th class="p-3 text-center whitespace-nowrap">Tỷ lệ hẹn</th>
-                <th class="p-3 text-center whitespace-nowrap">So hôm trước</th></tr></thead>`;
-            const rows = days.map((d, i) => {
-                const p = days[i - 1];
-                return `<tr class="border-b border-gray-100 dark:border-gray-800 hover:bg-black/5 dark:hover:bg-white/5 ${d.total ? '' : 'opacity-50'}">
-                    <td class="p-3 font-semibold whitespace-nowrap">${dayFull(d.date)}</td>
-                    <td class="p-3 text-center font-bold">${d.total}</td>
-                    <td class="p-3 text-center">${delta(d.total, p && p.total)}</td>
-                    ${results.map(r => `<td class="p-3 text-center">${d.results[r] || 0}</td>`).join('')}
-                    <td class="p-3 text-center font-semibold">${d.total ? d.rate + '%' : '-'}</td>
-                    <td class="p-3 text-center">${d.total && p && p.total ? delta(d.rate, p.rate, '%') : '<span class="opacity-40">-</span>'}</td></tr>`;
-            }).reverse().join(''); // ngày mới nhất lên đầu
-            $('t-days').innerHTML = head + `<tbody>${rows}</tbody>`;
-        }
-
-        document.addEventListener('DOMContentLoaded', () => {
-            if (typeof lucide !== 'undefined') lucide.createIcons();
-            setRange(14);
-            document.querySelectorAll('.quick').forEach(b => b.addEventListener('click', () => { setRange(+b.dataset.days); loadReport(); }));
-            $('btn-load').addEventListener('click', loadReport);
-            $('f-agent').addEventListener('change', loadReport);
-            // Đổi giao diện sáng/tối -> vẽ lại biểu đồ để màu chữ/lưới khớp theme
-            new MutationObserver(() => report && report.days && $('charts').classList.contains('hidden') === false && render())
-                .observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
-            loadAgents();
-        });
-    </script>
+    <script src="/admin/js/rplead_personal.js"></script>
 </body>
 </html>

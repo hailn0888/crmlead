@@ -1,5 +1,5 @@
 /*
- * Tên file: public/js/rplead_personal.js
+ * Tên file: public/admin/js/rplead_personal.js
  * Chức năng: Báo cáo Lead cá nhân - thống kê cuộc gọi telesale theo ngày/tuần/tháng/quý/năm.
  *
  * API backend cần có (trả JSON):
@@ -70,8 +70,23 @@
 
     function parseDate(v) {
         if (!v) return null;
-        const d = v instanceof Date ? v : new Date(v);
+        if (v instanceof Date) return isNaN(v.getTime()) ? null : v;
+        let s = String(v).trim();
+        // DB lưu giờ UTC dạng không kèm múi giờ -> thêm 'Z' để hiểu đúng là UTC (giống calls.html)
+        if (/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/.test(s) && !/([zZ]|[+-]\d{2}(:?\d{2})?)$/.test(s)) {
+            s = s.replace(' ', 'T') + 'Z';
+        }
+        const d = new Date(s);
         return isNaN(d.getTime()) ? null : d;
+    }
+    // Ghi chú trong DB có lẫn thẻ HTML (<br>, <span ...>) -> bỏ thẻ, giữ chữ
+    function cleanNote(s) {
+        return String(s == null ? '' : s)
+            .replace(/<\s*br\s*\/?>/gi, ' ')
+            .replace(/<\/?(?:span|div|p|b|i|u|em|strong|small|font)\b[^>]*>/gi, '')
+            .replace(/&nbsp;/gi, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+            .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&')
+            .replace(/\s+/g, ' ').trim();
     }
     function parseInputDate(v) {
         if (!v) return null;
@@ -162,7 +177,7 @@
             agentName: name,
             customer: r.customer_name || r.lead_name || r.name || '',
             phone: r.phone || r.customer_phone || '',
-            note: r.note || r.notes || '',
+            note: cleanNote(r.note || r.notes),
             duration: Number(r.duration || r.call_duration || 0)
         };
     }
@@ -347,7 +362,11 @@
             b.t = tally(b.rows);
         });
         state.buckets = buckets;
-        if (state.selected == null || state.selected >= buckets.length) state.selected = buckets.length - 1;
+        if (state.selected == null || state.selected >= buckets.length) {
+            let idx = buckets.length - 1;
+            while (idx > 0 && buckets[idx].t.total === 0) idx--;
+            state.selected = idx;
+        }
         drawTrend();
         drawCompare();
     }
@@ -495,6 +514,18 @@
         refreshIcons();
     }
 
+    function renderResultStrip(rows) {
+        const t = tally(rows);
+        $('resultStripTitle').textContent = `Chi tiết theo kết quả cuộc gọi - tổng ${num(t.total)} cuộc gọi`;
+        $('resultStrip').innerHTML = RESULTS.map(r => {
+            const p = t.total ? t[r.key] / t.total * 100 : 0;
+            return `<div class="theme-card border rounded-xl px-3 py-2 shadow-sm flex items-center gap-2">`
+                + `<span class="w-2.5 h-2.5 rounded-full shrink-0" style="background:${r.color}"></span>`
+                + `<div class="min-w-0"><div class="text-[11px] opacity-75 truncate" title="${esc(r.label)}">${esc(r.label)}</div>`
+                + `<div class="text-sm font-bold">${num(t[r.key])} <span class="text-[11px] font-normal opacity-70">(${pct(p)})</span></div></div></div>`;
+        }).join('');
+    }
+
     /* ---------- Xuất CSV ---------- */
     function downloadCsv(name, header, lines) {
         const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
@@ -578,6 +609,7 @@
             state.logPage = 1;
             if (!state.agentsFromApi) fillAgentsFromRows(rows);
             renderKpi(rows, prev);
+            renderResultStrip(rows);
             $('agentTable').innerHTML = agentTableHtml(rows, len === 1);
             drawHourAndResult(rows);
             renderCallbacks(rows);
@@ -588,7 +620,7 @@
         } finally {
             setLoading(false);
         }
-        if (ok) await renderPeriod();
+        if (ok) { state.selected = null; await renderPeriod(); }
     }
 
     function setQuickRange(days) {

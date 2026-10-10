@@ -16,6 +16,19 @@ const PAGE_SIZE = 1000;      // Supabase chỉ trả tối đa 1000 dòng / lầ
 const MAX_ROWS = 50000;      // trần an toàn cho 1 lần báo cáo
 const PHONE_CHUNK = 150;     // số điện thoại tối đa mỗi lần tra bảng nhac_hen_lai
 
+// call_history.thoi_gian_goi là kiểu timestamp KHÔNG múi giờ nhưng đang lưu giờ UTC
+// (calls.html cũng tự thêm 'Z' rồi cộng 7 tiếng để ra giờ Việt Nam). Vì vậy:
+//  - khi lọc theo ngày Việt Nam phải đổi mốc ngày sang giờ UTC;
+//  - khi trả dữ liệu phải gắn 'Z' để trình duyệt hiểu đúng đó là giờ UTC.
+function toUtcIso(v) {
+    if (!v) return null;
+    const s = String(v).trim();
+    if (/([zZ]|[+-]\d{2}(:?\d{2})?)$/.test(s)) return s;
+    return s.replace(' ', 'T') + 'Z';
+}
+const vnBoundaryToUtc = (dateStr, time) =>
+    new Date(`${dateStr}T${time}+07:00`).toISOString().slice(0, -1); // bỏ 'Z' vì cột là timestamp
+
 const cleanResult = v => String(v || '').normalize('NFC').replace(/\s+/g, ' ').trim();
 
 // 'Ghi chú chăm sóc' là ghi chú thủ công, không phải cuộc gọi thật (giống tab Nhật ký cuộc gọi)
@@ -79,8 +92,9 @@ router.get('/logs', async (req, res) => {
             return res.status(400).json({ success: false, message: 'from phải trước hoặc bằng to.' });
         }
 
-        const startIso = `${from}T00:00:00+07:00`;
-        const endIso = `${to}T23:59:59.999+07:00`;
+        // Ngày Việt Nam from..to -> khoảng giờ UTC tương ứng (VD 10/10 VN = 09/10 17:00 -> 10/10 16:59:59 UTC)
+        const startIso = vnBoundaryToUtc(from, '00:00:00');
+        const endIso = vnBoundaryToUtc(to, '23:59:59.999');
 
         const { rows: rawCalls, truncated } = await fetchAllPages(() => {
             let q = supabase
@@ -138,9 +152,9 @@ router.get('/logs', async (req, res) => {
                 agent_name: r.ten_agent,
                 customer_name: `${cust.ho || ''} ${cust.ten || ''}`.trim(),
                 phone,
-                called_at: r.thoi_gian_goi,
+                called_at: toUtcIso(r.thoi_gian_goi),
                 result: cleanResult(r.ket_qua_cuoc_goi),
-                callback_at: rem ? remTime(rem) : null,
+                callback_at: rem ? toUtcIso(remTime(rem)) : null,
                 callback_done: rem ? !!rem.da_nhac : null,
                 duration: 0, // call_history chưa lưu thời lượng cuộc gọi
                 note: r.ghi_chu || ''

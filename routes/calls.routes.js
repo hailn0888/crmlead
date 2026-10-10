@@ -910,6 +910,7 @@ router.post('/ai-insights/:id/remind', async (req, res) => {
     }
 });
 
-router.use('/report', require('./callsReport.routes'));
+// Báo cáo Lead cá nhân: /api/calls/report/agents và /api/calls/report/logs
+router.use("/report", require("./callsReport.routes"));
 
 module.exports = router;
