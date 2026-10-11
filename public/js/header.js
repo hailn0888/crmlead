@@ -16,9 +16,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const headerHTML = `
     <header id="appHeader" class="fixed top-0 left-0 right-0 z-50 h-14 flex items-center justify-between px-4 select-none transition-colors duration-200">
         <div class="flex items-center space-x-4">
-            <a href="#" class="flex items-center space-x-2">
+            <a href="/admin/dashboard_admin.html" class="flex items-center space-x-2" title="Về trang chủ">
                 <img src="/uploads/logo_crm.png" alt="Logo" class="w-12 h-12 object-contain rounded">
             </a>
+            
             <span id="dividerText" class="opacity-60">/</span>
             <div class="flex items-center space-x-2">
                 <span id="headerName" class="font-medium text-xs">${hoVaTen}</span>
