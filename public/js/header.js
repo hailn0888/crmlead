@@ -12,14 +12,24 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const savedTheme = localStorage.getItem('crm_theme') || 'light';
 
+    // Trang chủ theo phân quyền (bấm logo sẽ về đúng trang của từng vai trò)
+    // Role nào chưa khai báo sẽ tự về trang nhân viên, tránh bị lỗi 404.
+    // Khi leader có dashboard riêng: bỏ dấu // ở dòng leader và sửa đúng tên file.
+    const HOME_URLS = {
+        admin: '/admin/dashboard_admin.html',
+        agent: '/agents/dashboard_agents.html'
+        // leader: '/leaders/ten_file_dashboard_leader.html'
+    };
+    const homeUrl = HOME_URLS[phanQuyen] || HOME_URLS.agent;
+
     // 2. Hàm chức năng: Tạo mã HTML Header và chèn vào trang
     const headerHTML = `
     <header id="appHeader" class="fixed top-0 left-0 right-0 z-50 h-14 flex items-center justify-between px-4 select-none transition-colors duration-200">
         <div class="flex items-center space-x-4">
-            <a href="/admin/dashboard_admin.html" class="flex items-center space-x-2" title="Về trang chủ">
+            <a href="${homeUrl}" class="flex items-center space-x-2" title="Về trang chủ">
                 <img src="/uploads/logo_crm.png" alt="Logo" class="w-12 h-12 object-contain rounded">
             </a>
-            
+
             <span id="dividerText" class="opacity-60">/</span>
             <div class="flex items-center space-x-2">
                 <span id="headerName" class="font-medium text-xs">${hoVaTen}</span>
