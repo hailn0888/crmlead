@@ -1,4 +1,13 @@
 <!DOCTYPE html>
+<!--
+   fyc.html (public/agents/) - Công cụ tính FYC (hoa hồng) và lưu làm doanh số
+
+   - Bảng FYC thực lãnh theo chính sách thu nhập 2026: giữ nguyên.
+   - [MEMO 00110] Ô tick "Tính thêm IP xét thưởng": tính IP xét thưởng + thưởng phụ
+     (tiền, vé quay số iPhone 18 Pro), KHÔNG thay đổi hoa hồng thực lãnh.
+     Khi lưu kèm memo: bắt buộc nhập ngày nộp hồ sơ, ngày phát hành phải trong
+     01/10 - 31/10/2026. Quy tắc nằm trong /js/memo/memo110.js.
+-->
 <html lang="vi">
 <head>
 
@@ -256,12 +265,12 @@
                         </table>
                     </div>
 
-                    <!-- ===== Tuỳ chọn tính IP xét thưởng theo Memo 00110 ===== -->
+                    <!-- ===== Tuỳ chọn tính FYC xét thưởng theo Memo 00110 ===== -->
                     <div id="memo110-section" class="pt-3 border-t border-theme-border space-y-3">
                         <label for="memo110-toggle" class="flex items-start gap-2.5 cursor-pointer select-none">
                             <input type="checkbox" id="memo110-toggle" class="mt-0.5 w-4 h-4 shrink-0 rounded border-theme-border cursor-pointer" style="accent-color:#dc2626;">
                             <span class="text-xs leading-relaxed">
-                                <b>Tính thêm IP xét thưởng theo Memo 00110</b> &ndash; "Bứt tốc phi mã, chớp cơ hội vàng"
+                                <b>Tính thêm FYC xét thưởng theo Memo 00110</b> &ndash; "Bứt tốc phi mã, chớp cơ hội vàng"
                                 <span class="block text-[11px] text-theme-muted">Thi đua 01/10 &ndash; 31/10/2026 &bull; Chỉ thêm thưởng tiền + vé quay số, không thay đổi hoa hồng thực lãnh</span>
                             </span>
                         </label>
@@ -1145,9 +1154,9 @@
         panel.innerHTML = `
             <div class="p-3 bg-theme-bg rounded-xl border border-theme-border space-y-3 text-xs">
                 <div class="flex items-center gap-1.5 font-bold text-theme-primary">
-                    <i data-lucide="gift" class="w-4 h-4"></i> IP xét thưởng &amp; thưởng phụ theo ${MM.CFG.so}
+                    <i data-lucide="gift" class="w-4 h-4"></i> FYC xét thưởng &amp; thưởng phụ theo ${MM.CFG.so}
                 </div>
-                <p class="text-[11px] text-theme-muted">Đây là IP <b>xét thưởng</b>. Bảng hoa hồng thực lãnh ở trên <b>không thay đổi</b>; khoản thưởng dưới đây là thưởng phụ, tính riêng.</p>
+                <p class="text-[11px] text-theme-muted">Đây là FYC <b>xét thưởng</b> (IP tính thưởng). Bảng hoa hồng thực lãnh ở trên <b>không thay đổi</b>; khoản thưởng dưới đây là thưởng phụ, tính riêng.</p>
 
                 <div class="overflow-x-auto">
                     <table class="w-full text-left border-collapse">
@@ -1161,7 +1170,7 @@
                         </thead>
                         <tbody>${linesHtml}</tbody>
                         <tfoot>
-                            <tr><td class="p-2 font-bold" colspan="3">IP xét thưởng của hợp đồng này</td>
+                            <tr><td class="p-2 font-bold" colspan="3">FYC xét thưởng của hợp đồng này</td>
                                 <td class="p-2 text-right font-bold text-theme-primary">${fmt(a.ipTT)}</td></tr>
                         </tfoot>
                     </table>
@@ -1186,7 +1195,29 @@
 
     // ----- API cho phần "Lưu làm doanh số" -----
     window.memo110Get = function () { return { enabled: current().enabled }; };
-    window.memo110ValidateDate = MM.dateError;
+    // Ngày nộp hồ sơ nhập trong hộp thoại lưu (chỉ khi tick memo)
+    let lastNop = '';
+    function nopIssue(nop) {
+        if (!nop) return '';
+        if (!MM.inWindow(nop)) return 'Hồ sơ nộp ngoài 01/10 - 31/10/2026 nên KHÔNG hợp lệ theo Memo 00110 (IP xét thưởng = 0).';
+        return '';
+    }
+    window.memo110NopHint = function () {
+        const el = document.getElementById('swal-ngay-nop');
+        const hint = document.getElementById('memo-nop-hint');
+        if (!el || !hint) return;
+        hint.innerText = nopIssue(el.value);
+    };
+    window.memo110ValidateDate = function (ngayCap) {
+        const err = MM.dateError(ngayCap);
+        if (err) return err;
+        const el = document.getElementById('swal-ngay-nop');
+        const nop = el ? el.value : '';
+        if (!nop) return 'Vui lòng nhập ngày nộp hồ sơ để kiểm tra tính hợp lệ theo Memo 00110!';
+        if (nop > String(ngayCap).slice(0, 10)) return 'Ngày nộp hồ sơ không được sau ngày phát hành!';
+        lastNop = nop;
+        return '';
+    };
 
     window.memo110SaveNotice = function () {
         const cur = current();
@@ -1199,7 +1230,12 @@
             <div class="p-3 rounded-xl border border-red-300 bg-red-50/40 space-y-1">
                 <p class="font-bold text-red-600">Lưu kèm FYC xét thưởng ${MM.CFG.so}</p>
                 <p class="opacity-90">${summary}</p>
-                <p class="opacity-70 italic">Hoa hồng thực lãnh không đổi. Ngày phát hành phải từ 01/10/2026 đến 31/10/2026, nếu không sẽ không lưu được.</p>
+                <div>
+                    <label class="block font-medium mb-1 opacity-90">Ngày nộp hồ sơ <span class="text-red-500">*</span></label>
+                    <input id="swal-ngay-nop" type="date" oninput="window.memo110NopHint()" onchange="window.memo110NopHint()" class="w-full p-2.5 border border-theme-border rounded-xl text-xs outline-none bg-transparent focus:border-red-400 transition text-theme-text">
+                    <p id="memo-nop-hint" class="text-red-600 mt-1 text-[11px]"></p>
+                </div>
+                <p class="opacity-70 italic">Hoa hồng thực lãnh không đổi. Hồ sơ phải nộp VÀ phát hành trong 01/10 - 31/10/2026. Ngày phát hành ngoài khoảng này sẽ không lưu được; ngày nộp ngoài khoảng thì lưu nhưng IP xét thưởng = 0.</p>
             </div>`;
     };
 
@@ -1208,17 +1244,22 @@
         if (!cur.data) return null;
         const a = MM.analyze({ mainProduct: cur.data.mainProduct, mainIP: cur.data.mainPremium, riders: cur.data.riders });
         const tyLe = Number(tyLeChia) || 100;
-        const ipTT = a.hopLe ? a.ipTT : 0;
+        const nop = lastNop;
+        const nopOk = !!nop && MM.inWindow(nop) && nop <= String(ngayPhatHanh).slice(0, 10);
+        const hopLe = a.hopLe && nopOk;
+        const ipTT = hopLe ? a.ipTT : 0;
         return {
             memo: MM.CFG.so,
             apDung: true,
+            ngayNopHoSo: nop,
             ngayPhatHanh: ngayPhatHanh,
-            hopLe: a.hopLe,
+            hopLe: hopLe,
             ipChinh: a.mainIP,
             ipBanCung: a.riderIP,
             heSo: a.boostNote || null,
             chiTiet: a.lines.map(l => ({ ten: l.name, loai: l.type, ipGoc: l.ip, heSo: l.factor, ipXetThuong: l.ipTT })),
-            dieuKien: a.checks.map(c => ({ dat: c.ok, noiDung: c.short })),
+            dieuKien: a.checks.map(c => ({ dat: c.ok, noiDung: c.short }))
+                .concat([{ dat: nopOk, noiDung: 'Nộp hồ sơ trong 01/10 - 31/10/2026' }]),
             ipXetThuong: ipTT,
             tyLeChia: tyLe,
             ipXetThuongSauChia: ipTT * tyLe / 100

@@ -1,10 +1,27 @@
+/* ==========================================================================
+   agent.routes.js (routes/) - API dành cho Agent (Tư vấn viên)
+
+   Gồm các nhóm API (đường dẫn gốc: /api/agent):
+     1. /files, /colleagues, /leads   : file phân bổ, đồng nghiệp, data lead
+     2. /calls                        : ghi nhận và xem cuộc gọi
+     3. /sales                        : doanh số cá nhân (hợp đồng + kỳ đóng phí)
+                                        dùng cho fyc.html và sales.html
+
+   [MEMO 00110] GET /sales trả thêm khối "memo00110" (lưu trong ghi_chu của
+   hợp đồng, gồm ngày nộp hồ sơ, IP xét thưởng...) để sales.html cộng dồn IP
+   xét thưởng cả tháng 10/2026 - xem /js/memo/memo110.js.
+   ========================================================================== */
+
 const express = require('express');
 const router = express.Router();
 const supabase = require('../config/supabase');
 const checkOfficeIp = require('../middleware/officeIp.middleware');
 
+
 // Hàm phụ: Lấy ID của agent từ tên hoặc tên đăng nhập
+
 async function getAgentId(agentName) {
+
     if (!agentName) return null;
     const { data, error } = await supabase
         .from('users')
@@ -16,15 +33,21 @@ async function getAgentId(agentName) {
 }
 
 
+
 // Hàm phụ: chia mảng thành các lô nhỏ (tránh .in() quá dài / quá nhiều giá trị)
+
 function chunkArray(arr, size) {
+
     const out = [];
     for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
     return out;
 }
 
+
 // Hàm phụ: lấy dữ liệu theo danh sách giá trị, chia lô 300 giá trị/lần
+
 async function fetchByInChunks(table, columns, column, values, size = 300) {
+
     let all = [];
     for (const chunk of chunkArray(values, size)) {
         const { data, error } = await supabase.from(table).select(columns).in(column, chunk);
@@ -34,8 +57,11 @@ async function fetchByInChunks(table, columns, column, values, size = 300) {
     return all;
 }
 
+
 // Hàm phụ: lấy TOÀN BỘ dòng (vượt giới hạn 1000 dòng/truy vấn mặc định của Supabase)
+
 async function fetchAllPages(buildQuery, pageSize = 1000) {
+
     let all = [];
     for (let from = 0; ; from += pageSize) {
         const { data, error } = await buildQuery().range(from, from + pageSize - 1);
@@ -47,8 +73,11 @@ async function fetchAllPages(buildQuery, pageSize = 1000) {
     return all;
 }
 
+
 // 1. API: Lấy danh sách file được phân bổ cho Agent (Truy vấn độc lập chống lỗi quan hệ)
+
 router.get('/files', async (req, res) => {
+
     try {
         const agentName = req.query.agent;
         if (!agentName) {
@@ -131,8 +160,11 @@ router.get('/files', async (req, res) => {
     }
 });
 
+
 // API: Lấy danh sách đồng nghiệp (Agent) để chọn gửi hẹn (dùng cho popup Gửi Cuộc Hẹn)
+
 router.get('/colleagues', async (req, res) => {
+
     try {
         const { data, error } = await supabase
             .from('users')
@@ -146,6 +178,7 @@ router.get('/colleagues', async (req, res) => {
     }
 });
 
+
 // 2. API: Lấy danh sách lead chi tiết của agent
 // checkOfficeIp('agent'): CHỈ chặn nếu agent này đang bị admin bật "Giới hạn IP" (cột
 // ip_limit trong bảng users) VÀ đang gọi từ ngoài IP văn phòng - ai không bị bật cờ đó thì
@@ -158,7 +191,9 @@ router.get('/colleagues', async (req, res) => {
 //    call_history của agent này) để frontend bỏ qua, chỉ hiện lead CHƯA gọi.
 //  - Phân trang lấy lead_assignments + chia lô .in() để không bị cắt ở 1000 dòng.
 //  - Gộp các dòng lead_assignments trùng so_hop_dong (nguyên nhân hiển thị lặp lead).
+
 router.get('/leads', checkOfficeIp('agent'), async (req, res) => {
+
     try {
         const agentName = req.query.agent;
         if (!agentName) {
@@ -273,8 +308,11 @@ router.get('/leads', checkOfficeIp('agent'), async (req, res) => {
     }
 });
 
+
 // 3. API: Lưu kết quả cuộc gọi
+
 router.post('/calls', async (req, res) => {
+
     try {
         const { dien_thoai, so_hop_dong, ten_agent, ket_qua_cuoc_goi, ghi_chu, thoi_gian_goi } = req.body;
 
@@ -327,14 +365,18 @@ router.post('/calls', async (req, res) => {
     }
 });
 
+
 // API: Lấy lịch sử cuộc gọi kèm thông tin khách hàng (Đã fix lọc theo ngày)
+
 router.get('/calls', async (req, res) => {
+
     try {
         const { agent, date } = req.query;
         
         let query = supabase
             .from('call_history')
             .select(`
+
                 id,
                 dien_thoai,
                 ten_agent,
@@ -343,6 +385,7 @@ router.get('/calls', async (req, res) => {
                 thoi_gian_goi,
                 customers:dien_thoai (ho, ten, dia_chi)
             `)
+
             .order('thoi_gian_goi', { ascending: false });
 
         if (agent) {
@@ -366,6 +409,7 @@ router.get('/calls', async (req, res) => {
     }
 });
 
+
 // =====================================================================
 // 4. API DOANH SỐ CÁ NHÂN (FYC / Hợp đồng) - dùng cho fyc.html & sales.html
 // Trước đây 2 trang này gọi thẳng Supabase từ trình duyệt và lưu tạm vào
@@ -376,7 +420,9 @@ router.get('/calls', async (req, res) => {
 
 // Hàm phụ: sinh lịch các kỳ đóng phí (Năm/Nửa năm/Quý) kèm số FYC mỗi kỳ.
 // Kỳ 1 mặc định coi như đã đóng ngay tại ngày phát hành hợp đồng.
+
 function buildInstallmentSchedule(dinhKy, ngayPhatHanh, hoaHongFyc) {
+
     const divisor = dinhKy === 'Nửa năm' ? 2 : (dinhKy === 'Quý' ? 4 : 1);
     const fycPerPeriod = (Number(hoaHongFyc) || 0) / divisor;
     const schedule = [];
@@ -392,8 +438,11 @@ function buildInstallmentSchedule(dinhKy, ngayPhatHanh, hoaHongFyc) {
     return schedule;
 }
 
+
 // GET: Lấy toàn bộ danh sách doanh số (hợp đồng + lịch đóng phí) của 1 agent
+
 router.get('/sales', async (req, res) => {
+
     try {
         const agentName = req.query.agent;
         if (!agentName) {
@@ -444,10 +493,16 @@ router.get('/sales', async (req, res) => {
         // sửa đổi phần hiển thị/tính toán ở frontend
         const formatted = contracts.map(c => {
             let riders = [];
+            // [MEMO 00110] Khối thông tin thi đua memo (ngày nộp hồ sơ, IP xét thưởng...)
+            // được fyc.html lưu trong ghi_chu -> memo00110. Trả ra để sales.html kiểm tra
+            // "hồ sơ nộp VÀ phát hành trong 01/10 - 31/10/2026".
+            // Hợp đồng lưu khi không tick ô memo (hoặc lưu từ trước) sẽ là null.
+            let memo00110 = null;
             if (c.ghi_chu) {
                 try {
                     const parsed = typeof c.ghi_chu === 'string' ? JSON.parse(c.ghi_chu) : c.ghi_chu;
                     riders = parsed.riders || [];
+                    memo00110 = parsed.memo00110 || null; // [MEMO 00110] lấy khối memo nếu có
                 } catch (e) { /* ghi_chu không phải JSON hợp lệ thì bỏ qua */ }
             }
             return {
@@ -461,6 +516,7 @@ router.get('/sales', async (req, res) => {
                 splitRate: Number(c.ty_le_hoa_hong) || 100,
                 fyc: { fullY1: Number(c.hoa_hong_fyc) || 0, y1: Number(c.hoa_hong_fyc) || 0 },
                 riders,
+                memo00110, // [MEMO 00110] trả khối memo ra cho giao diện (null nếu không có)
                 installments: instMap[c.so_hop_dong] || []
             };
         });
@@ -472,8 +528,11 @@ router.get('/sales', async (req, res) => {
     }
 });
 
+
 // POST: Lưu (thêm mới hoặc cập nhật) 1 hợp đồng doanh số từ công cụ tính FYC
+
 router.post('/sales', async (req, res) => {
+
     try {
         const { agent, ...payload } = req.body;
         if (!agent || !payload.so_hop_dong) {
@@ -513,8 +572,11 @@ router.post('/sales', async (req, res) => {
     }
 });
 
+
 // PUT: Xác nhận đã đóng phí cho 1 kỳ cụ thể của 1 hợp đồng
+
 router.put('/sales/installment', async (req, res) => {
+
     try {
         const { so_hop_dong, ky_thu_may, ngay_da_dong } = req.body;
         if (!so_hop_dong || !ky_thu_may || !ngay_da_dong) {
@@ -535,8 +597,11 @@ router.put('/sales/installment', async (req, res) => {
     }
 });
 
+
 // PATCH: Sửa thông tin cơ bản của 1 hợp đồng (Số HĐ / BMBH / NĐBH)
+
 router.patch('/sales/:so_hop_dong', async (req, res) => {
+
     try {
         const { so_hop_dong } = req.params;
         // Chỉ cho phép sửa các trường này qua nút "Chỉnh sửa thông tin" ở giao diện
@@ -566,8 +631,11 @@ router.patch('/sales/:so_hop_dong', async (req, res) => {
     }
 });
 
+
 // DELETE: Xoá 1 hợp đồng doanh số (lịch đóng phí bị xoá kèm theo nhờ ON DELETE CASCADE)
+
 router.delete('/sales/:so_hop_dong', async (req, res) => {
+
     try {
         const { so_hop_dong } = req.params;
         const { error } = await supabase.from('danh_sach_hop_dong').delete().eq('so_hop_dong', so_hop_dong);
@@ -579,8 +647,11 @@ router.delete('/sales/:so_hop_dong', async (req, res) => {
     }
 });
 
+
 // DELETE: Xoá toàn bộ doanh số của 1 agent (nút "Xóa tất cả dữ liệu")
+
 router.delete('/sales', async (req, res) => {
+
     try {
         const agentName = req.query.agent;
         if (!agentName) {
@@ -598,5 +669,6 @@ router.delete('/sales', async (req, res) => {
         res.status(500).json({ success: false, message: 'Không thể xoá dữ liệu' });
     }
 });
+
 
 module.exports = router;

@@ -100,6 +100,20 @@
      * Chỉ "tính vào tổng tháng" khi phát hành trong 01-31/10/2026 VÀ hồ sơ hợp lệ.
      * Hợp đồng chia 50-50: chia toàn bộ IP xét thưởng theo tỷ lệ chia.
      */
+    // Lấy khối memo đã lưu kèm hợp đồng (ghi_chu.memo00110) nếu API có trả về
+    function getMemoMeta(item) {
+        try {
+            let m = item.memo00110;
+            if (!m) {
+                let g = item.ghiChu || item.ghi_chu;
+                if (typeof g === 'string') g = JSON.parse(g);
+                m = g && g.memo00110;
+            }
+            return m || null;
+        } catch (e) { return null; }
+    }
+    const fmtDate = (d) => dateOnly(d).split('-').reverse().join('/');
+
     function analyzeContract(item) {
         const riders = normRiders(item.riders);
         const riderIP = riders.reduce((s, r) => s + r.premium, 0);
@@ -107,12 +121,24 @@
             ? Number(item.mainPremium) || 0
             : Math.max(0, (Number(item.totalAnnualPremium) || 0) - riderIP);
         const a = analyze({ mainProduct: item.mainProduct, mainIP, riders });
+
+        // Ngày nộp hồ sơ (chỉ có khi hợp đồng được lưu kèm tuỳ chọn memo)
+        const meta = getMemoMeta(item);
+        const ngayNop = meta && meta.ngayNopHoSo ? dateOnly(meta.ngayNopHoSo) : '';
+        if (ngayNop) {
+            const nopOk = inWindow(ngayNop) && ngayNop <= dateOnly(item.issueDate);
+            a.checks.push({
+                ok: nopOk, short: 'Nộp hồ sơ ngoài 01-31/10/2026',
+                text: 'Hồ sơ nộp trong 01/10 - 31/10/2026 (ngày nộp: ' + fmtDate(ngayNop) + ')'
+            });
+            a.hopLe = a.checks.every(c => c.ok);
+        }
         const split = Number(item.splitRate) || 100;
         const win = inWindow(item.issueDate);
         const counted = win && a.hopLe;
         return Object.assign(a, {
             contractNumber: item.contractNumber, issueDate: item.issueDate,
-            split, inWindow: win, counted,
+            split, inWindow: win, counted, ngayNop, thieuNgayNop: !ngayNop,
             share: counted ? a.ipTT * split / 100 : 0
         });
     }
@@ -136,5 +162,5 @@
         return Object.assign({ count: counted.length }, tierFor(total));
     }
 
-    global.Memo110 = { CFG, norm, fmt, inWindow, dateError, analyze, analyzeContract, tierFor, summarize };
+    global.Memo110 = { CFG, norm, fmt, fmtDate, inWindow, dateError, analyze, analyzeContract, tierFor, summarize };
 })(window);
