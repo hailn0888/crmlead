@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
+
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Công cụ tính FYC - Hoa hồng bảo hiểm</title>
@@ -45,11 +46,13 @@
     </style>
 
     <!-- ================================================================
+
          TỐI ƯU HIỂN THỊ TRÊN ĐIỆN THOẠI (Mobile Scroll Optimization)
          Các vùng chứa dùng .overflow-x-auto / .overflow-y-auto (bảng dữ liệu,
          thanh tab, modal...) sẽ cuộn mượt kiểu native trên điện thoại thay vì
          bị bóp méo/vỡ khối khi nội dung rộng hoặc cao hơn màn hình.
     ================================================================= -->
+
     <style>
         .overflow-x-auto,
         .overflow-y-auto {
@@ -73,14 +76,18 @@
         }
         @media (max-width: 768px) {
             /* Cuộn ngang (thanh tab, bảng dữ liệu) sẽ không kích hoạt
+
                cử chỉ vuốt back/forward của trình duyệt trên điện thoại */
+
             .overflow-x-auto {
                 overscroll-behavior-x: contain;
             }
         }
     </style>
+
 </head>
 <body class="bg-theme-bg text-theme-text font-sans antialiased transition-colors duration-200">
+
 
     <!-- Header Container -->
     <div id="header-container"></div>
@@ -249,6 +256,18 @@
                         </table>
                     </div>
 
+                    <!-- ===== Tuỳ chọn tính IP xét thưởng theo Memo 00110 ===== -->
+                    <div id="memo110-section" class="pt-3 border-t border-theme-border space-y-3">
+                        <label for="memo110-toggle" class="flex items-start gap-2.5 cursor-pointer select-none">
+                            <input type="checkbox" id="memo110-toggle" class="mt-0.5 w-4 h-4 shrink-0 rounded border-theme-border cursor-pointer" style="accent-color:#dc2626;">
+                            <span class="text-xs leading-relaxed">
+                                <b>Tính thêm IP xét thưởng theo Memo 00110</b> &ndash; "Bứt tốc phi mã, chớp cơ hội vàng"
+                                <span class="block text-[11px] text-theme-muted">Thi đua 01/10 &ndash; 31/10/2026 &bull; Chỉ thêm thưởng tiền + vé quay số, không thay đổi hoa hồng thực lãnh</span>
+                            </span>
+                        </label>
+                        <div id="memo110-panel" class="hidden"></div>
+                    </div>
+
                     <!-- Nút lưu làm doanh số cá nhân -->
                     <div class="flex flex-col sm:flex-row items-center justify-end gap-2.5 pt-3 border-t border-theme-border">
                         <button id="btn-save-personal" class="w-full sm:w-auto px-5 py-2.5 text-xs font-bold rounded-xl shadow-md flex items-center justify-center gap-1.5 theme-action-btn">
@@ -277,9 +296,11 @@
     </datalist>
 
     <script src="/js/header.js"></script>
+
 <script src="/js/sidebar.js"></script>
 
 <script>
+
     let lastCalculatedData = null;
 
     document.addEventListener('DOMContentLoaded', () => {
@@ -350,6 +371,7 @@
             noRiderMsg.style.display = 'none';
             const rowId = 'rider-row-' + Date.now();
             const html = `
+
                 <div id="${rowId}" class="rider-row grid grid-cols-1 md:grid-cols-12 gap-2.5 items-end p-3 bg-theme-bg rounded-xl border border-theme-border relative">
                     <div class="md:col-span-5">
                         <label class="block text-[11px] font-medium mb-1">Sản phẩm bán cùng <span class="text-theme-primary">+</span></label>
@@ -373,6 +395,7 @@
                     </div>
                 </div>
             `;
+
             ridersContainer.insertAdjacentHTML('beforeend', html);
             
             const newlyAddedRow = document.getElementById(rowId);
@@ -689,6 +712,7 @@
 
             let ridersListArray = [];
             let tableRowsHtml = `
+
                 <tr class="border-b border-theme-border bg-theme-bg">
                     <td class="p-2.5">
                         <span class="block font-bold text-theme-primary">${mainProduct}</span>
@@ -703,6 +727,7 @@
                     <td class="p-2.5 text-right font-bold">${Math.round(mainFycY6).toLocaleString('vi-VN')}</td>
                 </tr>
             `;
+
 
             const riderRowElements = ridersContainer.querySelectorAll('.rider-row');
             let hasError = false;
@@ -742,6 +767,7 @@
                     });
 
                     tableRowsHtml += `
+
                         <tr class="border-b border-theme-border">
                             <td class="p-2.5">
                                 <span class="block font-medium">+ ${rName}</span>
@@ -756,6 +782,7 @@
                             <td class="p-2.5 text-right font-bold">${Math.round(rY6).toLocaleString('vi-VN')}</td>
                         </tr>
                     `;
+
                 }
             });
 
@@ -809,11 +836,14 @@
                 const tongPhiFYP = lastCalculatedData.totalAnnualPremium || lastCalculatedData.mainPremium || 0;
                 const fycNam1 = lastCalculatedData.fyc ? lastCalculatedData.fyc.y1 : 0;
                 const todayStr = new Date().toISOString().split('T')[0];
+                const memo110 = (window.memo110Get && window.memo110Get()) || { enabled: false };
 
                 const { value: formValues } = await Swal.fire({
                     title: '<span class="text-base font-bold text-theme-text">Xác nhận lưu doanh số hợp đồng</span>',
                     html: `
+
                         <div class="text-left text-xs space-y-3 p-1 max-h-[70vh] overflow-y-auto text-theme-text">
+                            ${memo110.enabled ? window.memo110SaveNotice() : ''}
                             <div class="p-3 bg-theme-border/20 border border-theme-border rounded-xl space-y-1">
                                 <p class="font-bold text-emerald-600 dark:text-emerald-400">• Sản phẩm chính: ${lastCalculatedData.mainProduct}</p>
                                 <p class="opacity-90 pl-3">Phí: <b>${Math.round(tongPhiFYP).toLocaleString('vi-VN')} VNĐ</b></p>
@@ -837,7 +867,7 @@
 
                             <div>
                                 <label class="block font-medium mb-1 opacity-90">Ngày phát hành hợp đồng <span class="text-red-500">*</span></label>
-                                <input id="swal-ngay-cap" type="date" value="${todayStr}" class="w-full p-2.5 border border-theme-border rounded-xl text-xs outline-none bg-transparent focus:border-emerald-500 transition text-theme-text">
+                                <input id="swal-ngay-cap" type="date" value="${todayStr}" ${memo110.enabled ? 'min="2026-10-01" max="2026-10-31"' : ''} class="w-full p-2.5 border border-theme-border rounded-xl text-xs outline-none bg-transparent focus:border-emerald-500 transition text-theme-text">
                             </div>
 
                             <div>
@@ -858,6 +888,7 @@
                             </div>
                         </div>
                     `,
+
                     focusConfirm: false,
                     showCancelButton: true,
                     confirmButtonText: 'Lưu & Sang trang Doanh số',
@@ -880,6 +911,14 @@
                         if (!bmbh) {
                             Swal.showValidationMessage('Vui lòng nhập Tên Bên Mua Bảo Hiểm!');
                             return false;
+                        }
+
+                        if (memo110.enabled) {
+                            const memoErr = window.memo110ValidateDate(ngayCap);
+                            if (memoErr) {
+                                Swal.showValidationMessage(memoErr);
+                                return false;
+                            }
                         }
 
                         return { soHd, bmbh, ndbh, ngayCap, dinhKy, tyLeHuong };
@@ -932,7 +971,8 @@
                     trang_thai: 'Hiệu lực',
                     ghi_chu: JSON.stringify({
                         riders: lastCalculatedData.riders || [],
-                        fycDetails: lastCalculatedData.fyc || {}
+                        fycDetails: lastCalculatedData.fyc || {},
+                        ...(memo110.enabled ? { memo00110: window.memo110Build(formValues.ngayCap, formValues.tyLeHuong) } : {})
                     })
                 };
 
@@ -993,6 +1033,215 @@
     window.addEventListener('resize', adjustMainMargin);
     document.addEventListener('DOMContentLoaded', adjustMainMargin);
     document.addEventListener('sidebarToggle', adjustMainMargin);
+
+</script>
+
+<!-- ================================================================
+     MEMO 00110 - "Bứt tốc phi mã, chớp cơ hội vàng" (01/10 - 31/10/2026)
+     Khối độc lập: KHÔNG đụng vào logic tính FYC (hoa hồng thực lãnh).
+     Quy tắc nằm trong /js/memo/memo110.js (dùng chung với sales.html).
+================================================================= -->
+<script src="/js/memo/memo110.js"></script>
+<script>
+(function () {
+    const MM = window.Memo110;
+    const fmt = MM.fmt;
+    const esc = (s) => String(s || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+    // Các hợp đồng TVV đã lưu trước đó (để cộng dồn IP xét thưởng tháng 10)
+    let existing = { status: 'idle', items: [] }; // idle | loading | ok | fail
+
+    function agentName() {
+        let u = {};
+        try { u = JSON.parse(localStorage.getItem('user_info')) || {}; } catch (e) {}
+        return u.ten_dang_nhap || localStorage.getItem('ten_dang_nhap') || '';
+    }
+
+    async function loadExisting() {
+        existing = { status: 'loading', items: [] };
+        render();
+        try {
+            const name = agentName();
+            if (!name) throw new Error('no user');
+            const res = await fetch('/api/agent/sales?agent=' + encodeURIComponent(name));
+            const j = await res.json();
+            if (!res.ok || !j.success) throw new Error('api');
+            existing = { status: 'ok', items: j.data || [] };
+        } catch (e) {
+            existing = { status: 'fail', items: [] };
+        }
+        render();
+    }
+
+    function current() {
+        const toggle = document.getElementById('memo110-toggle');
+        const d = (typeof lastCalculatedData !== 'undefined') ? lastCalculatedData : null;
+        return { enabled: !!(toggle && toggle.checked && d), data: d };
+    }
+
+    // Tính toàn bộ trạng thái memo cho hợp đồng đang tính + cộng dồn tháng 10
+    function state(d) {
+        const a = MM.analyze({ mainProduct: d.mainProduct, mainIP: d.mainPremium, riders: d.riders });
+        const thisShare = a.hopLe ? a.ipTT : 0; // xem trước ở 100%; chia 50-50 áp dụng khi lưu
+        const exSum = MM.summarize(existing.items.map(MM.analyzeContract));
+        const before = MM.tierFor(exSum.total);
+        const after = MM.tierFor(exSum.total + thisShare);
+        return { a, thisShare, exSum, before, after };
+    }
+
+    function render() {
+        const panel = document.getElementById('memo110-panel');
+        if (!panel) return;
+        const cur = current();
+        if (!cur.enabled) { panel.classList.add('hidden'); panel.innerHTML = ''; return; }
+
+        const s = state(cur.data);
+        const a = s.a;
+
+        const linesHtml = a.lines.map(l => `
+            <tr class="border-b border-theme-border">
+                <td class="p-2">${l.type === 'main' ? '<b>' + esc(l.name) + '</b> <span class="text-[11px] text-theme-muted">(chính)</span>' : '+ ' + esc(l.name)}</td>
+                <td class="p-2 text-right">${fmt(l.ip)}</td>
+                <td class="p-2 text-center ${l.factor === 2 ? 'font-bold text-theme-primary' : ''}">×${l.factor}</td>
+                <td class="p-2 text-right font-semibold">${fmt(l.ipTT)}</td>
+            </tr>`).join('');
+
+        const checksHtml = a.checks.map(c => `
+            <li class="flex items-start gap-1.5">
+                <span class="${c.ok ? 'text-emerald-600' : 'text-red-600'} font-bold">${c.ok ? '✓' : '✗'}</span>
+                <span class="${c.ok ? '' : 'text-red-600'}">${c.text}</span>
+            </li>`).join('');
+
+        let cumHtml;
+        if (!a.hopLe) {
+            cumHtml = `<p class="text-red-600 font-medium">Hồ sơ chưa đủ điều kiện hợp lệ nên IP của hợp đồng này không được cộng vào tổng IP xét thưởng.</p>`;
+        } else {
+            const dBonus = s.after.bonus - s.before.bonus;
+            const dTicket = s.after.tickets - s.before.tickets;
+            const exInfo = existing.status === 'loading' ? 'Đang tải các hợp đồng đã lưu...'
+                : existing.status === 'fail' ? 'Không tải được hợp đồng đã lưu - chỉ tính riêng hợp đồng này.'
+                : `${s.exSum.count} hợp đồng hợp lệ đã lưu trong tháng 10/2026`;
+            cumHtml = `
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    <div class="p-2.5 bg-theme-card rounded-lg border border-theme-border">
+                        <span class="text-[11px] text-theme-muted">Tổng IP xét thưởng tháng 10 (sau HĐ này)</span>
+                        <p class="text-sm font-bold mt-0.5 text-theme-primary">${fmt(s.after.total)} VNĐ</p>
+                        <span class="text-[11px] text-theme-muted">Đã lưu ${fmt(s.exSum.total)} + HĐ này ${fmt(s.thisShare)}<br>${exInfo}</span>
+                    </div>
+                    <div class="p-2.5 bg-theme-card rounded-lg border border-theme-border">
+                        <span class="text-[11px] text-theme-muted">Thưởng tiền (memo)</span>
+                        <p class="text-sm font-bold mt-0.5 text-theme-primary">${fmt(s.after.bonus)} VNĐ</p>
+                        <span class="text-[11px] text-theme-muted">${s.after.tier ? esc(s.after.tier.label) : 'Chưa đạt mốc 18 triệu IP'}${dBonus > 0 ? '<br><b class="text-emerald-600">+' + fmt(dBonus) + ' nhờ HĐ này</b>' : ''}</span>
+                    </div>
+                    <div class="p-2.5 bg-theme-card rounded-lg border border-theme-border">
+                        <span class="text-[11px] text-theme-muted">Vé quay số iPhone 18 Pro</span>
+                        <p class="text-sm font-bold mt-0.5 text-theme-primary">${s.after.tickets} vé</p>
+                        <span class="text-[11px] text-theme-muted">${dTicket > 0 ? '<b class="text-emerald-600">+' + dTicket + ' vé nhờ HĐ này</b>' : '&nbsp;'}</span>
+                    </div>
+                </div>
+                ${s.after.next ? `<p class="text-[11px] text-theme-muted">Mốc kế tiếp: ${fmt(s.after.next.min)} IP (còn thiếu ${fmt(s.after.missingToNext)} VNĐ).</p>` : ''}`;
+        }
+
+        panel.innerHTML = `
+            <div class="p-3 bg-theme-bg rounded-xl border border-theme-border space-y-3 text-xs">
+                <div class="flex items-center gap-1.5 font-bold text-theme-primary">
+                    <i data-lucide="gift" class="w-4 h-4"></i> IP xét thưởng &amp; thưởng phụ theo ${MM.CFG.so}
+                </div>
+                <p class="text-[11px] text-theme-muted">Đây là IP <b>xét thưởng</b>. Bảng hoa hồng thực lãnh ở trên <b>không thay đổi</b>; khoản thưởng dưới đây là thưởng phụ, tính riêng.</p>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="border-b border-theme-border text-[11px] text-theme-muted">
+                                <th class="p-2 font-semibold">Sản phẩm</th>
+                                <th class="p-2 font-semibold text-right">IP gốc</th>
+                                <th class="p-2 font-semibold text-center">Hệ số</th>
+                                <th class="p-2 font-semibold text-right">IP xét thưởng</th>
+                            </tr>
+                        </thead>
+                        <tbody>${linesHtml}</tbody>
+                        <tfoot>
+                            <tr><td class="p-2 font-bold" colspan="3">IP xét thưởng của hợp đồng này</td>
+                                <td class="p-2 text-right font-bold text-theme-primary">${fmt(a.ipTT)}</td></tr>
+                        </tfoot>
+                    </table>
+                </div>
+
+                <div>
+                    <p class="font-semibold mb-1">Điều kiện hồ sơ hợp lệ</p>
+                    <ul class="space-y-1">${checksHtml}</ul>
+                    <p class="text-[11px] text-theme-muted mt-1">Hồ sơ phải nộp và phát hành trong 01/10 &ndash; 31/10/2026 (kiểm tra khi lưu).</p>
+                </div>
+
+                <div>
+                    <p class="font-semibold mb-1.5">Cộng dồn cả tháng 10/2026</p>
+                    ${cumHtml}
+                </div>
+
+                <p class="text-[11px] text-theme-muted italic">Thưởng xét trên TỔNG IP hợp lệ của tất cả hợp đồng nộp và phát hành trong tháng 10, không xét riêng từng hợp đồng. Nếu hợp đồng chia 50-50, IP xét thưởng được chia theo tỷ lệ khi lưu. Thưởng chính tối đa 100 triệu đồng/TVV.</p>
+            </div>`;
+        panel.classList.remove('hidden');
+        if (window.lucide) lucide.createIcons();
+    }
+
+    // ----- API cho phần "Lưu làm doanh số" -----
+    window.memo110Get = function () { return { enabled: current().enabled }; };
+    window.memo110ValidateDate = MM.dateError;
+
+    window.memo110SaveNotice = function () {
+        const cur = current();
+        if (!cur.enabled) return '';
+        const s = state(cur.data);
+        const summary = s.a.hopLe
+            ? `FYC xét thưởng HĐ này <b>${fmt(s.a.ipTT)}</b> &bull; Tổng tháng 10 <b>${fmt(s.after.total)}</b><br>Thưởng <b>${fmt(s.after.bonus)} VNĐ</b> &bull; <b>${s.after.tickets}</b> vé quay số`
+            : `Hồ sơ chưa đủ điều kiện hợp lệ của memo (sẽ lưu với FYC xét thưởng = 0)`;
+        return `
+            <div class="p-3 rounded-xl border border-red-300 bg-red-50/40 space-y-1">
+                <p class="font-bold text-red-600">Lưu kèm FYC xét thưởng ${MM.CFG.so}</p>
+                <p class="opacity-90">${summary}</p>
+                <p class="opacity-70 italic">Hoa hồng thực lãnh không đổi. Ngày phát hành phải từ 01/10/2026 đến 31/10/2026, nếu không sẽ không lưu được.</p>
+            </div>`;
+    };
+
+    window.memo110Build = function (ngayPhatHanh, tyLeChia) {
+        const cur = current();
+        if (!cur.data) return null;
+        const a = MM.analyze({ mainProduct: cur.data.mainProduct, mainIP: cur.data.mainPremium, riders: cur.data.riders });
+        const tyLe = Number(tyLeChia) || 100;
+        const ipTT = a.hopLe ? a.ipTT : 0;
+        return {
+            memo: MM.CFG.so,
+            apDung: true,
+            ngayPhatHanh: ngayPhatHanh,
+            hopLe: a.hopLe,
+            ipChinh: a.mainIP,
+            ipBanCung: a.riderIP,
+            heSo: a.boostNote || null,
+            chiTiet: a.lines.map(l => ({ ten: l.name, loai: l.type, ipGoc: l.ip, heSo: l.factor, ipXetThuong: l.ipTT })),
+            dieuKien: a.checks.map(c => ({ dat: c.ok, noiDung: c.short })),
+            ipXetThuong: ipTT,
+            tyLeChia: tyLe,
+            ipXetThuongSauChia: ipTT * tyLe / 100
+        };
+    };
+
+    document.addEventListener('DOMContentLoaded', function () {
+        const toggle = document.getElementById('memo110-toggle');
+        if (toggle) toggle.addEventListener('change', function () {
+            if (toggle.checked) loadExisting(); else render();
+        });
+
+        // Handler gốc của nút Tính chạy trước; sau đó cập nhật phần memo nếu đang tick
+        const btnCalc = document.getElementById('btn-calculate');
+        if (btnCalc) btnCalc.addEventListener('click', render);
+
+        const btnReset = document.getElementById('btn-reset');
+        if (btnReset) btnReset.addEventListener('click', function () {
+            if (toggle) toggle.checked = false;
+            render();
+        });
+    });
+})();
 </script>
 </body>
 </html>

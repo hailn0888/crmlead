@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
+
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Doanh Số Cá Nhân - Quản Lý Hợp Đồng</title>
@@ -44,11 +45,13 @@
     </style>
 
     <!-- ================================================================
+
          TỐI ƯU HIỂN THỊ TRÊN ĐIỆN THOẠI (Mobile Scroll Optimization)
          Các vùng chứa dùng .overflow-x-auto / .overflow-y-auto (bảng dữ liệu,
          thanh tab, modal...) sẽ cuộn mượt kiểu native trên điện thoại thay vì
          bị bóp méo/vỡ khối khi nội dung rộng hoặc cao hơn màn hình.
     ================================================================= -->
+
     <style>
         .overflow-x-auto,
         .overflow-y-auto {
@@ -72,14 +75,18 @@
         }
         @media (max-width: 768px) {
             /* Cuộn ngang (thanh tab, bảng dữ liệu) sẽ không kích hoạt
+
                cử chỉ vuốt back/forward của trình duyệt trên điện thoại */
+
             .overflow-x-auto {
                 overscroll-behavior-x: contain;
             }
         }
     </style>
+
 </head>
 <body class="bg-theme-bg text-theme-text font-sans antialiased transition-colors duration-200">
+
 
     <!-- Header Container -->
     <div id="header-container"></div>
@@ -98,7 +105,7 @@
                             Quản Lý Doanh Số & Hợp Đồng Cá Nhân
                         </h1>
                         <p class="text-xs text-theme-muted mt-0.5">
-                            Theo dõi danh sách hợp đồng đã khai báo, kỳ đóng phí và dòng tiền hoa hồng thực nhận.
+                            Theo dõi danh sách hợp đồng đã khai báo, kỳ đóng phí, dòng tiền hoa hồng thực nhận và FYC xét thưởng.
                         </p>
                     </div>
                     <div class="flex items-center gap-2 self-start md:self-auto">
@@ -139,6 +146,60 @@
                             <i data-lucide="coins" class="w-6 h-6"></i>
                         </div>
                     </div>
+                </div>
+
+                <!-- ===== Thưởng thi đua Memo 00110 (FYC xét thưởng - tách riêng khỏi hoa hồng thực nhận) ===== -->
+                <div id="memo110-card" class="bg-theme-card rounded-xl border border-theme-border shadow-sm p-4 space-y-3">
+                    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-1">
+                        <h2 class="text-sm font-bold flex items-center gap-1.5 text-theme-text">
+                            <i data-lucide="gift" class="w-4 h-4 text-red-500"></i>
+                            Thưởng thi đua Memo 00110 &ndash; "Bứt tốc phi mã, chớp cơ hội vàng"
+                        </h2>
+                        <span class="text-[11px] text-theme-muted">Hợp đồng nộp &amp; phát hành 01/10 &ndash; 31/10/2026 &bull; Cộng dồn cả tháng</span>
+                    </div>
+                    <p class="text-[11px] text-theme-muted">
+                        Đây là <b>IP xét thưởng</b>, tách riêng với <b>FYC thực nhận</b> (hoa hồng). Mức thưởng tiền + vé quay số được xét trên <b>tổng IP</b> của tất cả hợp đồng hợp lệ trong tháng 10, không xét riêng từng hợp đồng.
+                    </p>
+                    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                        <div class="p-3 bg-theme-bg rounded-lg border border-theme-border">
+                            <span class="text-[11px] text-theme-muted">Tổng IP xét thưởng tháng 10</span>
+                            <p id="memo-total-ip" class="text-sm font-bold mt-0.5 text-theme-primary">0 VNĐ</p>
+                            <span id="memo-count" class="text-[11px] text-theme-muted">0 hợp đồng hợp lệ</span>
+                        </div>
+                        <div class="p-3 bg-theme-bg rounded-lg border border-theme-border">
+                            <span class="text-[11px] text-theme-muted">Thưởng tiền (memo)</span>
+                            <p id="memo-bonus" class="text-sm font-bold mt-0.5 text-amber-500">0 VNĐ</p>
+                            <span id="memo-tier" class="text-[11px] text-theme-muted">Chưa đạt mốc 18 triệu IP</span>
+                        </div>
+                        <div class="p-3 bg-theme-bg rounded-lg border border-theme-border">
+                            <span class="text-[11px] text-theme-muted">Vé quay số iPhone 18 Pro</span>
+                            <p id="memo-tickets" class="text-sm font-bold mt-0.5 text-red-500">0 vé</p>
+                            <span class="text-[11px] text-theme-muted">Tổng 10 giải iPhone 18 Pro 256GB</span>
+                        </div>
+                        <div class="p-3 bg-theme-bg rounded-lg border border-theme-border">
+                            <span class="text-[11px] text-theme-muted">Mốc kế tiếp</span>
+                            <p id="memo-next" class="text-sm font-bold mt-0.5 text-theme-text">-</p>
+                            <span id="memo-next-sub" class="text-[11px] text-theme-muted">&nbsp;</span>
+                        </div>
+                    </div>
+                    <details class="text-xs">
+                        <summary class="cursor-pointer font-medium text-theme-primary select-none">Chi tiết các hợp đồng trong tháng 10/2026</summary>
+                        <div class="overflow-x-auto mt-2">
+                            <table class="w-full text-left border-collapse text-xs">
+                                <thead>
+                                    <tr class="border-b border-theme-border bg-theme-bg text-[11px] text-theme-muted">
+                                        <th class="p-2 font-semibold">Số HĐ / Ngày phát hành</th>
+                                        <th class="p-2 font-semibold text-right">IP xét thưởng</th>
+                                        <th class="p-2 font-semibold text-center">Tỷ lệ chia</th>
+                                        <th class="p-2 font-semibold text-right">Tính vào tổng</th>
+                                        <th class="p-2 font-semibold">Trạng thái</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="memo-detail-body"></tbody>
+                            </table>
+                        </div>
+                        <p id="memo-detail-empty" class="text-theme-muted italic py-2 hidden">Chưa có hợp đồng nào phát hành trong 01/10 &ndash; 31/10/2026.</p>
+                    </details>
                 </div>
 
                 <!-- Table Card -->
@@ -194,15 +255,16 @@
                         <table class="rt-cards w-full text-left border-collapse text-xs">
                             <thead>
                                 <tr class="border-b border-theme-border bg-theme-bg text-[11px] text-theme-muted">
-                                    <th class="p-2.5 font-semibold text-center w-10">STT</th>
-                                    <th class="p-2.5 font-semibold">Số HĐ / Ngày phát hành</th>
-                                    <th class="p-2.5 font-semibold">Bên Mua (BMBH) & NĐBH</th>
-                                    <th class="p-2.5 font-semibold">Sản phẩm chính</th>
-                                    <th class="p-2.5 font-semibold text-right">Tổng phí HĐ</th>
-                                    <th class="p-2.5 font-semibold text-right">FYP Kỳ Đóng</th>
-                                    <th class="p-2.5 font-semibold text-right">FYC Thực Nhận</th>
-                                    <th class="p-2.5 font-semibold text-center">Định kỳ / Tỷ lệ</th>
-                                    <th class="p-2.5 font-semibold text-center">Thao tác</th>
+                                    <th class="px-2 py-2.5 font-semibold text-center w-10">STT</th>
+                                    <th class="px-2 py-2.5 font-semibold">Số HĐ / Ngày phát hành</th>
+                                    <th class="px-2 py-2.5 font-semibold">Bên Mua (BMBH) & NĐBH</th>
+                                    <th class="px-2 py-2.5 font-semibold">Sản phẩm chính</th>
+                                    <th class="px-2 py-2.5 font-semibold text-right">Tổng phí HĐ</th>
+                                    <th class="px-2 py-2.5 font-semibold text-right">FYP Kỳ Đóng</th>
+                                    <th class="px-2 py-2.5 font-semibold text-right">FYC Thực Nhận <span class="block text-[10px] font-normal">(hoa hồng)</span></th>
+                                    <th class="px-2 py-2.5 font-semibold text-right">IP Xét Thưởng <span class="block text-[10px] font-normal">(Memo 00110)</span></th>
+                                    <th class="px-2 py-2.5 font-semibold text-center">Định kỳ / Tỷ lệ</th>
+                                    <th class="px-2 py-2.5 font-semibold text-center">Thao tác</th>
                                 </tr>
                             </thead>
                             <tbody id="sales-table-body"></tbody>
@@ -222,6 +284,8 @@
     <!-- Layout Scripts -->
     <script src="/js/header.js"></script>
     <script src="/js/sidebar.js"></script>
+
+    <script src="/js/memo/memo110.js"></script>
 
     <!-- App Logic -->
     <script>
@@ -391,6 +455,7 @@
                 document.getElementById('kpi-total-fyc').innerText = Math.round(grandFyc).toLocaleString('vi-VN') + ' VNĐ';
 
                 renderSalesTable(displayList);
+                renderMemo110Summary();
             }
 
             function renderSalesTable(displayList) {
@@ -405,42 +470,54 @@
                 displayList.forEach(({ item, originalIndex, rev }, index) => {
                     const modeText = (item.paymentMode === 'YEAR' || item.paymentMode === 'Năm') ? 'Năm' : ((item.paymentMode === 'HALF' || item.paymentMode === 'Nửa năm') ? 'Nửa năm' : 'Quý');
                     const splitText = (item.splitRate || 100) + '%';
+                    const memoA = window.Memo110 ? Memo110.analyzeContract(item) : null;
+                    let memoCell = '<span class="text-theme-muted">—</span>';
+                    if (memoA && memoA.inWindow) {
+                        memoCell = memoA.counted
+                            ? `<span class="font-bold text-red-600" title="${memoA.split < 100 ? 'Đã chia ' + memoA.split + '% theo tỷ lệ hợp đồng' : 'Hồ sơ hợp lệ'}">${memoFmt(memoA.share)}</span>`
+                            : `<span class="text-red-600 text-[11px]" title="${memoEsc(memoA.checks.filter(c => !c.ok).map(c => c.short).join('; '))}">Không hợp lệ</span>`;
+                    }
 
                     const rowHtml = `
+
                         <tr class="border-b border-theme-border hover:bg-theme-bg/50 transition-colors">
-                            <td class="p-2.5 text-center font-semibold text-theme-muted">${index + 1}</td>
-                            <td class="p-2.5">
+                            <td class="px-2 py-2.5 md:whitespace-nowrap text-center font-semibold text-theme-muted">${index + 1}</td>
+                            <td class="px-2 py-2.5 md:whitespace-nowrap">
                                 <span class="block font-bold text-theme-primary">${item.contractNumber || 'Chưa cập nhật'}</span>
                                 <span class="text-[11px] text-theme-muted">${formatDateVN(item.issueDate)}</span>
                             </td>
-                            <td class="p-2.5">
+                            <td class="px-2 py-2.5 md:whitespace-nowrap">
                                 <div class="font-semibold text-theme-text">${item.policyHolder || 'Chưa cập nhật'}</div>
                                 <div class="text-[11px] text-theme-muted">NĐBH: ${item.lifeInsured || item.policyHolder || 'Chưa cập nhật'}</div>
                             </td>
-                            <td class="p-2.5">
+                            <td class="px-2 py-2.5 md:whitespace-nowrap">
                                 <span class="font-medium block">${item.mainProduct}</span>
                                 ${item.riders && item.riders.length > 0 ? `<span class="text-[11px] text-emerald-600">+ ${item.riders.length} sản phẩm bổ trợ</span>` : ''}
                             </td>
-                            <td class="p-2.5 text-right font-bold text-theme-text">
-                                ${Math.round(item.totalAnnualPremium || 0).toLocaleString('vi-VN')} VNĐ
+                            <td class="px-2 py-2.5 md:whitespace-nowrap text-right font-bold text-theme-text">
+                                ${Math.round(item.totalAnnualPremium || 0).toLocaleString('vi-VN')}
                             </td>
-                            <td class="p-2.5 text-right font-bold text-blue-600">
-                                ${Math.round(rev.periodFyp).toLocaleString('vi-VN')} VNĐ
+                            <td class="px-2 py-2.5 md:whitespace-nowrap text-right font-bold text-blue-600">
+                                ${Math.round(rev.periodFyp).toLocaleString('vi-VN')}
                             </td>
-                            <td class="p-2.5 text-right font-bold text-emerald-600">
-                                ${Math.round(rev.periodFyc).toLocaleString('vi-VN')} VNĐ
+                            <td class="px-2 py-2.5 md:whitespace-nowrap text-right font-bold text-emerald-600">
+                                ${Math.round(rev.periodFyc).toLocaleString('vi-VN')}
                             </td>
-                            <td class="p-2.5 text-center">
+                            <td class="px-2 py-2.5 md:whitespace-nowrap text-right">${memoCell}</td>
+                            <td class="px-2 py-2.5 md:whitespace-nowrap text-center">
                                 <span class="px-2 py-0.5 rounded text-[10px] bg-theme-bg border border-theme-border font-medium">
                                     ${modeText} | ${splitText}
                                 </span>
                             </td>
-                            <td class="p-2.5 text-center space-x-1">
+                            <td class="px-2 py-2.5 md:whitespace-nowrap text-center space-x-1">
                                 <button onclick="viewInstallments(${originalIndex})" class="p-1 text-blue-500 hover:text-blue-700 rounded" title="Quản lý kỳ đóng phí">
                                     <i data-lucide="calendar" class="w-4 h-4 inline"></i>
                                 </button>
                                 <button onclick="editContract(${originalIndex})" class="p-1 text-amber-500 hover:text-amber-700 rounded" title="Chỉnh sửa thông tin">
                                     <i data-lucide="edit-3" class="w-4 h-4 inline"></i>
+                                </button>
+                                <button onclick="viewMemo110(${originalIndex})" class="p-1 text-red-500 hover:text-red-700 rounded" title="Chi tiết IP xét thưởng (Memo 00110)">
+                                    <i data-lucide="gift" class="w-4 h-4 inline"></i>
                                 </button>
                                 <button onclick="deleteContract(${originalIndex})" class="p-1 text-red-500 hover:text-red-700 rounded" title="Xóa hợp đồng">
                                     <i data-lucide="trash-2" class="w-4 h-4 inline"></i>
@@ -448,6 +525,7 @@
                             </td>
                         </tr>
                     `;
+
                     salesTableBody.insertAdjacentHTML('beforeend', rowHtml);
                 });
 
@@ -455,6 +533,116 @@
                     if (window.lucide) lucide.createIcons();
                 }, 50);
             }
+
+            // ================= MEMO 00110: FYC xét thưởng (tách khỏi FYC thực nhận) =================
+            // Quy tắc nằm trong /js/memo/memo110.js. Luôn tính trên TOÀN BỘ hợp đồng của TVV
+            // (không phụ thuộc bộ lọc / ô tìm kiếm) và chỉ gồm HĐ phát hành 01-31/10/2026.
+            const memoEsc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+            const memoFmt = (n) => Math.round(Number(n) || 0).toLocaleString('vi-VN');
+
+            function renderMemo110Summary() {
+                if (!window.Memo110) return;
+                const all = salesData.map(it => Memo110.analyzeContract(it));
+                const inMonth = all.filter(a => a.inWindow);
+                const sum = Memo110.summarize(all);
+
+                document.getElementById('memo-total-ip').innerText = memoFmt(sum.total) + ' VNĐ';
+                document.getElementById('memo-count').innerText = sum.count + ' hợp đồng hợp lệ';
+                document.getElementById('memo-bonus').innerText = memoFmt(sum.bonus) + ' VNĐ';
+                document.getElementById('memo-tier').innerText = sum.tier ? sum.tier.label : 'Chưa đạt mốc 18 triệu IP';
+                document.getElementById('memo-tickets').innerText = sum.tickets + ' vé';
+                if (sum.next) {
+                    document.getElementById('memo-next').innerText = memoFmt(sum.next.min) + ' IP';
+                    document.getElementById('memo-next-sub').innerText = 'Còn thiếu ' + memoFmt(sum.missingToNext) + ' VNĐ';
+                } else {
+                    document.getElementById('memo-next').innerText = 'Mốc cao nhất';
+                    document.getElementById('memo-next-sub').innerText = 'Thưởng 10% IP, tối đa 100 triệu';
+                }
+
+                const body = document.getElementById('memo-detail-body');
+                const empty = document.getElementById('memo-detail-empty');
+                body.innerHTML = '';
+                empty.classList.toggle('hidden', inMonth.length > 0);
+                inMonth.forEach(a => {
+                    const reasons = a.checks.filter(c => !c.ok).map(c => c.short).join('; ');
+                    const status = a.counted
+                        ? '<span class="text-emerald-600 font-semibold">✓ Hợp lệ</span>'
+                        : '<span class="text-red-600">✗ ' + memoEsc(reasons || 'Không hợp lệ') + '</span>';
+                    body.insertAdjacentHTML('beforeend', `
+                        <tr class="border-b border-theme-border">
+                            <td class="p-2">
+                                <span class="block font-bold text-theme-primary">${memoEsc(a.contractNumber || 'Chưa cập nhật')}</span>
+                                <span class="text-[11px] text-theme-muted">${formatDateVN(a.issueDate)}</span>
+                            </td>
+                            <td class="p-2 text-right">${memoFmt(a.ipTT)}</td>
+                            <td class="p-2 text-center">${a.split}%</td>
+                            <td class="p-2 text-right font-bold">${memoFmt(a.share)}</td>
+                            <td class="p-2">${status}</td>
+                        </tr>`);
+                });
+            }
+
+            // Mô tả chi tiết các khoản FYC xét thưởng của 1 hợp đồng
+            window.viewMemo110 = function(index) {
+                const item = salesData[index];
+                const a = Memo110.analyzeContract(item);
+
+                if (!a.inWindow) {
+                    Swal.fire({
+                        icon: 'info',
+                        title: 'Không thuộc Memo 00110',
+                        text: 'Memo 00110 chỉ áp dụng cho hợp đồng nộp và phát hành từ 01/10/2026 đến 31/10/2026.',
+                        confirmButtonColor: '#16a34a'
+                    });
+                    return;
+                }
+
+                const linesHtml = a.lines.map(l => `
+                    <tr class="border-b border-theme-border">
+                        <td class="p-1.5">${l.type === 'main' ? '<b>' + memoEsc(l.name) + '</b>' : '+ ' + memoEsc(l.name)}</td>
+                        <td class="p-1.5 text-right">${memoFmt(l.ip)}</td>
+                        <td class="p-1.5 text-center ${l.factor === 2 ? 'font-bold text-red-600' : ''}">×${l.factor}</td>
+                        <td class="p-1.5 text-right font-semibold">${memoFmt(l.ipTT)}</td>
+                    </tr>`).join('');
+                const checksHtml = a.checks.map(c => `
+                    <li class="flex items-start gap-1.5">
+                        <span class="${c.ok ? 'text-emerald-600' : 'text-red-600'} font-bold">${c.ok ? '✓' : '✗'}</span>
+                        <span class="${c.ok ? '' : 'text-red-600'}">${c.text}</span>
+                    </li>`).join('');
+
+                Swal.fire({
+                    title: `IP xét thưởng - HĐ ${memoEsc(item.contractNumber)}`,
+                    html: `
+                        <div class="text-left text-xs space-y-3 max-h-[65vh] overflow-y-auto p-1">
+                            <p class="text-theme-muted">Memo 00110 &ndash; IP <b>xét thưởng</b>, không phải hoa hồng thực nhận.</p>
+                            <table class="w-full border-collapse">
+                                <thead>
+                                    <tr class="border-b border-theme-border text-[11px] text-theme-muted">
+                                        <th class="p-1.5 text-left">Sản phẩm</th>
+                                        <th class="p-1.5 text-right">IP gốc</th>
+                                        <th class="p-1.5 text-center">Hệ số</th>
+                                        <th class="p-1.5 text-right">IP xét thưởng</th>
+                                    </tr>
+                                </thead>
+                                <tbody>${linesHtml}</tbody>
+                                <tfoot>
+                                    <tr><td class="p-1.5 font-bold" colspan="3">Tổng IP xét thưởng của HĐ</td><td class="p-1.5 text-right font-bold">${memoFmt(a.ipTT)}</td></tr>
+                                    <tr><td class="p-1.5" colspan="3">Tỷ lệ chia hợp đồng</td><td class="p-1.5 text-right">${a.split}%</td></tr>
+                                    <tr><td class="p-1.5 font-bold" colspan="3">Tính vào tổng tháng 10</td><td class="p-1.5 text-right font-bold text-emerald-600">${memoFmt(a.share)}</td></tr>
+                                </tfoot>
+                            </table>
+                            ${a.boostNote ? `<p class="text-red-600">${memoEsc(a.boostNote)}</p>` : ''}
+                            <div>
+                                <p class="font-semibold mb-1">Điều kiện hồ sơ hợp lệ</p>
+                                <ul class="space-y-1">${checksHtml}</ul>
+                            </div>
+                            <p class="text-theme-muted italic">Mức thưởng tiền + vé quay số xét trên tổng IP của tất cả hợp đồng hợp lệ trong tháng 10 (xem khung "Thưởng thi đua Memo 00110" phía trên).</p>
+                        </div>`,
+                    showConfirmButton: false,
+                    showCloseButton: true,
+                    width: '560px'
+                });
+            };
 
             searchInput.addEventListener('input', applyFilters);
             filterYear.addEventListener('change', applyFilters);
@@ -466,6 +654,7 @@
                 Swal.fire({
                     title: 'Chỉnh sửa thông tin hợp đồng',
                     html: `
+
                         <div class="text-left space-y-3 mt-3 text-xs">
                             <div>
                                 <label class="block font-medium mb-1">Số hợp đồng (Đúng 8 số) <span class="text-red-500">*</span></label>
@@ -481,6 +670,7 @@
                             </div>
                         </div>
                     `,
+
                     showCancelButton: true,
                     confirmButtonText: 'Lưu thay đổi',
                     cancelButtonText: 'Hủy',
@@ -557,6 +747,7 @@
                     const displayDate = isPaid ? formatDateVN(inst.paidDate || inst.dueDate) : formatDateVN(inst.dueDate);
                     
                     listHtml += `
+
                         <div class="flex items-center justify-between p-3 bg-theme-bg rounded-lg border border-theme-border shadow-sm">
                             <div>
                                 <div class="font-bold text-sm text-theme-text">Kỳ ${inst.periodIndex} ${i === 0 ? '(Kỳ đầu)' : ''}</div>
@@ -577,6 +768,7 @@
                             </div>
                         </div>
                     `;
+
                 });
                 listHtml += `</div>`;
 
@@ -596,6 +788,7 @@
                 Swal.fire({
                     title: `Xác nhận đóng phí Kỳ ${inst.periodIndex}`,
                     html: `
+
                         <div class="text-left space-y-3 mt-3 text-xs">
                             <p class="text-theme-muted">Vui lòng chọn ngày thực tế khách đóng phí cho Kỳ ${inst.periodIndex}:</p>
                             <div>
@@ -604,6 +797,7 @@
                             </div>
                         </div>
                     `,
+
                     showCancelButton: true,
                     confirmButtonText: 'Xác nhận Đã đóng',
                     cancelButtonText: 'Hủy',
@@ -734,5 +928,6 @@
         document.addEventListener('DOMContentLoaded', adjustMainMargin);
         document.addEventListener('sidebarToggle', adjustMainMargin);
     </script>
+
 </body>
 </html>
