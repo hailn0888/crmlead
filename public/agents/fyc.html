@@ -270,7 +270,7 @@
                         <label for="memo110-toggle" class="flex items-start gap-2.5 cursor-pointer select-none">
                             <input type="checkbox" id="memo110-toggle" class="mt-0.5 w-4 h-4 shrink-0 rounded border-theme-border cursor-pointer" style="accent-color:#dc2626;">
                             <span class="text-xs leading-relaxed">
-                                <b>Tính thêm FYC xét thưởng theo Memo 00110</b> &ndash; "Bứt tốc phi mã, chớp cơ hội vàng"
+                                <b>Tính thêm IP xét thưởng theo Memo 00110</b> &ndash; "Bứt tốc phi mã, chớp cơ hội vàng"
                                 <span class="block text-[11px] text-theme-muted">Thi đua 01/10 &ndash; 31/10/2026 &bull; Chỉ thêm thưởng tiền + vé quay số, không thay đổi hoa hồng thực lãnh</span>
                             </span>
                         </label>
@@ -1154,9 +1154,9 @@
         panel.innerHTML = `
             <div class="p-3 bg-theme-bg rounded-xl border border-theme-border space-y-3 text-xs">
                 <div class="flex items-center gap-1.5 font-bold text-theme-primary">
-                    <i data-lucide="gift" class="w-4 h-4"></i> FYC xét thưởng &amp; thưởng phụ theo ${MM.CFG.so}
+                    <i data-lucide="gift" class="w-4 h-4"></i> IP xét thưởng &amp; thưởng phụ theo ${MM.CFG.so}
                 </div>
-                <p class="text-[11px] text-theme-muted">Đây là FYC <b>xét thưởng</b> (IP tính thưởng). Bảng hoa hồng thực lãnh ở trên <b>không thay đổi</b>; khoản thưởng dưới đây là thưởng phụ, tính riêng.</p>
+                <p class="text-[11px] text-theme-muted">Đây là IP <b>xét thưởng</b>. Bảng hoa hồng thực lãnh ở trên <b>không thay đổi</b>; khoản thưởng dưới đây là thưởng phụ, tính riêng.</p>
 
                 <div class="overflow-x-auto">
                     <table class="w-full text-left border-collapse">
@@ -1225,10 +1225,10 @@
         const s = state(cur.data);
         const summary = s.a.hopLe
             ? `FYC xét thưởng HĐ này <b>${fmt(s.a.ipTT)}</b> &bull; Tổng tháng 10 <b>${fmt(s.after.total)}</b><br>Thưởng <b>${fmt(s.after.bonus)} VNĐ</b> &bull; <b>${s.after.tickets}</b> vé quay số`
-            : `Hồ sơ chưa đủ điều kiện hợp lệ của memo (sẽ lưu với FYC xét thưởng = 0)`;
+            : `Hồ sơ chưa đủ điều kiện hợp lệ của memo (sẽ lưu với IP xét thưởng = 0)`;
         return `
             <div class="p-3 rounded-xl border border-red-300 bg-red-50/40 space-y-1">
-                <p class="font-bold text-red-600">Lưu kèm FYC xét thưởng ${MM.CFG.so}</p>
+                <p class="font-bold text-red-600">Lưu kèm IP xét thưởng ${MM.CFG.so}</p>
                 <p class="opacity-90">${summary}</p>
                 <div>
                     <label class="block font-medium mb-1 opacity-90">Ngày nộp hồ sơ <span class="text-red-500">*</span></label>
