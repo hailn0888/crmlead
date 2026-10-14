@@ -321,7 +321,7 @@
         $('compareTitle').textContent = `So sánh nhân viên - ${b.full}`;
         $('compareEmpty').classList.toggle('hidden', groups.length > 0);
         $('compareWrap').classList.toggle('hidden', groups.length === 0);
-        $('bucketTable').innerHTML = agentTableHtml(b.rows, state.period === 'day');
+        $('bucketTable').innerHTML = agentTableHtml(b.rows, state.period === 'day', false);
         if (!groups.length) { killChart('compareChart'); return; }
         const series = [
             ['Tổng cuộc gọi', 'total', '#3b82f6'],
@@ -455,29 +455,30 @@
             + `<select id="avgModeSelect" class="border border-gray-500/40 bg-transparent rounded-lg px-2 py-1 text-xs font-semibold cursor-pointer" title="Chọn cách tính trung bình">${opts}</select></th>`;
     }
 
-    function agentLine(name, list, t, oneDay, bold) {
+    function agentLine(name, list, t, oneDay, bold, withAvg) {
         const mm = minMax(list, r => r.at.getTime());
         const now = new Date();
         const nextCb = minMax(list.filter(r => r.cb && r.cb >= now), r => r.cb.getTime()).min;
         const ft = d => d ? (oneDay ? hm(d) : `${hm(d)} ${dm(d)}`) : '-';
         return `<tr class="border-b border-gray-500/30 ${bold ? 'bg-gray-500/10' : ''}">`
-            + TD(esc(name), true, true) + TD(num(t.total), false, bold) + avgCell(t.total, bold) + TD(num(t.connected), false, bold)
+            + TD(esc(name), true, true) + TD(num(t.total), false, bold) + (withAvg ? avgCell(t.total, bold) : '') + TD(num(t.connected), false, bold)
             + TD(num(t.hen_gap), false, bold) + TD(pct(t.rateHen), false, bold) + TD(num(t.goi_lai), false, bold)
             + TD(num(t.ban), false, bold) + TD(num(t.khong_nghe), false, bold) + TD(num(t.sai_so), false, bold)
             + TD(num(t.thue_bao), false, bold) + TD(num(t.tu_choi), false, bold) + TD(num(t.khac), false, bold)
             + TD(ft(mm.min), false, bold) + TD(ft(mm.max), false, bold)
             + TD(nextCb ? (oneDay ? hm(nextCb) : `${hm(nextCb)} ${dm(nextCb)}`) : '-', false, bold) + '</tr>';
     }
-    function agentTableHtml(rows, oneDay) {
+    // withAvg: true = có cột "Trung bình" (bảng Tổng hợp theo nhân viên); false = bảng so sánh theo kỳ (không cần trung bình)
+    function agentTableHtml(rows, oneDay, withAvg) {
         if (!rows.length) return emptyHtml('Chưa có cuộc gọi nào trong kỳ này.');
         const groups = summarizeByAgent(rows);
         const head = '<tr class="bg-gray-500/10 border-b border-gray-500/30">'
-            + TH('Nhân viên', true) + TH('Tổng gọi') + avgHeader() + TH('Liên hệ được') + TH('Hẹn gặp') + TH('Tỷ lệ hẹn')
+            + TH('Nhân viên', true) + TH('Tổng gọi') + (withAvg ? avgHeader() : '') + TH('Liên hệ được') + TH('Hẹn gặp') + TH('Tỷ lệ hẹn')
             + TH('Gọi lại sau') + TH('Khách bận') + TH('Không nghe') + TH('Sai số') + TH('Thuê bao')
             + TH('Từ chối') + TH('Khác') + TH('Giờ gọi đầu') + TH('Giờ gọi cuối') + TH('Gọi lại sớm nhất') + '</tr>';
-        const body = groups.map(g => agentLine(g.name, g.rows, g.t, oneDay, false)).join('')
-            + agentLine('Tổng cộng', rows, tally(rows), oneDay, true);
-        const a = avgInfo();
+        const body = groups.map(g => agentLine(g.name, g.rows, g.t, oneDay, false, withAvg)).join('')
+            + agentLine('Tổng cộng', rows, tally(rows), oneDay, true, withAvg);
+        const a = withAvg ? avgInfo() : null;
         const note = a ? `<p class="text-[11px] opacity-70 mt-2">${esc(AVG_MODES[state.avgMode].label)}: ${esc(a.note)}.</p>` : '';
         return `<table class="w-full text-xs"><thead>${head}</thead><tbody>${body}</tbody></table>${note}`;
     }
@@ -659,7 +660,7 @@
             if (!state.agentsFromApi) fillAgentsFromRows(rows);
             renderKpi(rows, prev);
             renderResultStrip(rows);
-            $('agentTable').innerHTML = agentTableHtml(rows, len === 1);
+            $('agentTable').innerHTML = agentTableHtml(rows, len === 1, true);
             drawHourAndResult(rows);
             renderCallbacks(rows);
             renderLog();
@@ -719,7 +720,7 @@
         $('agentTable').addEventListener('change', e => {
             if (e.target.id !== 'avgModeSelect') return;
             state.avgMode = e.target.value;
-            $('agentTable').innerHTML = agentTableHtml(state.rows, !!state.oneDay);
+            $('agentTable').innerHTML = agentTableHtml(state.rows, !!state.oneDay, true);
         });
         $('btnExportAgents').addEventListener('click', exportAgents);
         $('btnExportLog').addEventListener('click', exportLog);
