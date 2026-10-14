@@ -414,10 +414,11 @@
 
     /* ---------- Cột "Trung bình" (tính tại trình duyệt, không lưu DB) ----------
      * Mọi chế độ đều tính đủ 7 ngày/tuần (kể cả Chủ Nhật):
-     *  - d7 / d30 : "ngày liên tục" -> tổng gọi ÷ số ngày của khoảng đã chọn × 7 (hoặc × 30)
+     *  - d1 / d7 / d30 : "ngày liên tục" -> tổng gọi ÷ số ngày của khoảng đã chọn (× 1, × 7 hoặc × 30)
      *  - week     : tuần LỊCH (Thứ Hai - Chủ Nhật) -> tổng gọi ÷ số tuần lịch mà khoảng ngày chạm vào
      *  - month    : tháng LỊCH (mùng 1 - cuối tháng) -> tổng gọi ÷ số tháng lịch mà khoảng ngày chạm vào */
     const AVG_MODES = {
+        d1:    { label: 'Trung bình 1 ngày',  unit: '/ngày' },
         d7:    { label: 'Trung bình 7 ngày',  unit: '/7 ngày' },
         week:  { label: 'Trung bình tuần',    unit: '/tuần' },
         d30:   { label: 'Trung bình 30 ngày', unit: '/30 ngày' },
@@ -436,6 +437,7 @@
                 const months = (r.to.getFullYear() - r.from.getFullYear()) * 12 + r.to.getMonth() - r.from.getMonth() + 1;
                 return { div: months, mul: 1, note: `tổng gọi ÷ ${months} tháng lịch (mùng 1 - cuối tháng) mà khoảng ngày đã chọn chạm vào` };
             }
+            case 'd1':  return { div: days, mul: 1,  note: `tổng gọi ÷ ${days} ngày đã chọn (tính đủ cả Chủ Nhật)` };
             case 'd30': return { div: days, mul: 30, note: `tổng gọi ÷ ${days} ngày đã chọn × 30 (tính đủ cả Chủ Nhật)` };
             default:    return { div: days, mul: 7,  note: `tổng gọi ÷ ${days} ngày đã chọn × 7 (tính đủ cả Chủ Nhật)` };
         }
