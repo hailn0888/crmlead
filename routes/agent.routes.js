@@ -10,6 +10,9 @@
    [MEMO 00110] GET /sales trả thêm khối "memo00110" (lưu trong ghi_chu của
    hợp đồng, gồm ngày nộp hồ sơ, IP xét thưởng...) để sales.html cộng dồn IP
    xét thưởng cả tháng 10/2026 - xem /js/memo/memo110.js.
+   [MEMO 00210] GET /sales trả thêm khối "memo00210" (ngày nộp hồ sơ, hệ số,
+   IP xét thưởng...) để sales.html cộng dồn IP xét thưởng cả quý 4/2026
+   - xem /js/memo/memo210.js.
    ========================================================================== */
 
 const express = require('express');
@@ -498,11 +501,14 @@ router.get('/sales', async (req, res) => {
             // "hồ sơ nộp VÀ phát hành trong 01/10 - 31/10/2026".
             // Hợp đồng lưu khi không tick ô memo (hoặc lưu từ trước) sẽ là null.
             let memo00110 = null;
+            // [MEMO 00210] Tương tự: khối memo 00210 (ngày nộp hồ sơ, hệ số, IP xét thưởng...)
+            let memo00210 = null;
             if (c.ghi_chu) {
                 try {
                     const parsed = typeof c.ghi_chu === 'string' ? JSON.parse(c.ghi_chu) : c.ghi_chu;
                     riders = parsed.riders || [];
                     memo00110 = parsed.memo00110 || null; // [MEMO 00110] lấy khối memo nếu có
+                    memo00210 = parsed.memo00210 || null; // [MEMO 00210] lấy khối memo nếu có
                 } catch (e) { /* ghi_chu không phải JSON hợp lệ thì bỏ qua */ }
             }
             return {
@@ -517,6 +523,7 @@ router.get('/sales', async (req, res) => {
                 fyc: { fullY1: Number(c.hoa_hong_fyc) || 0, y1: Number(c.hoa_hong_fyc) || 0 },
                 riders,
                 memo00110, // [MEMO 00110] trả khối memo ra cho giao diện (null nếu không có)
+                memo00210, // [MEMO 00210] trả khối memo ra cho giao diện (null nếu không có)
                 installments: instMap[c.so_hop_dong] || []
             };
         });

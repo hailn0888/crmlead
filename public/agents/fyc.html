@@ -3,10 +3,12 @@
    fyc.html (public/agents/) - Công cụ tính FYC (hoa hồng) và lưu làm doanh số
 
    - Bảng FYC thực lãnh theo chính sách thu nhập 2026: giữ nguyên.
-   - [MEMO 00110] Ô tick "Tính thêm IP xét thưởng": tính IP xét thưởng + thưởng phụ
-     (tiền, vé quay số iPhone 18 Pro), KHÔNG thay đổi hoa hồng thực lãnh.
-     Khi lưu kèm memo: bắt buộc nhập ngày nộp hồ sơ, ngày phát hành phải trong
-     01/10 - 31/10/2026. Quy tắc nằm trong /js/memo/memo110.js.
+   - [MEMO 00110] Ô tick "Tính thêm IP xét thưởng theo Memo 00110": thưởng phụ (tiền, vé quay số
+     iPhone 18 Pro), xét theo tháng 10/2026. Quy tắc: /js/memo/memo110.js
+   - [MEMO 00210] Ô tick "Tính thêm IP xét thưởng theo Memo 00210": thưởng iPhone theo tổng IP
+     cả quý 4/2026 (hệ số nhân theo tháng). Quy tắc: /js/memo/memo210.js
+   - Hai memo ĐỘC LẬP nhau, KHÔNG thay đổi hoa hồng thực lãnh. IP = phí khách hàng thực đóng.
+   - Khi lưu kèm memo: bắt buộc nhập ngày nộp hồ sơ (hồ sơ phải nộp VÀ phát hành đúng thời gian memo).
 -->
 <html lang="vi">
 <head>
@@ -265,8 +267,19 @@
                         </table>
                     </div>
 
-                    <!-- ===== Tuỳ chọn tính FYC xét thưởng theo Memo 00110 ===== -->
+                    <!-- ===== Tuỳ chọn tính IP xét thưởng theo memo (Memo 00110 và Memo 00210 độc lập nhau) ===== -->
                     <div id="memo110-section" class="pt-3 border-t border-theme-border space-y-3">
+                        <!-- Phương thức đóng phí: IP = phí khách hàng thực đóng (chỉ hiện khi tick memo) -->
+                        <div id="memo-mode-wrap" class="hidden flex flex-wrap items-center gap-2 text-xs">
+                            <label for="memo-mode" class="font-medium">Phương thức đóng phí (IP = phí thực đóng):</label>
+                            <select id="memo-mode" class="p-1.5 border border-theme-border rounded-lg text-xs outline-none bg-theme-bg text-theme-text">
+                                <option value="Năm">Năm (100% phí năm)</option>
+                                <option value="Nửa năm">Nửa năm (phí năm ÷ 2)</option>
+                                <option value="Quý">Quý (phí năm ÷ 4)</option>
+                            </select>
+                        </div>
+
+                        <!-- Memo 00110 -->
                         <label for="memo110-toggle" class="flex items-start gap-2.5 cursor-pointer select-none">
                             <input type="checkbox" id="memo110-toggle" class="mt-0.5 w-4 h-4 shrink-0 rounded border-theme-border cursor-pointer" style="accent-color:#dc2626;">
                             <span class="text-xs leading-relaxed">
@@ -275,6 +288,26 @@
                             </span>
                         </label>
                         <div id="memo110-panel" class="hidden"></div>
+
+                        <!-- Memo 00210 -->
+                        <label for="memo210-toggle" class="flex items-start gap-2.5 cursor-pointer select-none">
+                            <input type="checkbox" id="memo210-toggle" class="mt-0.5 w-4 h-4 shrink-0 rounded border-theme-border cursor-pointer" style="accent-color:#dc2626;">
+                            <span class="text-xs leading-relaxed">
+                                <b>Tính thêm IP xét thưởng theo Memo 00210</b> &ndash; "Đỉnh cao hiệu suất, rinh ngay quà lớn"
+                                <span class="block text-[11px] text-theme-muted">Thi đua 01/10 &ndash; 31/12/2026 &bull; Thưởng iPhone theo tổng IP cả quý, không thay đổi hoa hồng thực lãnh</span>
+                            </span>
+                        </label>
+                        <div id="memo210-controls" class="hidden grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+                            <div>
+                                <label for="memo210-month" class="block font-medium mb-1">Tháng nộp &amp; phát hành hồ sơ</label>
+                                <select id="memo210-month" class="w-full p-2 border border-theme-border rounded-lg text-xs outline-none bg-theme-bg text-theme-text">
+                                    <option value="2026-10">Tháng 10/2026 (×2)</option>
+                                    <option value="2026-11">Tháng 11/2026 (×1.5, Yên Tâm Vui Khoẻ ×2)</option>
+                                    <option value="2026-12">Tháng 12/2026 (chỉ Yên Tâm Vui Khoẻ ×2)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div id="memo210-panel" class="hidden"></div>
                     </div>
 
                     <!-- Nút lưu làm doanh số cá nhân -->
@@ -845,14 +878,21 @@
                 const tongPhiFYP = lastCalculatedData.totalAnnualPremium || lastCalculatedData.mainPremium || 0;
                 const fycNam1 = lastCalculatedData.fyc ? lastCalculatedData.fyc.y1 : 0;
                 const todayStr = new Date().toISOString().split('T')[0];
-                const memo110 = (window.memo110Get && window.memo110Get()) || { enabled: false };
+                // [MEMO] Trạng thái các ô tick memo (00110 / 00210)
+                const memoSel = (window.memoGet && window.memoGet()) || { any: false };
+                const memoPreMsg = (memoSel.any && window.memoPreCheck) ? window.memoPreCheck() : '';
+                if (memoPreMsg) {
+                    // Memo 00210 + PRU-Đầu Tư Vững Tiến: bắt buộc nhập số tiền bảo hiểm trước khi lưu
+                    Swal.fire({ icon: 'warning', title: 'Thiếu thông tin', text: memoPreMsg, confirmButtonColor: '#dc2626' });
+                    return;
+                }
 
                 const { value: formValues } = await Swal.fire({
                     title: '<span class="text-base font-bold text-theme-text">Xác nhận lưu doanh số hợp đồng</span>',
                     html: `
 
                         <div class="text-left text-xs space-y-3 p-1 max-h-[70vh] overflow-y-auto text-theme-text">
-                            ${memo110.enabled ? window.memo110SaveNotice() : ''}
+                            ${memoSel.any ? window.memoSaveNotice() : ''}
                             <div class="p-3 bg-theme-border/20 border border-theme-border rounded-xl space-y-1">
                                 <p class="font-bold text-emerald-600 dark:text-emerald-400">• Sản phẩm chính: ${lastCalculatedData.mainProduct}</p>
                                 <p class="opacity-90 pl-3">Phí: <b>${Math.round(tongPhiFYP).toLocaleString('vi-VN')} VNĐ</b></p>
@@ -876,15 +916,15 @@
 
                             <div>
                                 <label class="block font-medium mb-1 opacity-90">Ngày phát hành hợp đồng <span class="text-red-500">*</span></label>
-                                <input id="swal-ngay-cap" type="date" value="${todayStr}" ${memo110.enabled ? 'min="2026-10-01" max="2026-10-31"' : ''} class="w-full p-2.5 border border-theme-border rounded-xl text-xs outline-none bg-transparent focus:border-emerald-500 transition text-theme-text">
+                                <input id="swal-ngay-cap" type="date" value="${window.memoDefaultDate ? window.memoDefaultDate(todayStr) : todayStr}" ${memoSel.any ? window.memoDateAttr() : ''} class="w-full p-2.5 border border-theme-border rounded-xl text-xs outline-none bg-transparent focus:border-emerald-500 transition text-theme-text">
                             </div>
 
                             <div>
                                 <label class="block font-medium mb-1 opacity-90">Phương thức đóng phí</label>
                                 <select id="swal-dinh-ky" class="w-full p-2.5 border border-theme-border rounded-xl text-xs outline-none bg-theme-bg text-theme-text focus:border-emerald-500 transition">
-                                    <option value="Năm">Định kỳ năm (100% FYP)</option>
-                                    <option value="Nửa năm">Định kỳ nửa năm (50% FYP)</option>
-                                    <option value="Quý">Định kỳ quý (25% FYP)</option>
+                                    <option value="Năm" ${window.memoModeAttr ? window.memoModeAttr('Năm') : ''}>Định kỳ năm (100% FYP)</option>
+                                    <option value="Nửa năm" ${window.memoModeAttr ? window.memoModeAttr('Nửa năm') : ''}>Định kỳ nửa năm (50% FYP)</option>
+                                    <option value="Quý" ${window.memoModeAttr ? window.memoModeAttr('Quý') : ''}>Định kỳ quý (25% FYP)</option>
                                 </select>
                             </div>
 
@@ -922,8 +962,8 @@
                             return false;
                         }
 
-                        if (memo110.enabled) {
-                            const memoErr = window.memo110ValidateDate(ngayCap);
+                        if (memoSel.any) {
+                            const memoErr = window.memoValidate(ngayCap);
                             if (memoErr) {
                                 Swal.showValidationMessage(memoErr);
                                 return false;
@@ -981,7 +1021,7 @@
                     ghi_chu: JSON.stringify({
                         riders: lastCalculatedData.riders || [],
                         fycDetails: lastCalculatedData.fyc || {},
-                        ...(memo110.enabled ? { memo00110: window.memo110Build(formValues.ngayCap, formValues.tyLeHuong) } : {})
+                        ...(memoSel.any && window.memoPayload ? window.memoPayload(formValues) : {})
                     })
                 };
 
@@ -1046,19 +1086,42 @@
 </script>
 
 <!-- ================================================================
-     MEMO 00110 - "Bứt tốc phi mã, chớp cơ hội vàng" (01/10 - 31/10/2026)
-     Khối độc lập: KHÔNG đụng vào logic tính FYC (hoa hồng thực lãnh).
-     Quy tắc nằm trong /js/memo/memo110.js (dùng chung với sales.html).
+     MEMO UI (fyc.html): Memo 00110 + Memo 00210 - hai memo ĐỘC LẬP nhau.
+     Khối này KHÔNG đụng vào logic tính FYC (hoa hồng thực lãnh).
+     Quy tắc nằm trong /js/memo/memo110.js và /js/memo/memo210.js
+     (dùng chung với sales.html).
+     IP = phí khách hàng thực đóng (nửa năm: phí năm / 2, quý: phí năm / 4).
 ================================================================= -->
 <script src="/js/memo/memo110.js"></script>
+<script src="/js/memo/memo210.js"></script>
 <script>
 (function () {
-    const MM = window.Memo110;
-    const fmt = MM.fmt;
+    const M1 = window.Memo110;
+    const M2 = window.Memo210;
+    const fmt = M1.fmt;
     const esc = (s) => String(s || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const $ = (id) => document.getElementById(id);
 
-    // Các hợp đồng TVV đã lưu trước đó (để cộng dồn IP xét thưởng tháng 10)
-    let existing = { status: 'idle', items: [] }; // idle | loading | ok | fail
+    // ================= Trạng thái chung =================
+    let lastNop = '';                                   // ngày nộp hồ sơ nhập trong hộp thoại lưu
+    let existing = { status: 'idle', items: [] };       // các hợp đồng đã lưu (để cộng dồn): idle | loading | ok | fail
+
+    const calc = () => (typeof lastCalculatedData !== 'undefined') ? lastCalculatedData : null;
+    const on110 = () => !!($('memo110-toggle') && $('memo110-toggle').checked && calc());
+    const on210 = () => !!($('memo210-toggle') && $('memo210-toggle').checked && calc());
+    const modeVal = () => ($('memo-mode') ? $('memo-mode').value : 'Năm');
+    const month210 = () => ($('memo210-month') ? $('memo210-month').value : '2026-10');
+    const lastDay = (m) => ({ '2026-10': 31, '2026-11': 30, '2026-12': 31 }[m] || 31);
+
+    // IP = phí thực đóng: quy đổi phí năm theo phương thức đóng phí
+    function scaled(d, mode) {
+        const div = M1.divisorOf(mode);
+        return {
+            mainProduct: d.mainProduct,
+            mainIP: (d.mainPremium || 0) / div,
+            riders: (d.riders || []).map(r => ({ name: r.name, premium: (r.premium || 0) / div }))
+        };
+    }
 
     function agentName() {
         let u = {};
@@ -1068,7 +1131,7 @@
 
     async function loadExisting() {
         existing = { status: 'loading', items: [] };
-        render();
+        renderAll();
         try {
             const name = agentName();
             if (!name) throw new Error('no user');
@@ -1079,34 +1142,30 @@
         } catch (e) {
             existing = { status: 'fail', items: [] };
         }
-        render();
+        renderAll();
     }
 
-    function current() {
-        const toggle = document.getElementById('memo110-toggle');
-        const d = (typeof lastCalculatedData !== 'undefined') ? lastCalculatedData : null;
-        return { enabled: !!(toggle && toggle.checked && d), data: d };
-    }
+    const exInfoText = (n, label) => existing.status === 'loading' ? 'Đang tải các hợp đồng đã lưu...'
+        : existing.status === 'fail' ? 'Không tải được hợp đồng đã lưu - chỉ tính riêng hợp đồng này.'
+        : n + ' hợp đồng hợp lệ đã lưu ' + label;
 
-    // Tính toàn bộ trạng thái memo cho hợp đồng đang tính + cộng dồn tháng 10
-    function state(d) {
-        const a = MM.analyze({ mainProduct: d.mainProduct, mainIP: d.mainPremium, riders: d.riders });
+    // ================= MEMO 00110 =================
+    function state110(d) {
+        const a = M1.analyze(scaled(d, modeVal()));
         const thisShare = a.hopLe ? a.ipTT : 0; // xem trước ở 100%; chia 50-50 áp dụng khi lưu
-        const exSum = MM.summarize(existing.items.map(MM.analyzeContract));
-        const before = MM.tierFor(exSum.total);
-        const after = MM.tierFor(exSum.total + thisShare);
+        const exSum = M1.summarize(existing.items.map(M1.analyzeContract));
+        const before = M1.tierFor(exSum.total);
+        const after = M1.tierFor(exSum.total + thisShare);
         return { a, thisShare, exSum, before, after };
     }
 
-    function render() {
-        const panel = document.getElementById('memo110-panel');
+    function render110() {
+        const panel = $('memo110-panel');
         if (!panel) return;
-        const cur = current();
-        if (!cur.enabled) { panel.classList.add('hidden'); panel.innerHTML = ''; return; }
+        if (!on110()) { panel.classList.add('hidden'); panel.innerHTML = ''; return; }
 
-        const s = state(cur.data);
+        const s = state110(calc());
         const a = s.a;
-
         const linesHtml = a.lines.map(l => `
             <tr class="border-b border-theme-border">
                 <td class="p-2">${l.type === 'main' ? '<b>' + esc(l.name) + '</b> <span class="text-[11px] text-theme-muted">(chính)</span>' : '+ ' + esc(l.name)}</td>
@@ -1114,7 +1173,6 @@
                 <td class="p-2 text-center ${l.factor === 2 ? 'font-bold text-theme-primary' : ''}">×${l.factor}</td>
                 <td class="p-2 text-right font-semibold">${fmt(l.ipTT)}</td>
             </tr>`).join('');
-
         const checksHtml = a.checks.map(c => `
             <li class="flex items-start gap-1.5">
                 <span class="${c.ok ? 'text-emerald-600' : 'text-red-600'} font-bold">${c.ok ? '✓' : '✗'}</span>
@@ -1127,15 +1185,12 @@
         } else {
             const dBonus = s.after.bonus - s.before.bonus;
             const dTicket = s.after.tickets - s.before.tickets;
-            const exInfo = existing.status === 'loading' ? 'Đang tải các hợp đồng đã lưu...'
-                : existing.status === 'fail' ? 'Không tải được hợp đồng đã lưu - chỉ tính riêng hợp đồng này.'
-                : `${s.exSum.count} hợp đồng hợp lệ đã lưu trong tháng 10/2026`;
             cumHtml = `
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                     <div class="p-2.5 bg-theme-card rounded-lg border border-theme-border">
                         <span class="text-[11px] text-theme-muted">Tổng IP xét thưởng tháng 10 (sau HĐ này)</span>
                         <p class="text-sm font-bold mt-0.5 text-theme-primary">${fmt(s.after.total)} VNĐ</p>
-                        <span class="text-[11px] text-theme-muted">Đã lưu ${fmt(s.exSum.total)} + HĐ này ${fmt(s.thisShare)}<br>${exInfo}</span>
+                        <span class="text-[11px] text-theme-muted">Đã lưu ${fmt(s.exSum.total)} + HĐ này ${fmt(s.thisShare)}<br>${exInfoText(s.exSum.count, 'trong tháng 10/2026')}</span>
                     </div>
                     <div class="p-2.5 bg-theme-card rounded-lg border border-theme-border">
                         <span class="text-[11px] text-theme-muted">Thưởng tiền (memo)</span>
@@ -1154,135 +1209,314 @@
         panel.innerHTML = `
             <div class="p-3 bg-theme-bg rounded-xl border border-theme-border space-y-3 text-xs">
                 <div class="flex items-center gap-1.5 font-bold text-theme-primary">
-                    <i data-lucide="gift" class="w-4 h-4"></i> IP xét thưởng &amp; thưởng phụ theo ${MM.CFG.so}
+                    <i data-lucide="gift" class="w-4 h-4"></i> IP xét thưởng &amp; thưởng phụ theo ${M1.CFG.so}
                 </div>
-                <p class="text-[11px] text-theme-muted">Đây là IP <b>xét thưởng</b>. Bảng hoa hồng thực lãnh ở trên <b>không thay đổi</b>; khoản thưởng dưới đây là thưởng phụ, tính riêng.</p>
-
+                <p class="text-[11px] text-theme-muted">Đây là IP <b>xét thưởng</b> (IP = phí khách hàng thực đóng, phương thức đóng: ${esc(modeVal())}). Bảng hoa hồng thực lãnh ở trên <b>không thay đổi</b>; khoản thưởng dưới đây là thưởng phụ, tính riêng.</p>
                 <div class="overflow-x-auto">
                     <table class="w-full text-left border-collapse">
-                        <thead>
-                            <tr class="border-b border-theme-border text-[11px] text-theme-muted">
-                                <th class="p-2 font-semibold">Sản phẩm</th>
-                                <th class="p-2 font-semibold text-right">IP gốc</th>
-                                <th class="p-2 font-semibold text-center">Hệ số</th>
-                                <th class="p-2 font-semibold text-right">IP xét thưởng</th>
-                            </tr>
-                        </thead>
+                        <thead><tr class="border-b border-theme-border text-[11px] text-theme-muted">
+                            <th class="p-2 font-semibold">Sản phẩm</th><th class="p-2 font-semibold text-right">IP thực đóng</th>
+                            <th class="p-2 font-semibold text-center">Hệ số</th><th class="p-2 font-semibold text-right">IP xét thưởng</th>
+                        </tr></thead>
                         <tbody>${linesHtml}</tbody>
-                        <tfoot>
-                            <tr><td class="p-2 font-bold" colspan="3">FYC xét thưởng của hợp đồng này</td>
-                                <td class="p-2 text-right font-bold text-theme-primary">${fmt(a.ipTT)}</td></tr>
-                        </tfoot>
+                        <tfoot><tr><td class="p-2 font-bold" colspan="3">IP xét thưởng của hợp đồng này</td>
+                            <td class="p-2 text-right font-bold text-theme-primary">${fmt(a.ipTT)}</td></tr></tfoot>
                     </table>
                 </div>
-
                 <div>
                     <p class="font-semibold mb-1">Điều kiện hồ sơ hợp lệ</p>
                     <ul class="space-y-1">${checksHtml}</ul>
                     <p class="text-[11px] text-theme-muted mt-1">Hồ sơ phải nộp và phát hành trong 01/10 &ndash; 31/10/2026 (kiểm tra khi lưu).</p>
                 </div>
-
-                <div>
-                    <p class="font-semibold mb-1.5">Cộng dồn cả tháng 10/2026</p>
-                    ${cumHtml}
-                </div>
-
+                <div><p class="font-semibold mb-1.5">Cộng dồn cả tháng 10/2026</p>${cumHtml}</div>
                 <p class="text-[11px] text-theme-muted italic">Thưởng xét trên TỔNG IP hợp lệ của tất cả hợp đồng nộp và phát hành trong tháng 10, không xét riêng từng hợp đồng. Nếu hợp đồng chia 50-50, IP xét thưởng được chia theo tỷ lệ khi lưu. Thưởng chính tối đa 100 triệu đồng/TVV.</p>
             </div>`;
         panel.classList.remove('hidden');
+    }
+
+    // ================= MEMO 00210 =================
+    function state210(d) {
+        const sc = scaled(d, modeVal());
+        const a = M2.analyze({
+            mainProduct: sc.mainProduct, mainIP: sc.mainIP, riders: sc.riders,
+            month: month210(), split: 100
+        });
+        const exAn = existing.items.map(M2.analyzeContract);
+        const before = M2.summarize(exAn);
+        const after = M2.summarize(exAn.concat([a]));
+        return { a, before, after };
+    }
+
+    function render210() {
+        const panel = $('memo210-panel');
+        const controls = $('memo210-controls');
+        if (!panel) return;
+        if (!on210()) {
+            panel.classList.add('hidden'); panel.innerHTML = '';
+            if (controls) controls.classList.add('hidden');
+            return;
+        }
+        const d = calc();
+        if (controls) controls.classList.remove('hidden');
+
+        const s = state210(d);
+        const a = s.a;
+        const mLabel = M2.monthLabel(month210());
+
+        const linesHtml = a.lines.map(l => `
+            <tr class="border-b border-theme-border">
+                <td class="p-2">${l.type === 'main' ? '<b>' + esc(l.name) + '</b> <span class="text-[11px] text-theme-muted">(chính)</span>' : '+ ' + esc(l.name)}</td>
+                <td class="p-2 text-right">${fmt(l.ip)}</td>
+            </tr>`).join('');
+        const checksHtml = a.checks.map(c => `
+            <li class="flex items-start gap-1.5">
+                <span class="${c.ok ? 'text-emerald-600' : 'text-red-600'} font-bold">${c.ok ? '✓' : '✗'}</span>
+                <span class="${c.ok ? '' : 'text-red-600'}">${c.text}</span>
+            </li>`).join('');
+
+        let cumHtml;
+        if (!a.valid) {
+            cumHtml = `<p class="text-red-600 font-medium">Hồ sơ chưa đủ điều kiện hợp lệ nên IP của hợp đồng này không được cộng vào tổng IP xét thưởng.</p>`;
+        } else {
+            const exTotal = s.before.total;
+            const thisAdd = s.after.total - s.before.total; // phần cộng thêm thực tế (đã tính trần)
+            const prizeText = s.after.prize ? '01 ' + esc(s.after.prize.name) : 'Chưa đạt mốc 600 triệu IP';
+            cumHtml = `
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    <div class="p-2.5 bg-theme-card rounded-lg border border-theme-border">
+                        <span class="text-[11px] text-theme-muted">Tổng IP xét thưởng cả quý (sau HĐ này)</span>
+                        <p class="text-sm font-bold mt-0.5 text-theme-primary">${fmt(s.after.total)} VNĐ</p>
+                        <span class="text-[11px] text-theme-muted">Đã lưu ${fmt(exTotal)} + HĐ này ${fmt(thisAdd)}<br>${exInfoText(s.before.count, 'trong 10-12/2026')}</span>
+                    </div>
+                    <div class="p-2.5 bg-theme-card rounded-lg border border-theme-border">
+                        <span class="text-[11px] text-theme-muted">Quà đạt được</span>
+                        <p class="text-sm font-bold mt-0.5 text-theme-primary">${prizeText}</p>
+                        <span class="text-[11px] text-theme-muted">${(s.after.prize && !(s.before.prize && s.before.prize.min === s.after.prize.min)) ? '<b class="text-emerald-600">Đạt nhờ HĐ này</b>' : '&nbsp;'}</span>
+                    </div>
+                    <div class="p-2.5 bg-theme-card rounded-lg border border-theme-border">
+                        <span class="text-[11px] text-theme-muted">Mốc kế tiếp</span>
+                        <p class="text-sm font-bold mt-0.5 text-theme-primary">${s.after.next ? fmt(s.after.next.min) + ' IP' : 'Mốc cao nhất'}</p>
+                        <span class="text-[11px] text-theme-muted">${s.after.next ? 'Còn thiếu ' + fmt(s.after.missingToNext) + ' &ndash; ' + esc(s.after.next.name) : '&nbsp;'}</span>
+                    </div>
+                </div>
+                `;
+        }
+
+        panel.innerHTML = `
+            <div class="p-3 bg-theme-bg rounded-xl border border-theme-border space-y-3 text-xs">
+                <div class="flex items-center gap-1.5 font-bold text-theme-primary">
+                    <i data-lucide="trophy" class="w-4 h-4"></i> IP xét thưởng theo ${M2.CFG.so} &ndash; Đỉnh cao hiệu suất, rinh ngay quà lớn
+                </div>
+                <p class="text-[11px] text-theme-muted">Đây là IP <b>xét thưởng</b> (IP = phí khách hàng thực đóng, phương thức đóng: ${esc(modeVal())}). Hoa hồng thực lãnh không thay đổi. Tính cho hồ sơ nộp và phát hành trong <b>${mLabel}</b>.</p>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead><tr class="border-b border-theme-border text-[11px] text-theme-muted">
+                            <th class="p-2 font-semibold">Sản phẩm</th><th class="p-2 font-semibold text-right">IP thực đóng</th>
+                        </tr></thead>
+                        <tbody>${linesHtml}</tbody>
+                        <tfoot>
+                            <tr class="border-b border-theme-border"><td class="p-2 font-semibold">Tổng IP thực đóng của hồ sơ</td><td class="p-2 text-right font-semibold">${fmt(a.ip)}</td></tr>
+                            <tr class="border-b border-theme-border"><td class="p-2">Hệ số nhân <span class="text-[11px] text-theme-muted">(${esc(a.factorNote)})</span></td>
+                                <td class="p-2 text-right font-bold ${a.factor > 1 ? 'text-theme-primary' : ''}">×${a.factor}</td></tr>
+                            <tr><td class="p-2 font-bold">IP xét thưởng của hợp đồng này</td>
+                                <td class="p-2 text-right font-bold text-theme-primary">${fmt(a.valid ? a.ipTT : 0)}</td></tr>
+                        </tfoot>
+                    </table>
+                </div>
+                <div>
+                    <p class="font-semibold mb-1">Điều kiện hồ sơ hợp lệ</p>
+                    <ul class="space-y-1">${checksHtml}</ul>
+                    <p class="text-[11px] text-theme-muted mt-1">Hồ sơ nộp từ 01/10 đến 31/12/2026 và phát hành đến hết 31/12/2026 thì được tính IP. Muốn được nhân hệ số, hồ sơ phải nộp VÀ phát hành trong cùng một tháng (kiểm tra khi lưu); nộp tháng này, phát hành tháng sau vẫn tính IP nhưng chỉ ×1.</p>
+                </div>
+                <div><p class="font-semibold mb-1.5">Cộng dồn cả quý 4/2026</p>${cumHtml}</div>
+                <p class="text-[11px] text-theme-muted italic">Quà xét trên TỔNG IP tính thưởng của tất cả hợp đồng hợp lệ từ 01/10 đến 31/12/2026; mỗi TVV nhận tối đa 01 quà (không quy đổi thành tiền). PRU-Đầu Tư Vững Tiến chỉ được nhân hệ số khi hồ sơ có tổng IP từ 20 triệu. Nếu hợp đồng chia 50-50, IP được chia theo tỷ lệ khi lưu.</p>
+            </div>`;
+        panel.classList.remove('hidden');
+    }
+
+    function renderAll() {
+        const any = on110() || on210();
+        const modeWrap = $('memo-mode-wrap');
+        if (modeWrap) modeWrap.classList.toggle('hidden', !any);
+        render110();
+        render210();
         if (window.lucide) lucide.createIcons();
     }
 
-    // ----- API cho phần "Lưu làm doanh số" -----
-    window.memo110Get = function () { return { enabled: current().enabled }; };
-    // Ngày nộp hồ sơ nhập trong hộp thoại lưu (chỉ khi tick memo)
-    let lastNop = '';
-    function nopIssue(nop) {
-        if (!nop) return '';
-        if (!MM.inWindow(nop)) return 'Hồ sơ nộp ngoài 01/10 - 31/10/2026 nên KHÔNG hợp lệ theo Memo 00110 (IP xét thưởng = 0).';
-        return '';
+    // ================= API cho phần "Lưu làm doanh số" =================
+    window.memoGet = function () { return { m110: on110(), m210: on210(), any: on110() || on210() }; };
+
+    // Kiểm tra trước khi mở hộp thoại lưu (hiện không còn điều kiện nào: bản điều chỉnh Memo 00210 đã
+    // bỏ điều kiện số tiền bảo hiểm của PRU-Đầu Tư Vững Tiến, thay bằng tổng IP từ 20 triệu/hồ sơ).
+    window.memoPreCheck = function () { return ''; };
+
+    // Khoảng ngày phát hành cho phép theo memo đang tick
+    function dateRange() {
+        let lo = '2026-10-01', hi = '2026-12-31';
+        if (on110() && hi > '2026-10-31') hi = '2026-10-31';
+        if (on210()) {
+            const m = month210();
+            if (m + '-01' > lo) lo = m + '-01';
+            const mh = m + '-' + lastDay(m);
+            if (mh < hi) hi = mh;
+        }
+        return { lo, hi };
     }
-    window.memo110NopHint = function () {
-        const el = document.getElementById('swal-ngay-nop');
-        const hint = document.getElementById('memo-nop-hint');
-        if (!el || !hint) return;
-        hint.innerText = nopIssue(el.value);
+    window.memoDateAttr = function () { const r = dateRange(); return 'min="' + r.lo + '" max="' + r.hi + '"'; };
+    window.memoDefaultDate = function (todayStr) {
+        if (!(on110() || on210())) return todayStr;
+        const r = dateRange();
+        return (todayStr >= r.lo && todayStr <= r.hi) ? todayStr : '';
     };
-    window.memo110ValidateDate = function (ngayCap) {
-        const err = MM.dateError(ngayCap);
-        if (err) return err;
-        const el = document.getElementById('swal-ngay-nop');
+    // Chọn sẵn phương thức đóng phí trong hộp thoại theo lựa chọn ở phần memo
+    window.memoModeAttr = function (mode) {
+        return ((on110() || on210()) && modeVal() === mode) ? 'selected' : '';
+    };
+
+    window.memoNopHint = function () {
+        const el = $('swal-ngay-nop'), hint = $('memo-nop-hint');
+        if (!el || !hint) return;
+        const nop = el.value, msgs = [];
+        if (nop) {
+            if (on110() && !M1.inWindow(nop)) msgs.push('Memo 00110: hồ sơ nộp ngoài 01/10 - 31/10/2026 nên KHÔNG hợp lệ (IP xét thưởng = 0).');
+            if (on210()) {
+                if (nop < M2.CFG.start || nop > M2.CFG.end) msgs.push('Memo 00210: hồ sơ nộp ngoài 01/10 - 31/12/2026 nên KHÔNG hợp lệ (IP xét thưởng = 0).');
+                else if (String(nop).slice(0, 7) !== month210()) msgs.push('Memo 00210: hồ sơ nộp khác ' + M2.monthLabel(month210()) + ' (tháng phát hành) nên vẫn tính IP nhưng KHÔNG được nhân hệ số (×1).');
+            }
+        }
+        hint.innerHTML = msgs.join('<br>');
+    };
+
+    window.memoSaveNotice = function () {
+        const d = calc();
+        if (!d || !(on110() || on210())) return '';
+        let rows = '';
+        if (on110()) {
+            const s = state110(d);
+            rows += `<p class="opacity-90"><b>Memo 00110:</b> ` + (s.a.hopLe
+                ? `IP xét thưởng HĐ này <b>${fmt(s.a.ipTT)}</b> &bull; Tổng tháng 10 <b>${fmt(s.after.total)}</b> &bull; Thưởng <b>${fmt(s.after.bonus)} VNĐ</b> &bull; <b>${s.after.tickets}</b> vé`
+                : `hồ sơ chưa đủ điều kiện hợp lệ (sẽ lưu với IP xét thưởng = 0)`) + `</p>`;
+        }
+        if (on210()) {
+            const s = state210(d);
+            rows += `<p class="opacity-90"><b>Memo 00210 (${M2.monthLabel(month210())}):</b> ` + (s.a.valid
+                ? `IP xét thưởng HĐ này <b>${fmt(s.a.ipTT)}</b> (×${s.a.factor}) &bull; Tổng quý <b>${fmt(s.after.total)}</b> &bull; ${s.after.prize ? '<b>' + esc(s.after.prize.name) + '</b>' : 'chưa đạt mốc quà'}`
+                : `hồ sơ chưa đủ điều kiện hợp lệ (sẽ lưu với IP xét thưởng = 0)`) + `</p>`;
+        }
+        return `
+            <div class="p-3 rounded-xl border border-red-300 bg-red-50/40 space-y-2">
+                <p class="font-bold text-red-600">Lưu kèm IP xét thưởng theo memo</p>
+                ${rows}
+                <p class="opacity-70 italic">Tính theo phương thức đóng phí đã chọn ở bước tính memo (${esc(modeVal())}). Hoa hồng thực lãnh không đổi.</p>
+                <div>
+                    <label class="block font-medium mb-1 opacity-90">Ngày nộp hồ sơ <span class="text-red-500">*</span></label>
+                    <input id="swal-ngay-nop" type="date" oninput="window.memoNopHint()" onchange="window.memoNopHint()" class="w-full p-2.5 border border-theme-border rounded-xl text-xs outline-none bg-transparent focus:border-red-400 transition text-theme-text">
+                    <p id="memo-nop-hint" class="text-red-600 mt-1 text-[11px]"></p>
+                </div>
+                <p class="opacity-70 italic">Ngày phát hành phải nằm trong khoảng của memo đã tick. Ngày nộp ngoài thời gian thi đua thì vẫn lưu hợp đồng nhưng IP xét thưởng = 0; Memo 00210: nộp khác tháng phát hành thì vẫn tính IP nhưng không được nhân hệ số.</p>
+            </div>`;
+    };
+
+    // Trả về chuỗi lỗi (rỗng nếu hợp lệ). Ngày phát hành sai -> chặn lưu; ngày nộp sai -> vẫn lưu nhưng không hợp lệ.
+    window.memoValidate = function (ngayCap) {
+        const ph = String(ngayCap || '').slice(0, 10);
+        if (!ph) return 'Vui lòng chọn ngày phát hành hợp đồng!';
+        if (on110()) {
+            const e = M1.dateError(ph);
+            if (e) return e;
+        }
+        if (on210() && ph.slice(0, 7) !== month210()) {
+            return 'Memo 00210: ngày phát hành phải thuộc ' + M2.monthLabel(month210()) + ' (tháng đã chọn ở phần tính Memo 00210). Hãy đổi ngày phát hành hoặc đổi tháng ở phần Memo 00210.';
+        }
+        const el = $('swal-ngay-nop');
         const nop = el ? el.value : '';
-        if (!nop) return 'Vui lòng nhập ngày nộp hồ sơ để kiểm tra tính hợp lệ theo Memo 00110!';
-        if (nop > String(ngayCap).slice(0, 10)) return 'Ngày nộp hồ sơ không được sau ngày phát hành!';
+        if (!nop) return 'Vui lòng nhập ngày nộp hồ sơ để kiểm tra tính hợp lệ theo memo!';
+        if (nop > ph) return 'Ngày nộp hồ sơ không được sau ngày phát hành!';
         lastNop = nop;
         return '';
     };
 
-    window.memo110SaveNotice = function () {
-        const cur = current();
-        if (!cur.enabled) return '';
-        const s = state(cur.data);
-        const summary = s.a.hopLe
-            ? `FYC xét thưởng HĐ này <b>${fmt(s.a.ipTT)}</b> &bull; Tổng tháng 10 <b>${fmt(s.after.total)}</b><br>Thưởng <b>${fmt(s.after.bonus)} VNĐ</b> &bull; <b>${s.after.tickets}</b> vé quay số`
-            : `Hồ sơ chưa đủ điều kiện hợp lệ của memo (sẽ lưu với IP xét thưởng = 0)`;
-        return `
-            <div class="p-3 rounded-xl border border-red-300 bg-red-50/40 space-y-1">
-                <p class="font-bold text-red-600">Lưu kèm IP xét thưởng ${MM.CFG.so}</p>
-                <p class="opacity-90">${summary}</p>
-                <div>
-                    <label class="block font-medium mb-1 opacity-90">Ngày nộp hồ sơ <span class="text-red-500">*</span></label>
-                    <input id="swal-ngay-nop" type="date" oninput="window.memo110NopHint()" onchange="window.memo110NopHint()" class="w-full p-2.5 border border-theme-border rounded-xl text-xs outline-none bg-transparent focus:border-red-400 transition text-theme-text">
-                    <p id="memo-nop-hint" class="text-red-600 mt-1 text-[11px]"></p>
-                </div>
-                <p class="opacity-70 italic">Hoa hồng thực lãnh không đổi. Hồ sơ phải nộp VÀ phát hành trong 01/10 - 31/10/2026. Ngày phát hành ngoài khoảng này sẽ không lưu được; ngày nộp ngoài khoảng thì lưu nhưng IP xét thưởng = 0.</p>
-            </div>`;
-    };
-
-    window.memo110Build = function (ngayPhatHanh, tyLeChia) {
-        const cur = current();
-        if (!cur.data) return null;
-        const a = MM.analyze({ mainProduct: cur.data.mainProduct, mainIP: cur.data.mainPremium, riders: cur.data.riders });
+    function build110(ngayPhatHanh, tyLeChia, dinhKy) {
+        const d = calc();
+        const a = M1.analyze(scaled(d, dinhKy));
         const tyLe = Number(tyLeChia) || 100;
         const nop = lastNop;
-        const nopOk = !!nop && MM.inWindow(nop) && nop <= String(ngayPhatHanh).slice(0, 10);
+        const nopOk = !!nop && M1.inWindow(nop) && nop <= String(ngayPhatHanh).slice(0, 10);
         const hopLe = a.hopLe && nopOk;
         const ipTT = hopLe ? a.ipTT : 0;
         return {
-            memo: MM.CFG.so,
-            apDung: true,
-            ngayNopHoSo: nop,
-            ngayPhatHanh: ngayPhatHanh,
+            memo: M1.CFG.so, apDung: true,
+            ngayNopHoSo: nop, ngayPhatHanh: ngayPhatHanh,
+            phuongThucDongPhi: dinhKy,
             hopLe: hopLe,
-            ipChinh: a.mainIP,
-            ipBanCung: a.riderIP,
+            ipChinh: a.mainIP, ipBanCung: a.riderIP,
             heSo: a.boostNote || null,
             chiTiet: a.lines.map(l => ({ ten: l.name, loai: l.type, ipGoc: l.ip, heSo: l.factor, ipXetThuong: l.ipTT })),
-            dieuKien: a.checks.map(c => ({ dat: c.ok, noiDung: c.short }))
-                .concat([{ dat: nopOk, noiDung: 'Nộp hồ sơ trong 01/10 - 31/10/2026' }]),
-            ipXetThuong: ipTT,
-            tyLeChia: tyLe,
-            ipXetThuongSauChia: ipTT * tyLe / 100
+            dieuKien: a.checks.map(c => ({ dat: c.ok, noiDung: c.short })).concat([{ dat: nopOk, noiDung: 'Nộp hồ sơ trong 01/10 - 31/10/2026' }]),
+            ipXetThuong: ipTT, tyLeChia: tyLe, ipXetThuongSauChia: ipTT * tyLe / 100
         };
+    }
+
+    function build210(ngayPhatHanh, tyLeChia, dinhKy) {
+        const d = calc();
+        const sc = scaled(d, dinhKy);
+        const tyLe = Number(tyLeChia) || 100;
+        const a = M2.analyze({
+            mainProduct: sc.mainProduct, mainIP: sc.mainIP, riders: sc.riders,
+            month: month210(), ngayNop: lastNop, ngayPhatHanh: ngayPhatHanh, split: tyLe
+        });
+        return {
+            memo: M2.CFG.so, apDung: true,
+            ngayNopHoSo: lastNop, ngayPhatHanh: ngayPhatHanh, thang: month210(),
+            phuongThucDongPhi: dinhKy,
+            nopCungThangPhatHanh: a.sameMonth,
+            hopLe: a.valid,
+            ipThucDong: a.ip, tyLeChia: tyLe, ipSauChia: a.shareIP,
+            heSo: a.factor, ghiChuHeSo: a.factorNote,
+            ipXetThuong: a.ipTT,
+            chiTiet: a.lines.map(l => ({ ten: l.name, loai: l.type, ipThucDong: l.ip })),
+            dieuKien: a.checks.map(c => ({ dat: c.ok, noiDung: c.short }))
+        };
+    }
+
+    window.memoPayload = function (fv) {
+        const out = {};
+        if (on110()) out.memo00110 = build110(fv.ngayCap, fv.tyLeHuong, fv.dinhKy);
+        if (on210()) out.memo00210 = build210(fv.ngayCap, fv.tyLeHuong, fv.dinhKy);
+        return out;
     };
 
+    // ================= Khởi tạo =================
     document.addEventListener('DOMContentLoaded', function () {
-        const toggle = document.getElementById('memo110-toggle');
-        if (toggle) toggle.addEventListener('change', function () {
-            if (toggle.checked) loadExisting(); else render();
-        });
+        const t110 = $('memo110-toggle'), t210 = $('memo210-toggle');
+        const onToggle = function () {
+            if ((t110 && t110.checked) || (t210 && t210.checked)) { if (existing.status === 'idle') loadExisting(); else renderAll(); }
+            else renderAll();
+        };
+        if (t110) t110.addEventListener('change', onToggle);
+        if (t210) t210.addEventListener('change', onToggle);
 
+        // Tháng mặc định: tháng hiện tại nếu nằm trong 10-12/2026, ngược lại tháng 10
+        const sel = $('memo210-month');
+        if (sel) {
+            const nowM = new Date().toISOString().slice(0, 7);
+            sel.value = M2.CFG.months.includes(nowM) ? nowM : '2026-10';
+            sel.addEventListener('change', renderAll);
+        }
+        const mode = $('memo-mode');
+        if (mode) mode.addEventListener('change', renderAll);
         // Handler gốc của nút Tính chạy trước; sau đó cập nhật phần memo nếu đang tick
-        const btnCalc = document.getElementById('btn-calculate');
-        if (btnCalc) btnCalc.addEventListener('click', render);
-
-        const btnReset = document.getElementById('btn-reset');
+        const btnCalc = $('btn-calculate');
+        if (btnCalc) btnCalc.addEventListener('click', renderAll);
+        const btnReset = $('btn-reset');
         if (btnReset) btnReset.addEventListener('click', function () {
-            if (toggle) toggle.checked = false;
-            render();
+            if (t110) t110.checked = false;
+            if (t210) t210.checked = false;
+            renderAll();
         });
     });
 })();
 </script>
+
 </body>
 </html>

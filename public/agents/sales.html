@@ -3,10 +3,12 @@
    sales.html (public/agents/) - Quản lý doanh số và hợp đồng cá nhân
 
    - FYC thực nhận (hoa hồng) và kỳ đóng phí: hiển thị như thường.
-   - [MEMO 00110] Ô tick "Hiển thị thưởng theo memo": hiện cột IP xét thưởng và khung
-     cộng dồn IP cả tháng 10/2026 -> thưởng tiền + vé quay số. Mặc định ẩn.
-     Dữ liệu ngày nộp hồ sơ lấy từ GET /api/agent/sales (trường memo00110).
-     Quy tắc nằm trong /js/memo/memo110.js.
+   - [MEMO 00110] Ô tick "Memo 00110": cột IP xét thưởng + khung cộng dồn IP tháng 10/2026 ->
+     thưởng tiền + vé quay số. Quy tắc: /js/memo/memo110.js
+   - [MEMO 00210] Ô tick "Memo 00210": cột IP xét thưởng + khung cộng dồn IP cả quý 4/2026
+     (hệ số nhân theo tháng) -> quà iPhone. Quy tắc: /js/memo/memo210.js
+   - Hai memo ĐỘC LẬP nhau, mặc định ẩn. IP = phí khách hàng thực đóng.
+     Dữ liệu ngày nộp hồ sơ lấy từ GET /api/agent/sales (trường memo00110, memo00210).
 -->
 <html lang="vi">
 <head>
@@ -164,6 +166,10 @@
                         <input type="checkbox" id="memo-view-memo110" class="w-4 h-4 rounded border-theme-border cursor-pointer" style="accent-color:#dc2626;">
                         <span>Memo 00110 &ndash; Bứt tốc phi mã, chớp cơ hội vàng <span class="text-theme-muted">(01/10 &ndash; 31/10/2026)</span></span>
                     </label>
+                    <label class="flex items-center gap-1.5 cursor-pointer select-none">
+                        <input type="checkbox" id="memo-view-memo210" class="w-4 h-4 rounded border-theme-border cursor-pointer" style="accent-color:#dc2626;">
+                        <span>Memo 00210 &ndash; Đỉnh cao hiệu suất, rinh ngay quà lớn <span class="text-theme-muted">(01/10 &ndash; 31/12/2026)</span></span>
+                    </label>
                 </div>
 
                 <!-- ===== Thưởng thi đua Memo 00110 (IP xét thưởng - tách riêng khỏi hoa hồng thực nhận) ===== -->
@@ -217,6 +223,78 @@
                             </table>
                         </div>
                         <p id="memo-detail-empty" class="text-theme-muted italic py-2 hidden">Chưa có hợp đồng nào phát hành trong 01/10 &ndash; 31/10/2026.</p>
+                    </details>
+                </div>
+
+                <!-- ===== Thưởng thi đua Memo 00210 (IP xét thưởng cả quý - độc lập với Memo 00110) ===== -->
+                <div id="memo210-card" class="memo210-col bg-theme-card rounded-xl border border-theme-border shadow-sm p-4 space-y-3">
+                    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-1">
+                        <h2 class="text-sm font-bold flex items-center gap-1.5 text-theme-text">
+                            <i data-lucide="trophy" class="w-4 h-4 text-amber-500"></i>
+                            Thưởng thi đua Memo 00210 &ndash; "Đỉnh cao hiệu suất, rinh ngay quà lớn"
+                        </h2>
+                        <span class="text-[11px] text-theme-muted">Hợp đồng nộp &amp; phát hành cùng tháng, 01/10 &ndash; 31/12/2026 &bull; Cộng dồn cả quý</span>
+                    </div>
+                    <p class="text-[11px] text-theme-muted">
+                        Đây là <b>IP xét thưởng</b> (IP = phí khách hàng thực đóng), tách riêng với <b>FYC thực nhận</b> (hoa hồng) và độc lập với Memo 00110. Quà xét trên <b>tổng IP tính thưởng cả quý</b> (đã nhân hệ số theo tháng; hồ sơ nộp khác tháng phát hành vẫn tính IP nhưng không được nhân), mỗi TVV nhận tối đa 01 quà.
+                    </p>
+                    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                        <div class="p-3 bg-theme-bg rounded-lg border border-theme-border">
+                            <span class="text-[11px] text-theme-muted">Tổng IP tính thưởng cả quý</span>
+                            <p id="m210-total" class="text-sm font-bold mt-0.5 text-theme-primary">0</p>
+                            <span id="m210-count" class="text-[11px] text-theme-muted">0 hợp đồng hợp lệ</span>
+                        </div>
+                        <div class="p-3 bg-theme-bg rounded-lg border border-theme-border">
+                            <span class="text-[11px] text-theme-muted">Quà đạt được</span>
+                            <p id="m210-prize" class="text-sm font-bold mt-0.5 text-amber-500">Chưa đạt</p>
+                            <span class="text-[11px] text-theme-muted">Mốc 600 triệu và 900 triệu IP</span>
+                        </div>
+                        <div class="p-3 bg-theme-bg rounded-lg border border-theme-border">
+                            <span class="text-[11px] text-theme-muted">Mốc kế tiếp</span>
+                            <p id="m210-next" class="text-sm font-bold mt-0.5 text-theme-text">-</p>
+                            <span id="m210-next-sub" class="text-[11px] text-theme-muted">&nbsp;</span>
+                        </div>
+                        <div class="p-3 bg-theme-bg rounded-lg border border-theme-border">
+                            <span class="text-[11px] text-theme-muted">IP nhân thêm nhờ hệ số</span>
+                            <p id="m210-nov" class="text-sm font-bold mt-0.5 text-theme-text">0</p>
+                            <span id="m210-nov-sub" class="text-[11px] text-theme-muted">Phần tăng thêm so với ×1</span>
+                        </div>
+                    </div>
+                    <details class="text-xs">
+                        <summary class="cursor-pointer font-medium text-theme-primary select-none">Tổng hợp theo tháng</summary>
+                        <div class="overflow-x-auto mt-2">
+                            <table class="w-full text-left border-collapse text-xs">
+                                <thead>
+                                    <tr class="border-b border-theme-border bg-theme-bg text-[11px] text-theme-muted">
+                                        <th class="p-2 font-semibold">Tháng</th>
+                                        <th class="p-2 font-semibold text-center">Số HĐ hợp lệ</th>
+                                        <th class="p-2 font-semibold text-right">IP (sau chia)</th>
+                                        <th class="p-2 font-semibold text-right">IP nhân thêm</th>
+                                        <th class="p-2 font-semibold text-right">Tính vào tổng</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="m210-month-body"></tbody>
+                            </table>
+                        </div>
+                    </details>
+                    <details class="text-xs">
+                        <summary class="cursor-pointer font-medium text-theme-primary select-none">Chi tiết các hợp đồng tháng 10 - 12/2026</summary>
+                        <div class="overflow-x-auto mt-2">
+                            <table class="w-full text-left border-collapse text-xs">
+                                <thead>
+                                    <tr class="border-b border-theme-border bg-theme-bg text-[11px] text-theme-muted">
+                                        <th class="p-2 font-semibold">Số HĐ / Ngày</th>
+                                        <th class="p-2 font-semibold text-right">IP thực đóng</th>
+                                        <th class="p-2 font-semibold text-center">Hệ số</th>
+                                        <th class="p-2 font-semibold text-center">Tỷ lệ chia</th>
+                                        <th class="p-2 font-semibold text-right">IP tính thưởng</th>
+                                        <th class="p-2 font-semibold">Trạng thái</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="m210-detail-body"></tbody>
+                            </table>
+                        </div>
+                        <p id="m210-detail-empty" class="text-theme-muted italic py-2 hidden">Chưa có hợp đồng nào phát hành trong 01/10 &ndash; 31/12/2026.</p>
                     </details>
                 </div>
 
@@ -281,6 +359,7 @@
                                     <th class="px-2 py-2.5 font-semibold text-right">FYP Kỳ Đóng</th>
                                     <th class="px-2 py-2.5 font-semibold text-right">FYC Thực Nhận <span class="block text-[10px] font-normal">(hoa hồng)</span></th>
                                     <th class="memo-col px-2 py-2.5 font-semibold text-right">IP Xét Thưởng <span class="block text-[10px] font-normal">(Memo 00110)</span></th>
+                                    <th class="memo210-col px-2 py-2.5 font-semibold text-right">IP Xét Thưởng <span class="block text-[10px] font-normal">(Memo 00210)</span></th>
                                     <th class="px-2 py-2.5 font-semibold text-center">Định kỳ / Tỷ lệ</th>
                                     <th class="px-2 py-2.5 font-semibold text-center">Thao tác</th>
                                 </tr>
@@ -304,10 +383,12 @@
     <script src="/js/sidebar.js"></script>
 
     <script src="/js/memo/memo110.js"></script>
+    <script src="/js/memo/memo210.js"></script>
 
     <style>
         /* Phần thưởng theo memo chỉ hiện khi tick ô "Hiển thị thưởng theo memo" */
         body:not(.show-memo110) .memo-col { display: none !important; }
+        body:not(.show-memo210) .memo210-col { display: none !important; }
     </style>
 
     <!-- App Logic -->
@@ -479,6 +560,7 @@
 
                 renderSalesTable(displayList);
                 renderMemo110Summary();
+                renderMemo210Summary();
             }
 
             function renderSalesTable(displayList) {
@@ -499,6 +581,15 @@
                         memoCell = memoA.counted
                             ? `<span class="font-bold text-red-600" title="${memoA.split < 100 ? 'Đã chia ' + memoA.split + '% theo tỷ lệ hợp đồng' : 'Hồ sơ hợp lệ'}">${memoFmt(memoA.share)}</span>`
                             : `<span class="text-red-600 text-[11px]" title="${memoEsc(memoA.checks.filter(c => !c.ok).map(c => c.short).join('; '))}">Không hợp lệ</span>`;
+                    }
+
+                    // [MEMO 00210] IP tính thưởng của hợp đồng (độc lập với Memo 00110)
+                    const memo210A = window.Memo210 ? Memo210.analyzeContract(item) : null;
+                    let memo210Cell = '<span class="text-theme-muted">—</span>';
+                    if (memo210A && memo210A.inWindow) {
+                        memo210Cell = memo210A.valid
+                            ? `<span class="font-bold text-amber-600" title="${memoEsc(memo210A.factorNote)}${memo210A.split < 100 ? ' - đã chia ' + memo210A.split + '%' : ''}">${memoFmt(memo210A.ipTT)}</span> <span class="text-[10px] text-theme-muted">×${memo210A.factor}</span>`
+                            : `<span class="text-red-600 text-[11px]" title="${memoEsc(memo210A.checks.filter(c => !c.ok).map(c => c.short).join('; '))}">Không hợp lệ</span>`;
                     }
 
                     const rowHtml = `
@@ -527,6 +618,7 @@
                                 ${Math.round(rev.periodFyc).toLocaleString('vi-VN')}
                             </td>
                             <td class="memo-col px-2 py-2.5 md:whitespace-nowrap text-right">${memoCell}</td>
+                            <td class="memo210-col px-2 py-2.5 md:whitespace-nowrap text-right">${memo210Cell}</td>
                             <td class="px-2 py-2.5 md:whitespace-nowrap text-center">
                                 <span class="px-2 py-0.5 rounded text-[10px] bg-theme-bg border border-theme-border font-medium">
                                     ${modeText} | ${splitText}
@@ -541,6 +633,9 @@
                                 </button>
                                 <button onclick="viewMemo110(${originalIndex})" class="memo-col p-1 text-red-500 hover:text-red-700 rounded" title="Chi tiết IP xét thưởng (Memo 00110)">
                                     <i data-lucide="gift" class="w-4 h-4 inline"></i>
+                                </button>
+                                <button onclick="viewMemo210(${originalIndex})" class="memo210-col p-1 text-amber-500 hover:text-amber-700 rounded" title="Chi tiết IP xét thưởng (Memo 00210)">
+                                    <i data-lucide="trophy" class="w-4 h-4 inline"></i>
                                 </button>
                                 <button onclick="deleteContract(${originalIndex})" class="p-1 text-red-500 hover:text-red-700 rounded" title="Xóa hợp đồng">
                                     <i data-lucide="trash-2" class="w-4 h-4 inline"></i>
@@ -667,6 +762,147 @@
                     width: '560px'
                 });
             };
+
+            // ================= MEMO 00210: IP xét thưởng cả quý (độc lập với Memo 00110) =================
+            // Quy tắc nằm trong /js/memo/memo210.js. Luôn tính trên TOÀN BỘ hợp đồng của TVV
+            // (không phụ thuộc bộ lọc / ô tìm kiếm). IP = phí khách hàng thực đóng.
+            function renderMemo210Summary() {
+                if (!window.Memo210) return;
+                const M = Memo210;
+                const all = salesData.map(it => M.analyzeContract(it));
+                const inProg = all.filter(a => a.inWindow);
+                const sum = M.summarize(all);
+
+                document.getElementById('m210-total').innerText = memoFmt(sum.total);
+                document.getElementById('m210-count').innerText = sum.count + ' hợp đồng hợp lệ';
+                document.getElementById('m210-prize').innerText = sum.prize ? '01 ' + sum.prize.name : 'Chưa đạt';
+                if (sum.next) {
+                    document.getElementById('m210-next').innerText = memoFmt(sum.next.min) + ' IP';
+                    document.getElementById('m210-next-sub').innerText = 'Còn thiếu ' + memoFmt(sum.missingToNext) + ' - ' + sum.next.name;
+                } else {
+                    document.getElementById('m210-next').innerText = 'Mốc cao nhất';
+                    document.getElementById('m210-next-sub').innerText = '\u00A0';
+                }
+                const extraAll = M.CFG.months.reduce((t, m) => t + sum.byMonth[m].extraCounted, 0);
+                document.getElementById('m210-nov').innerText = memoFmt(extraAll);
+
+                // Tổng hợp theo tháng
+                const mBody = document.getElementById('m210-month-body');
+                mBody.innerHTML = '';
+                M.CFG.months.forEach(m => {
+                    const b = sum.byMonth[m];
+                    mBody.insertAdjacentHTML('beforeend', `
+                        <tr class="border-b border-theme-border">
+                            <td class="p-2 font-medium">${M.monthLabel(m)}</td>
+                            <td class="p-2 text-center">${b.count}</td>
+                            <td class="p-2 text-right">${memoFmt(b.ip)}</td>
+                            <td class="p-2 text-right">${memoFmt(b.extraCounted)}${b.capped ? ' <span class="text-[10px] text-red-600">(đã áp trần)</span>' : ''}</td>
+                            <td class="p-2 text-right font-bold">${memoFmt(b.ip + b.extraCounted)}</td>
+                        </tr>`);
+                });
+
+                // Chi tiết từng hợp đồng
+                const body = document.getElementById('m210-detail-body');
+                const empty = document.getElementById('m210-detail-empty');
+                body.innerHTML = '';
+                empty.classList.toggle('hidden', inProg.length > 0);
+                inProg.forEach(a => {
+                    const reasons = a.checks.filter(c => !c.ok).map(c => c.short).join('; ');
+                    const notes = [];
+                    if (a.valid && a.thieuNgayNop) notes.push('chưa có ngày nộp');
+                    if (a.valid && !a.thieuNgayNop && !a.sameMonth) notes.push('nộp khác tháng phát hành: không nhân hệ số');
+                    const status = a.valid
+                        ? '<span class="text-emerald-600 font-semibold">✓ Hợp lệ</span>' + (notes.length ? ' <span class="text-[10px] text-amber-600" title="Hợp đồng chưa lưu thông tin này nên được xét theo dữ liệu hiện có">(' + notes.join(', ') + ')</span>' : '')
+                        : '<span class="text-red-600">✗ ' + memoEsc(reasons || 'Không hợp lệ') + '</span>';
+                    body.insertAdjacentHTML('beforeend', `
+                        <tr class="border-b border-theme-border">
+                            <td class="p-2">
+                                <span class="block font-bold text-theme-primary">${memoEsc(a.contractNumber || 'Chưa cập nhật')}</span>
+                                <span class="text-[11px] text-theme-muted">PH: ${formatDateVN(a.issueDate)}${a.ngayNop ? ' &bull; Nộp: ' + formatDateVN(a.ngayNop) : ''}</span>
+                            </td>
+                            <td class="p-2 text-right">${memoFmt(a.ip)}</td>
+                            <td class="p-2 text-center">×${a.factor}</td>
+                            <td class="p-2 text-center">${a.split}%</td>
+                            <td class="p-2 text-right font-bold">${memoFmt(a.ipTT)}</td>
+                            <td class="p-2">${status}</td>
+                        </tr>`);
+                });
+            }
+
+            // Mô tả chi tiết IP xét thưởng Memo 00210 của 1 hợp đồng
+            window.viewMemo210 = function(index) {
+                const item = salesData[index];
+                const a = Memo210.analyzeContract(item);
+
+                if (!a.inWindow) {
+                    Swal.fire({
+                        icon: 'info',
+                        title: 'Không thuộc Memo 00210',
+                        text: 'Memo 00210 chỉ áp dụng cho hồ sơ nộp và phát hành từ 01/10/2026 đến 31/12/2026.',
+                        confirmButtonColor: '#16a34a'
+                    });
+                    return;
+                }
+
+                const linesHtml = a.lines.map(l => `
+                    <tr class="border-b border-theme-border">
+                        <td class="p-1.5">${l.type === 'main' ? '<b>' + memoEsc(l.name) + '</b>' : '+ ' + memoEsc(l.name)}</td>
+                        <td class="p-1.5 text-right">${memoFmt(l.ip)}</td>
+                    </tr>`).join('');
+                const checksHtml = a.checks.map(c => `
+                    <li class="flex items-start gap-1.5">
+                        <span class="${c.ok ? 'text-emerald-600' : 'text-red-600'} font-bold">${c.ok ? '✓' : '✗'}</span>
+                        <span class="${c.ok ? '' : 'text-red-600'}">${c.text}</span>
+                    </li>`).join('');
+
+                Swal.fire({
+                    title: `IP xét thưởng - HĐ ${memoEsc(item.contractNumber)}`,
+                    html: `
+                        <div class="text-left text-xs space-y-3 max-h-[65vh] overflow-y-auto p-1">
+                            <p class="text-theme-muted">Memo 00210 &ndash; IP <b>xét thưởng</b> (IP = phí khách hàng thực đóng), không phải hoa hồng thực nhận.</p>
+                            <table class="w-full border-collapse">
+                                <thead>
+                                    <tr class="border-b border-theme-border text-[11px] text-theme-muted">
+                                        <th class="p-1.5 text-left">Sản phẩm</th>
+                                        <th class="p-1.5 text-right">IP thực đóng</th>
+                                    </tr>
+                                </thead>
+                                <tbody>${linesHtml}</tbody>
+                                <tfoot>
+                                    <tr><td class="p-1.5 font-semibold">Tổng IP thực đóng</td><td class="p-1.5 text-right font-semibold">${memoFmt(a.ip)}</td></tr>
+                                    <tr><td class="p-1.5">Tỷ lệ chia hợp đồng</td><td class="p-1.5 text-right">${a.split}%</td></tr>
+                                    <tr><td class="p-1.5">IP sau chia</td><td class="p-1.5 text-right">${memoFmt(a.valid ? a.shareIP : 0)}</td></tr>
+                                    <tr><td class="p-1.5">Hệ số nhân (${Memo210.monthLabel(a.month)})</td><td class="p-1.5 text-right font-bold text-red-600">×${a.factor}</td></tr>
+                                    <tr><td class="p-1.5 font-bold">IP tính thưởng của HĐ</td><td class="p-1.5 text-right font-bold text-emerald-600">${memoFmt(a.valid ? a.ipTT : 0)}</td></tr>
+                                </tfoot>
+                            </table>
+                            <p class="text-red-600">${memoEsc(a.factorNote)}</p>
+                            <p>Ngày nộp hồ sơ: <b>${a.ngayNop ? formatDateVN(a.ngayNop) : 'chưa có (chỉ xét theo ngày phát hành)'}</b> &bull; Ngày phát hành: <b>${formatDateVN(a.issueDate)}</b></p>
+                            ${a.isULR9 ? `<p>PRU-Đầu Tư Vững Tiến: chỉ được nhân hệ số khi hồ sơ có tổng IP từ 20 triệu (hồ sơ này: <b>${memoFmt(a.ip)}</b>).</p>` : ''}
+                            <div>
+                                <p class="font-semibold mb-1">Điều kiện hồ sơ hợp lệ</p>
+                                <ul class="space-y-1">${checksHtml}</ul>
+                            </div>
+                            <p class="text-theme-muted italic">Quà xét trên tổng IP tính thưởng cả quý của tất cả hợp đồng hợp lệ (xem khung "Thưởng thi đua Memo 00210" phía trên). Hệ số nhân chỉ áp dụng cho hồ sơ nộp và phát hành cùng một tháng.</p>
+                        </div>`,
+                    showConfirmButton: false,
+                    showCloseButton: true,
+                    width: '560px'
+                });
+            };
+
+            // Checkbox hiển thị thưởng theo Memo 00210 (mặc định tắt, nhớ lựa chọn lần trước)
+            (function initMemo210ViewToggle() {
+                const cb = document.getElementById('memo-view-memo210');
+                if (!cb) return;
+                try { cb.checked = localStorage.getItem('sales_view_memo210') === '1'; } catch (e) {}
+                const apply = () => {
+                    document.body.classList.toggle('show-memo210', cb.checked);
+                    try { localStorage.setItem('sales_view_memo210', cb.checked ? '1' : '0'); } catch (e) {}
+                };
+                cb.addEventListener('change', apply);
+                apply();
+            })();
 
             // Checkbox hiển thị thưởng theo memo (mặc định tắt, nhớ lựa chọn lần trước)
             (function initMemoViewToggle() {
