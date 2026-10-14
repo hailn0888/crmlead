@@ -49,7 +49,9 @@
         selected: null,
         logPage: 1,
         pageSize: 50,
-        charts: {}
+        charts: {},
+        avgMode: 'd7',   // chế độ cột "Trung bình" của bảng tổng hợp theo nhân viên
+        range: null      // { from, to } khoảng ngày đang xem (để tính cột Trung bình)
     };
 
     /* ---------- Tiện ích ---------- */
@@ -410,13 +412,54 @@
     const TH = (text, left) => `<th class="px-2 py-2 ${left ? 'text-left' : 'text-right'} whitespace-nowrap font-semibold">${text}</th>`;
     const TD = (text, left, bold) => `<td class="px-2 py-2 ${left ? 'text-left' : 'text-right'} whitespace-nowrap ${bold ? 'font-semibold' : ''}">${text}</td>`;
 
+    /* ---------- Cột "Trung bình" (tính tại trình duyệt, không lưu DB) ----------
+     * Mọi chế độ đều tính đủ 7 ngày/tuần (kể cả Chủ Nhật):
+     *  - d7 / d30 : "ngày liên tục" -> tổng gọi ÷ số ngày của khoảng đã chọn × 7 (hoặc × 30)
+     *  - week     : tuần LỊCH (Thứ Hai - Chủ Nhật) -> tổng gọi ÷ số tuần lịch mà khoảng ngày chạm vào
+     *  - month    : tháng LỊCH (mùng 1 - cuối tháng) -> tổng gọi ÷ số tháng lịch mà khoảng ngày chạm vào */
+    const AVG_MODES = {
+        d7:    { label: 'Trung bình 7 ngày',  unit: '/7 ngày' },
+        week:  { label: 'Trung bình tuần',    unit: '/tuần' },
+        d30:   { label: 'Trung bình 30 ngày', unit: '/30 ngày' },
+        month: { label: 'Trung bình tháng',   unit: '/tháng' }
+    };
+    function avgInfo() {
+        const r = state.range;
+        if (!r) return null;
+        const days = Math.round((startOfDay(r.to) - startOfDay(r.from)) / 864e5) + 1;
+        switch (state.avgMode) {
+            case 'week': {
+                const weeks = Math.round((startOfWeek(r.to) - startOfWeek(r.from)) / (7 * 864e5)) + 1;
+                return { div: weeks, mul: 1, note: `tổng gọi ÷ ${weeks} tuần lịch (Thứ Hai - Chủ Nhật) mà khoảng ngày đã chọn chạm vào` };
+            }
+            case 'month': {
+                const months = (r.to.getFullYear() - r.from.getFullYear()) * 12 + r.to.getMonth() - r.from.getMonth() + 1;
+                return { div: months, mul: 1, note: `tổng gọi ÷ ${months} tháng lịch (mùng 1 - cuối tháng) mà khoảng ngày đã chọn chạm vào` };
+            }
+            case 'd30': return { div: days, mul: 30, note: `tổng gọi ÷ ${days} ngày đã chọn × 30 (tính đủ cả Chủ Nhật)` };
+            default:    return { div: days, mul: 7,  note: `tổng gọi ÷ ${days} ngày đã chọn × 7 (tính đủ cả Chủ Nhật)` };
+        }
+    }
+    const fmtAvg = v => v.toLocaleString('vi-VN', { maximumFractionDigits: 1 });
+    function avgCell(total, bold) {
+        const a = avgInfo();
+        if (!a) return TD('-', false, bold);
+        return TD(`${fmtAvg(total / a.div * a.mul)}`, false, bold);
+    }
+    function avgHeader() {
+        const opts = Object.entries(AVG_MODES).map(([k, m]) =>
+            `<option value="${k}"${k === state.avgMode ? ' selected' : ''}>${m.label}</option>`).join('');
+        return '<th class="px-2 py-2 text-right whitespace-nowrap font-semibold">'
+            + `<select id="avgModeSelect" class="border border-gray-500/40 bg-transparent rounded-lg px-2 py-1 text-xs font-semibold cursor-pointer" title="Chọn cách tính trung bình">${opts}</select></th>`;
+    }
+
     function agentLine(name, list, t, oneDay, bold) {
         const mm = minMax(list, r => r.at.getTime());
         const now = new Date();
         const nextCb = minMax(list.filter(r => r.cb && r.cb >= now), r => r.cb.getTime()).min;
         const ft = d => d ? (oneDay ? hm(d) : `${hm(d)} ${dm(d)}`) : '-';
         return `<tr class="border-b border-gray-500/30 ${bold ? 'bg-gray-500/10' : ''}">`
-            + TD(esc(name), true, true) + TD(num(t.total), false, bold) + TD(num(t.connected), false, bold)
+            + TD(esc(name), true, true) + TD(num(t.total), false, bold) + avgCell(t.total, bold) + TD(num(t.connected), false, bold)
             + TD(num(t.hen_gap), false, bold) + TD(pct(t.rateHen), false, bold) + TD(num(t.goi_lai), false, bold)
             + TD(num(t.ban), false, bold) + TD(num(t.khong_nghe), false, bold) + TD(num(t.sai_so), false, bold)
             + TD(num(t.thue_bao), false, bold) + TD(num(t.tu_choi), false, bold) + TD(num(t.khac), false, bold)
@@ -427,12 +470,14 @@
         if (!rows.length) return emptyHtml('Chưa có cuộc gọi nào trong kỳ này.');
         const groups = summarizeByAgent(rows);
         const head = '<tr class="bg-gray-500/10 border-b border-gray-500/30">'
-            + TH('Nhân viên', true) + TH('Tổng gọi') + TH('Liên hệ được') + TH('Hẹn gặp') + TH('Tỷ lệ hẹn')
+            + TH('Nhân viên', true) + TH('Tổng gọi') + avgHeader() + TH('Liên hệ được') + TH('Hẹn gặp') + TH('Tỷ lệ hẹn')
             + TH('Gọi lại sau') + TH('Khách bận') + TH('Không nghe') + TH('Sai số') + TH('Thuê bao')
             + TH('Từ chối') + TH('Khác') + TH('Giờ gọi đầu') + TH('Giờ gọi cuối') + TH('Gọi lại sớm nhất') + '</tr>';
         const body = groups.map(g => agentLine(g.name, g.rows, g.t, oneDay, false)).join('')
             + agentLine('Tổng cộng', rows, tally(rows), oneDay, true);
-        return `<table class="w-full text-xs"><thead>${head}</thead><tbody>${body}</tbody></table>`;
+        const a = avgInfo();
+        const note = a ? `<p class="text-[11px] opacity-70 mt-2">${esc(AVG_MODES[state.avgMode].label)}: ${esc(a.note)}.</p>` : '';
+        return `<table class="w-full text-xs"><thead>${head}</thead><tbody>${body}</tbody></table>${note}`;
     }
 
     function resultBadge(key) {
@@ -606,6 +651,8 @@
             let prev = null;
             try { prev = await loadRange(prevFrom, prevTo, agent); } catch (_) { /* không bắt buộc */ }
             state.rows = rows;
+            state.range = { from, to };
+            state.oneDay = len === 1;
             state.logPage = 1;
             if (!state.agentsFromApi) fillAgentsFromRows(rows);
             renderKpi(rows, prev);
@@ -665,6 +712,12 @@
             if (!b || b.disabled) return;
             state.logPage = Number(b.dataset.page);
             renderLog();
+        });
+        // Đổi cách tính trung bình -> chỉ vẽ lại bảng tại chỗ (không gọi API, không ghi DB)
+        $('agentTable').addEventListener('change', e => {
+            if (e.target.id !== 'avgModeSelect') return;
+            state.avgMode = e.target.value;
+            $('agentTable').innerHTML = agentTableHtml(state.rows, !!state.oneDay);
         });
         $('btnExportAgents').addEventListener('click', exportAgents);
         $('btnExportLog').addEventListener('click', exportLog);
