@@ -51,7 +51,10 @@
         pageSize: 50,
         charts: {},
         avgMode: 'd7',   // chế độ cột "Trung bình" của bảng tổng hợp theo nhân viên
-        range: null      // { from, to } khoảng ngày đang xem (để tính cột Trung bình)
+        range: null,     // { from, to } khoảng ngày đang xem (để tính cột Trung bình)
+        agentList: [],              // danh sách nhân viên [{ id, name }] cho ô chọn nhiều
+        selectedAgents: new Set(),  // id các nhân viên đang chọn (rỗng = tất cả nhân viên)
+        keepCache: false
     };
 
     /* ---------- Tiện ích ---------- */
@@ -184,17 +187,23 @@
         };
     }
 
-    async function loadRange(from, to, agentId) {
-        const key = `${ymd(from)}|${ymd(to)}|${agentId}`;
-        if (state.cache.has(key)) return state.cache.get(key);
-        const qs = new URLSearchParams({ from: ymd(from), to: ymd(to) });
-        if (agentId) qs.set('agent_id', agentId);
-        const data = await fetchJson(`${API.logs}?${qs}`);
-        if (data && data.truncated) showNotice('Khoảng thời gian này có quá nhiều cuộc gọi, báo cáo chỉ gồm 50.000 cuộc gọi gần nhất. Hãy chọn khoảng ngắn hơn hoặc lọc theo nhân viên.');
-        const lo = startOfDay(from), hi = addDays(startOfDay(to), 1);
-        const rows = unwrap(data).map(normalizeRow).filter(r => r.at && r.at >= lo && r.at < hi);
-        state.cache.set(key, rows);
-        return rows;
+    // agentIds: mảng id nhân viên ([] = tất cả). 1 nhân viên -> API lọc sẵn theo agent_id;
+    // từ 2 nhân viên trở lên -> tải toàn bộ rồi lọc tại trình duyệt (API chỉ nhận 1 agent_id).
+    async function loadRange(from, to, agentIds) {
+        const ids = Array.isArray(agentIds) ? agentIds : (agentIds ? [agentIds] : []);
+        const single = ids.length === 1 ? ids[0] : '';
+        const key = `${ymd(from)}|${ymd(to)}|${single}`;
+        let rows = state.cache.get(key);
+        if (!rows) {
+            const qs = new URLSearchParams({ from: ymd(from), to: ymd(to) });
+            if (single) qs.set('agent_id', single);
+            const data = await fetchJson(`${API.logs}?${qs}`);
+            if (data && data.truncated) showNotice('Khoảng thời gian này có quá nhiều cuộc gọi, báo cáo chỉ gồm 50.000 cuộc gọi gần nhất. Hãy chọn khoảng ngắn hơn hoặc lọc theo nhân viên.');
+            const lo = startOfDay(from), hi = addDays(startOfDay(to), 1);
+            rows = unwrap(data).map(normalizeRow).filter(r => r.at && r.at >= lo && r.at < hi);
+            state.cache.set(key, rows);
+        }
+        return ids.length > 1 ? rows.filter(r => ids.includes(r.agentId)) : rows;
     }
 
     /* ---------- Thống kê ---------- */
@@ -345,7 +354,7 @@
     }
 
     async function renderPeriod() {
-        const p = state.period, agent = $('agentSelect').value;
+        const p = state.period, agents = selectedAgentIds();
         document.querySelectorAll('.period-tab').forEach(btn => {
             const on = btn.dataset.period === p;
             btn.classList.toggle('bg-red-700', on);
@@ -356,7 +365,7 @@
         const buckets = makeBuckets(p);
         let rows;
         try {
-            rows = await loadRange(buckets[0].s, new Date(), agent);
+            rows = await loadRange(buckets[0].s, new Date(), agents);
         } catch (e) { showError(e); return; }
         if (p !== state.period) return; // người dùng đã đổi tab trong lúc tải
         buckets.forEach(b => {
@@ -619,16 +628,86 @@
         }
     }
     function fillAgents(list) {
-        const sel = $('agentSelect'), cur = sel.value;
-        sel.innerHTML = '<option value="">Tất cả nhân viên</option>'
-            + list.map(a => `<option value="${esc(a.id)}">${esc(a.name)}</option>`).join('');
-        sel.value = list.some(a => a.id === cur) ? cur : '';
+        state.agentList = list;
+        const ids = new Set(list.map(a => a.id));
+        [...state.selectedAgents].forEach(id => { if (!ids.has(id)) state.selectedAgents.delete(id); });
+        renderAgentPicker();
     }
     function fillAgentsFromRows(rows) {
-        if ($('agentSelect').value) return; // đang lọc 1 nhân viên - giữ nguyên danh sách
+        if (state.selectedAgents.size) return; // đang lọc theo nhân viên - giữ nguyên danh sách
         const map = new Map();
         rows.forEach(r => { if (r.agentId !== '') map.set(r.agentId, r.agentName); });
         if (map.size) fillAgents([...map].map(([id, name]) => ({ id, name })));
+    }
+
+    /* ---------- Ô chọn NHIỀU nhân viên (thay cho select 1 người) ---------- */
+    const selectedAgentIds = () => [...state.selectedAgents];
+    function agentLabel() {
+        const ids = selectedAgentIds();
+        if (!ids.length) return 'Tất cả nhân viên';
+        const names = ids.map(id => (state.agentList.find(a => a.id === id) || {}).name || ('NV #' + id));
+        return ids.length <= 2 ? names.join(', ') : `${ids.length} nhân viên đã chọn`;
+    }
+    function renderAgentPicker() {
+        const panel = $('agentPanel');
+        if (!panel) return;
+        const row = 'flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer hover:bg-gray-500/15';
+        panel.innerHTML = `<label class="${row} font-semibold"><input type="checkbox" data-all class="accent-red-700"${state.selectedAgents.size ? '' : ' checked'}> Tất cả nhân viên</label>`
+            + '<div class="border-t border-gray-500/30 my-1"></div>'
+            + (state.agentList.length ? state.agentList.map(a =>
+                `<label class="${row}"><input type="checkbox" data-id="${esc(a.id)}" class="accent-red-700"${state.selectedAgents.has(a.id) ? ' checked' : ''}> <span class="truncate">${esc(a.name)}</span></label>`).join('')
+                : '<div class="px-2 py-2 text-xs opacity-70">Chưa có danh sách nhân viên.</div>');
+        const txt = $('agentBtnText');
+        if (txt) { txt.textContent = agentLabel(); txt.title = agentLabel(); }
+    }
+    // Màu nền đặc của khung chứa (để bảng chọn không bị trong suốt ở giao diện sáng/tối)
+    function solidBg(el) {
+        for (; el; el = el.parentElement) {
+            const c = getComputedStyle(el).backgroundColor;
+            if (c && c !== 'transparent' && !/,\s*0\)$/.test(c)) return c;
+        }
+        return '#fff';
+    }
+    function initAgentPicker() {
+        const old = $('agentSelect');
+        if (!old) return;
+        const wrap = document.createElement('div');
+        wrap.id = 'agentPicker';
+        wrap.className = 'relative';
+        wrap.innerHTML = '<button id="agentBtn" type="button" class="w-full flex items-center justify-between gap-2 border border-gray-500/40 bg-transparent rounded-lg px-3 py-2 text-sm text-left">'
+            + '<span id="agentBtnText" class="truncate">Tất cả nhân viên</span><span class="text-xs opacity-70">▾</span></button>'
+            + '<div id="agentPanel" class="hidden absolute z-30 left-0 mt-1 min-w-full w-72 max-h-72 overflow-auto border border-gray-500/40 rounded-lg shadow-lg p-1 text-sm"></div>';
+        old.replaceWith(wrap);
+        if (wrap.parentElement) { wrap.parentElement.classList.remove('min-w-[200px]'); wrap.parentElement.classList.add('min-w-[260px]'); }
+        const lab = document.querySelector('label[for="agentSelect"]');
+        if (lab) lab.htmlFor = 'agentBtn';
+        renderAgentPicker();
+
+        const panel = $('agentPanel');
+        const close = () => panel.classList.add('hidden');
+        $('agentBtn').addEventListener('click', e => {
+            e.stopPropagation();
+            if (panel.classList.contains('hidden')) {
+                panel.style.backgroundColor = solidBg(wrap);
+                panel.classList.remove('hidden');
+            } else close();
+        });
+        panel.addEventListener('click', e => e.stopPropagation());
+        document.addEventListener('click', close);
+        document.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
+
+        let timer = null;
+        panel.addEventListener('change', e => {
+            const cb = e.target;
+            if (cb.dataset.all !== undefined) state.selectedAgents.clear();
+            else if (cb.dataset.id !== undefined) {
+                if (cb.checked) state.selectedAgents.add(cb.dataset.id); else state.selectedAgents.delete(cb.dataset.id);
+            } else return;
+            renderAgentPicker();
+            // Chọn xong (ngừng tick 0,4 giây) mới chạy báo cáo; dùng lại dữ liệu đã tải, không tải lại từ server
+            clearTimeout(timer);
+            timer = setTimeout(() => { state.keepCache = true; runReport(); }, 400);
+        });
     }
 
     /* ---------- Chạy báo cáo ---------- */
@@ -642,17 +721,17 @@
         const from = parseInputDate($('dateFrom').value), to = parseInputDate($('dateTo').value);
         if (!from || !to) { Swal.fire({ icon: 'warning', title: 'Thiếu ngày', text: 'Chọn đủ Từ ngày và Đến ngày.' }); return; }
         if (from > to) { Swal.fire({ icon: 'warning', title: 'Sai khoảng ngày', text: 'Từ ngày phải trước hoặc bằng Đến ngày.' }); return; }
-        const agent = $('agentSelect').value;
-        state.cache.clear();
+        const agents = selectedAgentIds();
+        if (state.keepCache) state.keepCache = false; else state.cache.clear();
         if (state.agentsFromApi) showNotice('');
         setLoading(true);
         let ok = false;
         try {
-            const rows = await loadRange(from, to, agent);
+            const rows = await loadRange(from, to, agents);
             const len = Math.round((startOfDay(to) - startOfDay(from)) / 864e5) + 1;
             const prevTo = addDays(from, -1), prevFrom = addDays(prevTo, -(len - 1));
             let prev = null;
-            try { prev = await loadRange(prevFrom, prevTo, agent); } catch (_) { /* không bắt buộc */ }
+            try { prev = await loadRange(prevFrom, prevTo, agents); } catch (_) { /* không bắt buộc */ }
             state.rows = rows;
             state.range = { from, to };
             state.oneDay = len === 1;
@@ -688,11 +767,11 @@
     /* ---------- Khởi tạo ---------- */
     document.addEventListener('DOMContentLoaded', async () => {
         refreshIcons();
+        initAgentPicker();
         $('logResult').innerHTML = '<option value="">Tất cả kết quả</option>'
             + RESULTS.map(r => `<option value="${r.key}">${esc(r.label)}</option>`).join('');
 
         $('btnReport').addEventListener('click', runReport);
-        $('agentSelect').addEventListener('change', runReport);
         $('quickRange').addEventListener('click', e => {
             const b = e.target.closest('.quick-btn');
             if (!b) return;
