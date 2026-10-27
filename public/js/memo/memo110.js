@@ -51,6 +51,13 @@
     // SP bán cùng PRUKhỏe Linh Hoạt
     function isKhoeLinhHoat(name) { return norm(name).includes('khoe linh hoat'); }
 
+    // IP = phí khách hàng thực đóng: đóng nửa năm thì IP = phí năm / 2, đóng quý thì IP = phí năm / 4
+    function divisorOf(mode) {
+        if (mode === 'HALF' || mode === 'Nửa năm') return 2;
+        if (mode === 'QUARTER' || mode === 'Quý') return 4;
+        return 1;
+    }
+
     function normRiders(list) {
         return (Array.isArray(list) ? list : []).map(r => ({
             name: String((r && (r.name || r.ten || r.productName)) || ''),
@@ -115,11 +122,15 @@
     const fmtDate = (d) => dateOnly(d).split('-').reverse().join('/');
 
     function analyzeContract(item) {
-        const riders = normRiders(item.riders);
-        const riderIP = riders.reduce((s, r) => s + r.premium, 0);
-        const mainIP = item.mainPremium != null
+        // Phí trong dữ liệu là phí NĂM -> đổi sang IP thực đóng theo phương thức đóng phí
+        const div = divisorOf(item.paymentMode);
+        const annualRiders = normRiders(item.riders);
+        const annualRiderIP = annualRiders.reduce((s, r) => s + r.premium, 0);
+        const annualMain = item.mainPremium != null
             ? Number(item.mainPremium) || 0
-            : Math.max(0, (Number(item.totalAnnualPremium) || 0) - riderIP);
+            : Math.max(0, (Number(item.totalAnnualPremium) || 0) - annualRiderIP);
+        const riders = annualRiders.map(r => ({ name: r.name, premium: r.premium / div }));
+        const mainIP = annualMain / div;
         const a = analyze({ mainProduct: item.mainProduct, mainIP, riders });
 
         // Ngày nộp hồ sơ (chỉ có khi hợp đồng được lưu kèm tuỳ chọn memo)
@@ -162,5 +173,5 @@
         return Object.assign({ count: counted.length }, tierFor(total));
     }
 
-    global.Memo110 = { CFG, norm, fmt, fmtDate, inWindow, dateError, analyze, analyzeContract, tierFor, summarize };
+    global.Memo110 = { CFG, divisorOf, norm, fmt, fmtDate, inWindow, dateError, analyze, analyzeContract, tierFor, summarize };
 })(window);
