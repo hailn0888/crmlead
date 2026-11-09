@@ -93,12 +93,15 @@ router.get('/files', async (req, res) => {
         }
 
         // Lấy danh sách số hợp đồng mà agent này được phân bổ
-        const { data: assignments, error: assignError } = await supabase
-            .from('lead_assignments')
-            .select('so_hop_dong')
-            .eq('agent_id', agentId);
+        // FIX: phân trang để lấy đủ lead_assignments (Supabase chỉ trả tối đa 1000 dòng/truy vấn)
+        const assignments = await fetchAllPages(() =>
+            supabase
+                .from('lead_assignments')
+                .select('so_hop_dong')
+                .eq('agent_id', agentId)
+                .order('id', { ascending: true })
+        );
 
-        if (assignError) throw assignError;
         if (!assignments || assignments.length === 0) {
             return res.json({ success: true, data: [] });
         }
@@ -106,12 +109,9 @@ router.get('/files', async (req, res) => {
         const contractNos = assignments.map(a => a.so_hop_dong).filter(Boolean);
 
         // Bước 1: Lấy thông tin contracts trước
-        const { data: contracts, error: contractError } = await supabase
-            .from('contracts')
-            .select('file_id, so_hop_dong')
-            .in('so_hop_dong', contractNos);
+        // FIX: chia lô .in() để không bị cắt ở 1000 dòng / không quá dài
+        const contracts = await fetchByInChunks('contracts', 'file_id, so_hop_dong', 'so_hop_dong', contractNos);
 
-        if (contractError) throw contractError;
         if (!contracts || contracts.length === 0) {
             return res.json({ success: true, data: [] });
         }
@@ -678,4 +678,4 @@ router.delete('/sales', async (req, res) => {
 });
 
 
-module.exports = router;
+module.exports = router;``
