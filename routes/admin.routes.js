@@ -672,6 +672,7 @@ router.post('/upload-data', upload.array('files'), async (req, res) => {
 
             let validCount = 0;
             let invalidCount = 0;
+            let duplicateContractCount = 0; // số dòng trùng số hợp đồng trong cùng 1 file đã được gộp
 
             // Bước 2: Đọc dữ liệu Excel và chuẩn bị dữ liệu
             if (rows.length > 1) {
@@ -775,6 +776,19 @@ router.post('/upload-data', upload.array('files'), async (req, res) => {
                     contractRows.push(cRow);
                 });
 
+                // [VÁ LỖI] Postgres không cho 1 câu upsert chứa 2 dòng cùng khoá (so_hop_dong), nếu có sẽ báo
+                // "ON CONFLICT DO UPDATE command cannot affect row a second time".
+                // Gộp các dòng trùng số hợp đồng trong cùng file (dòng xuất hiện SAU ghi đè dòng trước).
+                const contractMap = new Map();
+                contractRows.forEach(r => {
+                    if (contractMap.has(r.so_hop_dong)) duplicateContractCount++;
+                    contractMap.set(r.so_hop_dong, r);
+                });
+                contractRows = Array.from(contractMap.values());
+                if (duplicateContractCount > 0) {
+                    console.warn(`[upload] File "${fileName}": gộp ${duplicateContractCount} dòng trùng số hợp đồng`);
+                }
+
                 validCount = contractRows.length;
                 invalidCount = invalidRows.length;
 
@@ -822,7 +836,7 @@ router.post('/upload-data', upload.array('files'), async (req, res) => {
                 })
                 .eq('id', fileId);
 
-            summary.push({ file_id: fileId, file_name: fileName, total: totalRecords, valid: validCount, invalid: invalidCount });
+            summary.push({ file_id: fileId, file_name: fileName, total: totalRecords, valid: validCount, invalid: invalidCount, duplicates: duplicateContractCount });
         }
 
         const totalInvalid = summary.reduce((sum, s) => sum + s.invalid, 0);
@@ -830,7 +844,9 @@ router.post('/upload-data', upload.array('files'), async (req, res) => {
             ? ` (${totalInvalid} lead thiếu số điện thoại đã được tách sang mục "Leads Thiếu Dữ Liệu")`
             : '';
 
-        res.json({ success: true, message: `Upload và xử lý dữ liệu thành công!${messageSuffix}`, summary });
+        const totalDup = summary.reduce((sum, s) => sum + (s.duplicates || 0), 0);
+        const dupSuffix = totalDup > 0 ? ` (${totalDup} dòng trùng số hợp đồng trong file đã được gộp lại)` : '';
+        res.json({ success: true, message: `Upload và xử lý dữ liệu thành công!${messageSuffix}${dupSuffix}`, summary });
     } catch (error) {
         console.error("Upload error:", error.message);
         res.status(500).json({ success: false, message: error.message });
